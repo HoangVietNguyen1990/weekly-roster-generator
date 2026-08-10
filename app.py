@@ -627,15 +627,9 @@ with tab5:
                 
                 # Store in session state
                 st.session_state.final_roster_df = roster_out_df
-                st.session_state.generation_debug_logs = debug_logs
                 st.success("Roster successfully generated!")
             except Exception as e:
                 st.error(f"Failed to generate roster: {e}")
-
-    # Render debug logs and final editable roster if it exists in state
-    if "generation_debug_logs" in st.session_state:
-        st.markdown("### 📊 Generation Diagnostic Log:")
-        st.json(st.session_state.generation_debug_logs)
 
     if "final_roster_df" in st.session_state:
         final_df = st.session_state.final_roster_df
