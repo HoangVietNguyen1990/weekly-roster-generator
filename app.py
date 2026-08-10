@@ -78,13 +78,13 @@ def read_excel_robust(uploaded_file):
         df_raw = pd.read_excel(uploaded_file, header=None)
         
         # Look for the header row containing key columns
-        keywords = ["name", "employee", "staff", "role", "age", "start date", "commencement", "shift", "day", "monday", "tuesday", "unavailability", "fixed"]
+        keywords = ["name", "employee", "staff", "role", "age", "dob", "commence", "start", "shift", "day", "monday", "tuesday", "unavailability", "fixed", "status", "type"]
         header_row_idx = 0
         
         for idx, row in df_raw.iterrows():
             row_vals = [str(x).strip().lower() for x in row if pd.notna(x)]
             matches = sum(1 for val in row_vals for kw in keywords if kw in val)
-            if matches >= 2:  # Found a row with at least 2 matching headers
+            if matches >= 1:  # Relaxed to 1 or more keyword matches to catch "NAME" headers
                 header_row_idx = idx
                 break
                 
@@ -245,7 +245,6 @@ def find_column(df, candidates, default=""):
 
 # Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt):
-    # Make copies and standardize column names dynamically to prevent KeyError
     employees = employees_raw.copy()
     unavailability = unavailability_raw.copy()
     requirements = requirements_raw.copy()
@@ -261,13 +260,24 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     emp_rename = {}
     c_name = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
     if c_name: emp_rename[c_name] = "Name"
-    c_start = find_column(employees, ["start date", "commencement date", "started", "startdate"])
+    c_start = find_column(employees, ["start date", "commencement date", "started", "startdate", "commence date", "commence"])
     if c_start: emp_rename[c_start] = "Start Date"
-    c_age = find_column(employees, ["age", "dob", "date of birth", "years"])
+    c_age = find_column(employees, ["age", "years"])
     if c_age: emp_rename[c_age] = "Age"
+    c_dob = find_column(employees, ["dob", "date of birth", "birth date"])
+    if c_dob: emp_rename[c_dob] = "DOB"
     c_type = find_column(employees, ["employment type", "type", "status", "ft/pt/casual", "employmenttype"])
     if c_type: emp_rename[c_type] = "Employment Type"
     employees = employees.rename(columns=emp_rename)
+
+    # Calculate Age dynamically if DOB is present and Age is missing
+    if "DOB" in employees.columns and ("Age" not in employees.columns or employees["Age"].isna().all()):
+        try:
+            dob_parsed = pd.to_datetime(employees["DOB"], errors='coerce')
+            today = datetime.now()
+            employees["Age"] = dob_parsed.apply(lambda x: today.year - x.year - ((today.month, today.day) < (x.month, x.day)) if pd.notna(x) else 25)
+        except:
+            employees["Age"] = 25
 
     # Unavailability mapping
     unavail_rename = {}
@@ -303,11 +313,9 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             continue
         try:
             start_date_parsed = pd.to_datetime(emp.get("Start Date"))
-            # Compare parsed date to start_dt
             if start_date_parsed.date() <= start_dt:
                 active_employees.append(emp.to_dict())
         except:
-            # If date parsing fails or column doesn't exist, assume they are active
             active_employees.append(emp.to_dict())
 
     if not active_employees:
@@ -495,10 +503,10 @@ with tab5:
                             
                             target_cell = cell
                             if isinstance(cell, MergedCell):
-                                for merged_range in ws.merged_cells.ranges:
-                                    if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
-                                        target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                                        break
+                                    for merged_range in ws.merged_cells.ranges:
+                                        if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
+                                            target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                                            break
                                         
                             target_cell.value = value
                             target_cell.font = text_font
