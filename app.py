@@ -177,8 +177,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # Tab 1: Employees
 with tab1:
     st.subheader("Manage Employees")
-    upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
     emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
+    upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
     
     if upload_emp is not None:
         file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
@@ -200,8 +200,8 @@ with tab1:
 # Tab 2: Unavailability
 with tab2:
     st.subheader("Log Unavailability")
-    upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
     unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
+    upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
     
     if upload_unavail is not None:
         file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
@@ -223,8 +223,8 @@ with tab2:
 # Tab 3: Daily Requirements
 with tab3:
     st.subheader("Daily Shift Requirements")
-    upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
     req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
+    upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
     
     if upload_req is not None:
         file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
@@ -246,8 +246,8 @@ with tab3:
 # Tab 4: Fixed Shifts
 with tab4:
     st.subheader("Fixed Baseline Shifts")
-    upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
     fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
+    upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
     
     if upload_fixed is not None:
         file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
@@ -602,7 +602,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                         continue
 
                 # Rule: Under-18 school hours (Mon-Fri 9:00 AM - 3:30 PM)
-                if age < 18 and day not in ["Saturday", "Sunday"]:
+                if age < 18 park and day not in ["Saturday", "Sunday"]:
                     if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
                         continue
 
