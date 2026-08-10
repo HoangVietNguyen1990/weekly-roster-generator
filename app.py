@@ -3,6 +3,7 @@ import pandas as pd
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 import io
+import os
 from datetime import datetime, timedelta
 
 # Set page configuration with a modern design
@@ -69,6 +70,28 @@ st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
 st.sidebar.title("App Controls")
 st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
 
+# --- DISK PERSISTENCE ENGINE ---
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
+
+def load_persisted_df(filename, default_df):
+    path = os.path.join(DATA_DIR, filename)
+    if os.path.exists(path):
+        try:
+            # Read all columns as string to avoid formatting locks
+            df = pd.read_csv(path, dtype=str)
+            return df
+        except:
+            return default_df
+    return default_df
+
+def save_persisted_df(df, filename):
+    path = os.path.join(DATA_DIR, filename)
+    try:
+        df.astype(str).to_csv(path, index=False)
+    except:
+        pass
+
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
     if uploaded_file is None:
@@ -104,20 +127,21 @@ def read_excel_robust(uploaded_file):
         st.error(f"Error parsing Excel file structure: {e}")
         return None
 
-# Initialize Session States for manual inputs if they don't exist
+# Initialize Session States with Disk Cache
 if 'manual_employees' not in st.session_state:
-    st.session_state.manual_employees = pd.DataFrame([
-        {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": 28, "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
-        {"Name": "Stella", "Role": "Junior Team Member", "Age": 17, "Employment Type": "Casual", "Start Date": "2024-03-15"},
-        {"Name": "Ainsley Mactier", "Role": "Junior Team Member", "Age": 19, "Employment Type": "Casual", "Start Date": "2024-05-10"},
-        {"Name": "Aimi", "Role": "Junior Team Member", "Age": 20, "Employment Type": "Casual", "Start Date": "2024-06-01"},
-        {"Name": "Jude", "Role": "Senior Team Member", "Age": 25, "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
-        {"Name": "Aroha", "Role": "Senior Team Member", "Age": 32, "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
-        {"Name": "Robert", "Role": "Senior Team Member", "Age": 45, "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
+    default_emp = pd.DataFrame([
+        {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
+        {"Name": "Stella", "Role": "Junior Team Member", "Age": "17", "Employment Type": "Casual", "Start Date": "2024-03-15"},
+        {"Name": "Ainsley Mactier", "Role": "Junior Team Member", "Age": "19", "Employment Type": "Casual", "Start Date": "2024-05-10"},
+        {"Name": "Aimi", "Role": "Junior Team Member", "Age": "20", "Employment Type": "Casual", "Start Date": "2024-06-01"},
+        {"Name": "Jude", "Role": "Senior Team Member", "Age": "25", "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
+        {"Name": "Aroha", "Role": "Senior Team Member", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
+        {"Name": "Robert", "Role": "Senior Team Member", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
     ])
+    st.session_state.manual_employees = load_persisted_df("employees.csv", default_emp)
 
 if 'manual_unavailability' not in st.session_state:
-    st.session_state.manual_unavailability = pd.DataFrame([
+    default_unavail = pd.DataFrame([
         {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
         {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
         {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
@@ -125,18 +149,21 @@ if 'manual_unavailability' not in st.session_state:
         {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
         {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
     ])
+    st.session_state.manual_unavailability = load_persisted_df("unavailability.csv", default_unavail)
 
 if 'manual_requirements' not in st.session_state:
-    st.session_state.manual_requirements = pd.DataFrame([
+    default_req = pd.DataFrame([
         {"Shift": "7:30am-12:30pm", "Monday": "2", "Tuesday": "2", "Wednesday": "2", "Thursday": "2", "Friday": "2", "Saturday": "0", "Sunday": "0"},
         {"Shift": "12:30pm-5:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "2", "Sunday": "2"},
     ])
+    st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
 if 'manual_fixed' not in st.session_state:
-    st.session_state.manual_fixed = pd.DataFrame([
+    default_fixed = pd.DataFrame([
         {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "off", "Friday": "off", "Saturday": "off", "Sunday": "off"},
         {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
     ])
+    st.session_state.manual_fixed = load_persisted_df("fixed.csv", default_fixed)
 
 # --- TABS FOR INPUT ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -158,8 +185,10 @@ with tab1:
             if loaded is not None:
                 st.session_state.manual_employees = loaded
                 st.session_state.last_emp_file = file_key
+                save_persisted_df(loaded, "employees.csv")
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
     st.session_state.manual_employees = employees_df
+    save_persisted_df(employees_df, "employees.csv")
 
 # Tab 2: Unavailability
 with tab2:
@@ -172,8 +201,10 @@ with tab2:
             if loaded is not None:
                 st.session_state.manual_unavailability = loaded
                 st.session_state.last_unavail_file = file_key
+                save_persisted_df(loaded, "unavailability.csv")
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
     st.session_state.manual_unavailability = unavailability_df
+    save_persisted_df(unavailability_df, "unavailability.csv")
 
 # Tab 3: Daily Requirements
 with tab3:
@@ -186,8 +217,10 @@ with tab3:
             if loaded is not None:
                 st.session_state.manual_requirements = loaded
                 st.session_state.last_req_file = file_key
+                save_persisted_df(loaded, "requirements.csv")
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
     st.session_state.manual_requirements = requirements_df
+    save_persisted_df(requirements_df, "requirements.csv")
 
 # Tab 4: Fixed Shifts
 with tab4:
@@ -200,8 +233,10 @@ with tab4:
             if loaded is not None:
                 st.session_state.manual_fixed = loaded
                 st.session_state.last_fixed_file = file_key
+                save_persisted_df(loaded, "fixed.csv")
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
     st.session_state.manual_fixed = fixed_df
+    save_persisted_df(fixed_df, "fixed.csv")
 
 # Helpers for parsing times
 def parse_time_to_decimal(time_str):
