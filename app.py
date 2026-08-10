@@ -145,7 +145,7 @@ st.markdown("""
         background-color: rgba(9, 32, 28, 0.85) !important;
         border: 2px dashed rgba(229, 169, 60, 0.6) !important;
         border-radius: 12px !important;
-        padding: 15px !important;
+        padding: 12px !important;
     }
     [data-testid="stFileUploaderDropzone"]:hover {
         border-color: #e5a93c !important;
@@ -158,9 +158,23 @@ st.markdown("""
         opacity: 1 !important;
     }
 
+    /* FILE UPLOADER BUTTON SPECIFIC - CLEAN WHITE BUTTON WITH DARK TEAL TEXT */
+    [data-testid="stFileUploaderDropzone"] button,
+    [data-testid="stFileUploaderDropzone"] button * {
+        color: #0e2b26 !important;
+        background: #ffffff !important;
+        font-weight: 800 !important;
+        border: 1px solid #e5a93c !important;
+        border-radius: 8px !important;
+        opacity: 1 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button:hover {
+        background: #f7d594 !important;
+    }
+
     /* Hero Generate Button Styling - Tight Under Date Picker */
     .hero-generate-btn {
-        margin-top: -10px !important;
+        margin-top: 5px !important;
     }
     .hero-generate-btn button {
         width: 100% !important;
@@ -686,7 +700,6 @@ with tab_home:
     
     col1, col2 = st.columns([1, 1])
     with col1:
-        st.markdown('<div style="background: rgba(9, 32, 28, 0.6); padding: 16px; border-radius: 14px; border: 1px solid rgba(229,169,60,0.35);">', unsafe_allow_html=True)
         start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
         
         # Position Hero Generate Button TIGHT right under the Date Picker
@@ -704,7 +717,7 @@ with tab_home:
                     st.success("🎉 Weekly Roster successfully generated!")
                 except Exception as e:
                     st.error(f"Failed to generate roster: {e}")
-        st.markdown('</div></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
         upload_template = st.file_uploader("📋 Custom Layout Template (.xlsx)", type=["xlsx"], key="home_template_upload")
