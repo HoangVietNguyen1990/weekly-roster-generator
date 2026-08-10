@@ -69,6 +69,33 @@ st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
 st.sidebar.title("App Controls")
 st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
 
+# Helper to read excel sheets robustly, skipping empty headers
+def read_excel_robust(uploaded_file):
+    if uploaded_file is None:
+        return None
+    try:
+        # Load without headers first to scan rows
+        df_raw = pd.read_excel(uploaded_file, header=None)
+        
+        # Look for the header row containing key columns
+        keywords = ["name", "employee", "staff", "role", "age", "start date", "commencement", "shift", "day", "monday", "tuesday", "unavailability", "fixed"]
+        header_row_idx = 0
+        
+        for idx, row in df_raw.iterrows():
+            row_vals = [str(x).strip().lower() for x in row if pd.notna(x)]
+            matches = sum(1 for val in row_vals for kw in keywords if kw in val)
+            if matches >= 2:  # Found a row with at least 2 matching headers
+                header_row_idx = idx
+                break
+                
+        # Re-read from that header row index
+        df = pd.read_excel(uploaded_file, header=header_row_idx)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"Error parsing Excel file structure: {e}")
+        return None
+
 # Initialize Session States for manual inputs if they don't exist
 if 'manual_employees' not in st.session_state:
     st.session_state.manual_employees = pd.DataFrame([
@@ -127,10 +154,9 @@ with tab1:
     st.subheader("Manage Employees")
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
     if upload_emp is not None:
-        try:
-            st.session_state.manual_employees = pd.read_excel(upload_emp)
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
+        loaded = read_excel_robust(upload_emp)
+        if loaded is not None:
+            st.session_state.manual_employees = loaded
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
 
 # Tab 2: Unavailability
@@ -138,10 +164,9 @@ with tab2:
     st.subheader("Log Unavailability")
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
     if upload_unavail is not None:
-        try:
-            st.session_state.manual_unavailability = pd.read_excel(upload_unavail)
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
+        loaded = read_excel_robust(upload_unavail)
+        if loaded is not None:
+            st.session_state.manual_unavailability = loaded
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
 
 # Tab 3: Daily Requirements
@@ -149,10 +174,9 @@ with tab3:
     st.subheader("Daily Shift Requirements")
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
     if upload_req is not None:
-        try:
-            st.session_state.manual_requirements = pd.read_excel(upload_req)
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
+        loaded = read_excel_robust(upload_req)
+        if loaded is not None:
+            st.session_state.manual_requirements = loaded
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
 
 # Tab 4: Fixed Shifts
@@ -160,10 +184,9 @@ with tab4:
     st.subheader("Fixed Baseline Shifts")
     upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
     if upload_fixed is not None:
-        try:
-            st.session_state.manual_fixed = pd.read_excel(upload_fixed)
-        except Exception as e:
-            st.error(f"Error loading file: {e}")
+        loaded = read_excel_robust(upload_fixed)
+        if loaded is not None:
+            st.session_state.manual_fixed = loaded
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
 
 # Helpers for parsing times
@@ -228,6 +251,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     requirements = requirements_raw.copy()
     fixed = fixed_raw.copy()
 
+    # Standardize headers in case of leading/trailing spaces
+    employees.columns = [str(c).strip() for c in employees.columns]
+    unavailability.columns = [str(c).strip() for c in unavailability.columns]
+    requirements.columns = [str(c).strip() for c in requirements.columns]
+    fixed.columns = [str(c).strip() for c in fixed.columns]
+
     # Employees mapping
     emp_rename = {}
     c_name = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
@@ -273,11 +302,16 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         if pd.isna(name_val) or str(name_val).strip() == "":
             continue
         try:
-            start_date_parsed = pd.to_datetime(emp.get("Start Date", start_dt))
+            start_date_parsed = pd.to_datetime(emp.get("Start Date"))
+            # Compare parsed date to start_dt
             if start_date_parsed.date() <= start_dt:
                 active_employees.append(emp.to_dict())
         except:
+            # If date parsing fails or column doesn't exist, assume they are active
             active_employees.append(emp.to_dict())
+
+    if not active_employees:
+        return pd.DataFrame()
 
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     roster_output = {emp["Name"]: {day: "off" for day in days_of_week} for emp in active_employees}
@@ -328,7 +362,10 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
             for emp in active_employees:
                 name = emp["Name"]
-                age = int(emp.get("Age", 25))
+                try:
+                    age = int(emp.get("Age", 25))
+                except:
+                    age = 25
                 
                 # Check if already working a shift today
                 if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
@@ -404,78 +441,86 @@ with tab5:
     if st.button("Generate Weekly Roster"):
         with st.spinner("Calculating optimal roster locally..."):
             try:
-                # Use current state dataframes
                 roster_out_df = solve_roster(employees_df, unavailability_df, requirements_df, fixed_df, start_date)
                 
-                st.success("Roster successfully generated!")
-                st.dataframe(roster_out_df)
-                
-                # Create Excel download
-                if upload_template is not None:
-                    wb = openpyxl.load_workbook(upload_template)
+                if roster_out_df.empty:
+                    st.warning("⚠️ Roster generated is empty. Please verify that your Employees tab lists active employee names, and the Start Dates are not in the future.")
+                    st.markdown("### Debug Information:")
+                    st.write("Active Employees Table Loaded in App:", employees_df)
                 else:
-                    wb = openpyxl.Workbook()
+                    st.success("Roster successfully generated!")
+                    st.dataframe(roster_out_df)
                     
-                ws = wb.active
-                ws.title = f"Roster {start_date.strftime('%d.%m.%Y')}"
-                
-                headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                ws.append(headers)
-                
-                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                thin_border = Border(
-                    left=Side(style='thin', color='BFBFBF'),
-                    right=Side(style='thin', color='BFBFBF'),
-                    top=Side(style='thin', color='BFBFBF'),
-                    bottom=Side(style='thin', color='BFBFBF')
-                )
-                
-                for col_num, header in enumerate(headers, 1):
-                    cell = ws.cell(row=1, column=col_num)
-                    cell.fill = header_fill
-                    cell.font = header_font
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                    cell.border = thin_border
-                
-                unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
-                off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-                text_font = Font(name="Calibri", size=11)
-                
-                from openpyxl.cell.cell import MergedCell
-                
-                for row_idx, row_data in enumerate(roster_out_df.itertuples(index=False), 2):
-                    for col_idx, value in enumerate(row_data, 1):
-                        cell = ws.cell(row=row_idx, column=col_idx)
+                    # Create Excel download
+                    if upload_template is not None:
+                        wb = openpyxl.load_workbook(upload_template)
+                    else:
+                        wb = openpyxl.Workbook()
                         
-                        target_cell = cell
-                        if isinstance(cell, MergedCell):
-                            for merged_range in ws.merged_cells.ranges:
-                                if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
-                                    target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                                    break
-                                    
-                        target_cell.value = value
-                        target_cell.font = text_font
-                        target_cell.alignment = Alignment(horizontal="center", vertical="center")
-                        target_cell.border = thin_border
+                    ws = wb.active
+                    ws.title = f"Roster {start_date.strftime('%d.%m.%Y')}"
+                    
+                    headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    
+                    # If using template, clean up rows or write in place
+                    if upload_template is None:
+                        ws.append(headers)
                         
-                        val_str = str(value).strip().lower()
-                        if "unavailable" in val_str:
-                            target_cell.fill = unavail_fill
-                        elif val_str == "off":
-                            target_cell.fill = off_fill
-                
-                excel_data = io.BytesIO()
-                wb.save(excel_data)
-                excel_data.seek(0)
-                
-                st.download_button(
-                    label="📥 Download Roster Excel File",
-                    data=excel_data,
-                    file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                    thin_border = Border(
+                        left=Side(style='thin', color='BFBFBF'),
+                        right=Side(style='thin', color='BFBFBF'),
+                        top=Side(style='thin', color='BFBFBF'),
+                        bottom=Side(style='thin', color='BFBFBF')
+                    )
+                    
+                    if upload_template is None:
+                        for col_num, header in enumerate(headers, 1):
+                            cell = ws.cell(row=1, column=col_num)
+                            cell.fill = header_fill
+                            cell.font = header_font
+                            cell.alignment = Alignment(horizontal="center", vertical="center")
+                            cell.border = thin_border
+                    
+                    unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+                    off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                    text_font = Font(name="Calibri", size=11)
+                    
+                    from openpyxl.cell.cell import MergedCell
+                    
+                    for row_idx, row_data in enumerate(roster_out_df.itertuples(index=False), 2):
+                        for col_idx, value in enumerate(row_data, 1):
+                            cell = ws.cell(row=row_idx, column=col_idx)
+                            
+                            target_cell = cell
+                            if isinstance(cell, MergedCell):
+                                for merged_range in ws.merged_cells.ranges:
+                                    if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
+                                        target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                                        break
+                                        
+                            target_cell.value = value
+                            target_cell.font = text_font
+                            target_cell.alignment = Alignment(horizontal="center", vertical="center")
+                            target_cell.border = thin_border
+                            
+                            val_str = str(value).strip().lower()
+                            if "unavailable" in val_str:
+                                target_cell.fill = unavail_fill
+                            elif val_str == "off":
+                                target_cell.fill = off_fill
+                    
+                    excel_data = io.BytesIO()
+                    wb.save(excel_data)
+                    excel_data.seek(0)
+                    
+                    st.download_button(
+                        label="📥 Download Roster Excel File",
+                        data=excel_data,
+                        file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
                 
             except Exception as e:
                 st.error(f"Failed to generate roster: {e}")
