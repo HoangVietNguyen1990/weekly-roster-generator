@@ -169,6 +169,33 @@ st.markdown("""
         opacity: 1 !important;
     }
 
+    /* Hero Generate Button Styling */
+    .hero-generate-btn button {
+        width: 100% !important;
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
+        color: #0e2b26 !important;
+        border: none !important;
+        padding: 18px 36px !important;
+        border-radius: 14px !important;
+        font-weight: 900 !important;
+        font-size: 1.35rem !important;
+        letter-spacing: 0.5px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 8px 25px rgba(229, 169, 60, 0.45) !important;
+        margin-top: 15px !important;
+        margin-bottom: 25px !important;
+    }
+    .hero-generate-btn button p, .hero-generate-btn button span {
+        color: #0e2b26 !important;
+        font-weight: 900 !important;
+        font-size: 1.35rem !important;
+    }
+    .hero-generate-btn button:hover {
+        transform: translateY(-3px) scale(1.01) !important;
+        box-shadow: 0 12px 35px rgba(229, 169, 60, 0.65) !important;
+        background: linear-gradient(135deg, #f7d594 0%, #e5a93c 100%) !important;
+    }
+
     /* General Action Buttons */
     .stButton>button {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
@@ -181,22 +208,16 @@ st.markdown("""
         transition: all 0.3s ease;
         box-shadow: 0 4px 14px rgba(229, 169, 60, 0.35);
     }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(229, 169, 60, 0.55);
-        background: linear-gradient(135deg, #f7d594 0%, #e5a93c 100%);
-        color: #081d19;
-    }
 
     /* Download Button Specific Accent */
     .stDownloadButton>button {
         background: linear-gradient(135deg, #2e7d6e 0%, #1b5349 100%);
         color: #ffffff !important;
         border: 1px solid #e5a93c;
-        padding: 12px 28px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 1rem;
+        padding: 14px 32px;
+        border-radius: 12px;
+        font-weight: 800;
+        font-size: 1.1rem;
         transition: all 0.3s ease;
     }
     .stDownloadButton>button:hover {
@@ -211,7 +232,7 @@ st.markdown("""
         background-color: #09201c;
         border-right: 1px solid rgba(229, 169, 60, 0.2);
     }
-    section[data-testid="stSidebar"] * {
+    section[data-testid="section-sidebar"] * {
         color: #ffffff !important;
     }
 </style>
@@ -320,126 +341,14 @@ if 'manual_fixed' not in st.session_state:
     ])
     st.session_state.manual_fixed = load_persisted_df("fixed.csv", default_fixed)
 
-# --- TABS FOR INPUT ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+# --- NEW TAB ORDER: Home Page as Tab 1 ---
+tab_home, tab_emp, tab_unavail, tab_req, tab_fixed = st.tabs([
+    "🏠 Home / Roster Generator",
     "👥 Staff Members", 
     "🚫 Unavailability", 
     "📋 Daily Requirements", 
-    "📌 Fixed Shifts", 
-    "⚙️ Roster Engine & Export"
+    "📌 Fixed Shifts"
 ])
-
-# Tab 1: Employees
-with tab1:
-    st.subheader("Manage Bakery Employees")
-    emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
-    upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
-    
-    if upload_emp is not None:
-        file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
-        if st.session_state.get("last_emp_file") != file_key:
-            loaded = read_excel_robust(upload_emp)
-            if loaded is not None:
-                if emp_mode == "Replace current data":
-                    st.session_state.manual_employees = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_employees = combined
-                st.session_state.last_emp_file = file_key
-                save_persisted_df(st.session_state.manual_employees, "employees.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        👥 Bakery Staff Members List
-    </div>
-    """, unsafe_allow_html=True)
-    employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
-    st.session_state.manual_employees = employees_df
-    save_persisted_df(employees_df, "employees.csv")
-
-# Tab 2: Unavailability
-with tab2:
-    st.subheader("Log Staff Unavailability")
-    unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
-    upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
-    
-    if upload_unavail is not None:
-        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
-        if st.session_state.get("last_unavail_file") != file_key:
-            loaded = read_excel_robust(upload_unavail)
-            if loaded is not None:
-                if unavail_mode == "Replace current data":
-                    st.session_state.manual_unavailability = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_unavailability = combined
-                st.session_state.last_unavail_file = file_key
-                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        🚫 Staff Weekly Unavailability Constraints
-    </div>
-    """, unsafe_allow_html=True)
-    unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
-    st.session_state.manual_unavailability = unavailability_df
-    save_persisted_df(unavailability_df, "unavailability.csv")
-
-# Tab 3: Daily Requirements
-with tab3:
-    st.subheader("Daily Bakery Shift Requirements")
-    req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
-    upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
-    
-    if upload_req is not None:
-        file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
-        if st.session_state.get("last_req_file") != file_key:
-            loaded = read_excel_robust(upload_req)
-            if loaded is not None:
-                if req_mode == "Replace current data":
-                    st.session_state.manual_requirements = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_requirements = combined
-                st.session_state.last_req_file = file_key
-                save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📋 Daily Shift Coverage Requirements (Mon-Sun)
-    </div>
-    """, unsafe_allow_html=True)
-    requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
-    st.session_state.manual_requirements = requirements_df
-    save_persisted_df(requirements_df, "requirements.csv")
-
-# Tab 4: Fixed Shifts
-with tab4:
-    st.subheader("Fixed Baseline Shifts")
-    fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
-    upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
-    
-    if upload_fixed is not None:
-        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
-        if st.session_state.get("last_fixed_file") != file_key:
-            loaded = read_excel_robust(upload_fixed)
-            if loaded is not None:
-                if fixed_mode == "Replace current data":
-                    st.session_state.manual_fixed = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_fixed = combined
-                st.session_state.last_fixed_file = file_key
-                save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📌 Fixed Baseline Staff Shifts
-    </div>
-    """, unsafe_allow_html=True)
-    fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
-    st.session_state.manual_fixed = fixed_df
-    save_persisted_df(fixed_df, "fixed.csv")
 
 # Helpers for parsing times
 def parse_time_to_decimal(time_str):
@@ -533,12 +442,6 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     fixed = fixed_raw.copy()
     fixed.columns = [str(c).strip().lower() for c in fixed.columns]
 
-    if debug_logs is not None:
-        debug_logs["employees_cols"] = list(employees.columns)
-        debug_logs["unavail_cols"] = list(unavailability.columns)
-        debug_logs["requirements_cols"] = list(requirements.columns)
-        debug_logs["fixed_cols"] = list(fixed.columns)
-
     # Map employees columns
     name_col = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
     start_col = find_column(employees, ["start date", "commencement date", "started", "startdate", "commence date", "commence"])
@@ -590,10 +493,6 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             "Type": emp_type
         })
 
-    if debug_logs is not None:
-        debug_logs["active_employees_count"] = len(active_employees)
-        debug_logs["active_employees_list"] = [e["Name"] for e in active_employees]
-
     if not active_employees:
         return pd.DataFrame()
 
@@ -608,11 +507,9 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
     # 1. Apply fixed shifts first
     fixed_name_col = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
-    # Fallback to column 0 if no matching header name
     if not fixed_name_col and not fixed.empty:
         fixed_name_col = fixed.columns[0]
         
-    fixed_applied = 0
     if fixed_name_col:
         for _, fix_row in fixed.iterrows():
             raw_fixed_name = str(fix_row.get(fixed_name_col, "")).strip().lower()
@@ -625,12 +522,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                         if val.lower() not in ["off", "nan", ""]:
                             roster_output[name][day] = val
                             weekly_shifts_count[name] += 1
-                            fixed_applied += 1
                             if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
                                 elizabeth_weekday_shifts += 1
-
-    if debug_logs is not None:
-        debug_logs["fixed_applied_count"] = fixed_applied
 
     # 2. Check unavailability
     unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
@@ -666,18 +559,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     # 3. Schedule required shifts day by day
     req_day_col = find_column(requirements, ["day", "date", "weekday"])
     req_shift_col = find_column(requirements, ["shift", "time", "hours", "shift time"])
-    
-    # Check if requirements contains columns matching days of the week (Grid Format)
     has_day_cols = any(find_column(requirements, [day.lower(), day.lower()[:3]]) for day in days_of_week)
-
-    if debug_logs is not None:
-        debug_logs["shifts_per_day"] = {}
 
     for day in days_of_week:
         shifts_to_fill = []
         
         if has_day_cols and req_shift_col:
-            # Grid Format: Days are columns, rows are shifts, cell values are counts
             day_col = find_column(requirements, [day.lower(), day.lower()[:3]])
             if day_col:
                 for _, req in requirements.iterrows():
@@ -695,7 +582,6 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                                 for _ in range(count):
                                     shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
         elif req_day_col and req_shift_col:
-            # Flat Format: Rows are (Day, Shift, Count)
             req_count_col = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
             clean_day_series = requirements[req_day_col].astype(str).str.strip().str.lower()
             day_reqs = requirements[clean_day_series.str.startswith(day.lower()[:3])]
@@ -713,14 +599,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                     for _ in range(count):
                         shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
                         
-        # Get fixed shifts already applied for this day to subtract from requirements
         fixed_shifts_today = []
         for name in roster_output:
             val = roster_output[name][day]
             if val != "off" and val != " unavailable":
                 fixed_shifts_today.append(val)
                 
-        # Subtract fixed shifts from required shifts to fill
         remaining_shifts_to_fill = []
         for shift_req in shifts_to_fill:
             filled_idx = -1
@@ -731,15 +615,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                     filled_idx = idx
                     break
             if filled_idx >= 0:
-                fixed_shifts_today.pop(filled_idx)  # Consume this fixed shift
+                fixed_shifts_today.pop(filled_idx)
             else:
                 remaining_shifts_to_fill.append(shift_req)
                 
         shifts_to_fill = remaining_shifts_to_fill
         shifts_to_fill = sorted(shifts_to_fill, key=lambda x: x["duration"], reverse=True)
-
-        if debug_logs is not None:
-            debug_logs["shifts_per_day"][day] = len(shifts_to_fill)
 
         for shift_info in shifts_to_fill:
             best_candidate = None
@@ -750,15 +631,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 norm_name = emp["NormalizedName"]
                 age = emp["Age"]
                 
-                # Check if already working a shift today
                 if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
                     continue
                 
-                # Check weekly shift limit
                 if weekly_shifts_count[name] >= 5:
                     continue
 
-                # Check unavailability overlap
                 is_emp_unavailable = False
                 key = (norm_name, day.lower())
                 if key in unavail_map:
@@ -769,27 +647,22 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 if is_emp_unavailable:
                     continue
 
-                # Rule: Elizabeth cap and weekends
                 if name == "Elizabeth":
                     if day in ["Saturday", "Sunday"]:
                         continue
                     if elizabeth_weekday_shifts >= 2:
                         continue
 
-                # Rule: Under-18 school hours (Mon-Fri 9:00 AM - 3:30 PM)
                 if age < 18 and day not in ["Saturday", "Sunday"]:
                     if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
                         continue
 
-                # Calculate heuristic score
                 score = 0
                 score -= weekly_shifts_count[name] * 20
                 
-                # Junior rate preference
                 if age < 21:
                     score += (21 - age) * shift_info["duration"] * 2
                 
-                # Elizabeth early morning shift preference
                 if name == "Elizabeth" and shift_info["start"] in [7.0, 7.5]:
                     score += 100
 
@@ -803,7 +676,6 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 if best_candidate == "Elizabeth" and day not in ["Saturday", "Sunday"]:
                     elizabeth_weekday_shifts += 1
 
-    # Form dataframe output
     roster_rows = []
     for name, sched in roster_output.items():
         row = {"Employee": name}
@@ -811,41 +683,51 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         roster_rows.append(row)
     return pd.DataFrame(roster_rows)
 
-
-# Tab 5: Generate & Export
-with tab5:
-    st.subheader("Roster Configurations & Generation")
+# --- TAB 1: HOME PAGE & ROSTER GENERATOR ---
+with tab_home:
+    st.markdown("""
+    <div style="background: rgba(9, 32, 28, 0.7); border: 2px solid #e5a93c; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+        <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">⚡ Weekly Roster Generator</h2>
+        <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Configure your target week period below and hit the <b>Generate Weekly Roster</b> button to instantly build an award-compliant bakery schedule.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])
     with col1:
-        start_date = st.date_input("Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
-        upload_template = st.file_uploader("Upload Roster Layout Template (Optional)", type=["xlsx"], key="template_upload")
-    
-    if st.button("Generate Weekly Roster"):
-        with st.spinner("Calculating optimal roster locally..."):
+        start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
+    with col2:
+        upload_template = st.file_uploader("📋 Custom Layout Template (.xlsx)", type=["xlsx"], key="home_template_upload")
+
+    # Big Hero Generate Button
+    st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
+    if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
+        with st.spinner("Calculating optimal bakery roster locally..."):
             try:
-                # Debug logging structure
-                debug_logs = {}
-                roster_out_df = solve_roster(employees_df, unavailability_df, requirements_df, fixed_df, start_date, debug_logs)
+                emp_data = st.session_state.manual_employees
+                unavail_data = st.session_state.manual_unavailability
+                req_data = st.session_state.manual_requirements
+                fixed_data = st.session_state.manual_fixed
                 
-                # Store in session state
+                roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
                 st.session_state.final_roster_df = roster_out_df
-                st.success("Roster successfully generated!")
+                st.success("🎉 Weekly Roster successfully generated!")
             except Exception as e:
                 st.error(f"Failed to generate roster: {e}")
+    st.markdown('</div>', unsafe_allow_html=True)
 
+    # Display generated roster & export controls
     if "final_roster_df" in st.session_state:
         final_df = st.session_state.final_roster_df
         
         if final_df.empty:
-            st.warning("⚠️ Roster generated is empty. Please verify that your Employees tab lists active employee names.")
+            st.warning("⚠️ Roster generated is empty. Please check your Staff Members tab to ensure active employees are listed.")
         else:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 20px;">
-                📝 Final Generated Weekly Roster (Double-click any cell to manually override/edit)
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 14px 14px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+                📝 Generated Roster Preview & Manual Override Editor
             </div>
             """, unsafe_allow_html=True)
-            edited_final_df = st.data_editor(final_df, num_rows="dynamic", key="final_roster_editor")
+            edited_final_df = st.data_editor(final_df, num_rows="dynamic", key="home_final_roster_editor")
             st.session_state.final_roster_df = edited_final_df
             
             # Create Excel download
@@ -898,49 +780,43 @@ with tab5:
             
             from openpyxl.cell.cell import MergedCell
             
-            # Data Rows start at row 5
             for row_idx, row_data in enumerate(edited_final_df.itertuples(index=False), 5):
                 for col_idx, value in enumerate(row_data, 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
                     
                     target_cell = cell
                     if isinstance(cell, MergedCell):
-                            for merged_range in ws.merged_cells.ranges:
-                                if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
-                                    target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                                    break
+                        for merged_range in ws.merged_cells.ranges:
+                            if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
+                                target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                                break
                     
-                    # Store original value for color testing
                     val_str = str(value).strip().lower()
-                    
-                    # Format all empty/off/unavailable cells with uniform light grey fill
                     if "unavailable" in val_str or val_str == "off" or val_str == "nan" or val_str == "":
                         target_cell.fill = off_fill
                         target_cell.value = ""
                     else:
-                        target_cell.fill = white_fill  # Force clean solid white background for scheduled shifts
+                        target_cell.fill = white_fill
                         target_cell.value = value
                         
                     target_cell.font = text_font
                     target_cell.alignment = Alignment(horizontal="center", vertical="center")
                     target_cell.border = thin_border
 
-            # Set HUGE column widths to prevent text clipping
-            ws.column_dimensions['A'].width = 30  # Employee Column
+            ws.column_dimensions['A'].width = 30
             for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H']:
-                ws.column_dimensions[col_letter].width = 25  # Monday to Sunday Columns
+                ws.column_dimensions[col_letter].width = 25
                 
-            # Set precise row heights for better spacing and readability
-            ws.row_dimensions[1].height = 32  # Title banner height
-            ws.row_dimensions[2].height = 20  # Subtitle banner height
-            ws.row_dimensions[3].height = 12  # Spacer height
-            ws.row_dimensions[4].height = 28  # Header row height
+            ws.row_dimensions[1].height = 32
+            ws.row_dimensions[2].height = 20
+            ws.row_dimensions[3].height = 12
+            ws.row_dimensions[4].height = 28
             
             last_data_row = len(edited_final_df) + 4
             for r in range(5, last_data_row + 1):
-                ws.row_dimensions[r].height = 22  # Data row heights
+                ws.row_dimensions[r].height = 22
                 
-            # --- General Retail Industry Award Break Reference Note ---
+            # Award Break Card Note
             note_start_row = last_data_row + 3
             ws.row_dimensions[note_start_row].height = 26
             ws.merge_cells(start_row=note_start_row, start_column=1, end_row=note_start_row, end_column=8)
@@ -951,7 +827,6 @@ with tab5:
             note_hdr_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
             note_hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
             
-            # Sub-headers for breaks
             sub_hdr_row = note_start_row + 1
             ws.row_dimensions[sub_hdr_row].height = 22
             
@@ -975,7 +850,6 @@ with tab5:
                 c.alignment = Alignment(horizontal="center", vertical="center")
                 c.border = thin_border
 
-            # Break card content rows
             breaks_data = [
                 ("Less than 4 hours", "None", "None"),
                 ("4 hours up to 5 hours", "1 x 10 minutes", "None"),
@@ -988,7 +862,6 @@ with tab5:
             for duration_text, paid_breaks, unpaid_breaks in breaks_data:
                 ws.row_dimensions[curr_row].height = 20
                 
-                # Merge columns
                 ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
                 cell_dur = ws.cell(row=curr_row, column=1)
                 cell_dur.value = duration_text
@@ -1012,9 +885,123 @@ with tab5:
             wb.save(excel_data)
             excel_data.seek(0)
             
+            st.markdown("<br>", unsafe_allow_html=True)
             st.download_button(
-                label="📥 Download Roster Excel File",
+                label="📥 DOWNLOAD ROSTER EXCEL FILE (.XLSX)",
                 data=excel_data,
                 file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_excel_home"
             )
+
+# --- TAB 2: STAFF MEMBERS ---
+with tab_emp:
+    st.subheader("Manage Bakery Employees")
+    emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
+    upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
+    
+    if upload_emp is not None:
+        file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
+        if st.session_state.get("last_emp_file") != file_key:
+            loaded = read_excel_robust(upload_emp)
+            if loaded is not None:
+                if emp_mode == "Replace current data":
+                    st.session_state.manual_employees = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_employees = combined
+                st.session_state.last_emp_file = file_key
+                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        👥 Bakery Staff Members List
+    </div>
+    """, unsafe_allow_html=True)
+    employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
+    st.session_state.manual_employees = employees_df
+    save_persisted_df(employees_df, "employees.csv")
+
+# --- TAB 3: UNAVAILABILITY ---
+with tab_unavail:
+    st.subheader("Log Staff Unavailability")
+    unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
+    upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
+    
+    if upload_unavail is not None:
+        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
+        if st.session_state.get("last_unavail_file") != file_key:
+            loaded = read_excel_robust(upload_unavail)
+            if loaded is not None:
+                if unavail_mode == "Replace current data":
+                    st.session_state.manual_unavailability = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_unavailability = combined
+                st.session_state.last_unavail_file = file_key
+                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        🚫 Staff Weekly Unavailability Constraints
+    </div>
+    """, unsafe_allow_html=True)
+    unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
+    st.session_state.manual_unavailability = unavailability_df
+    save_persisted_df(unavailability_df, "unavailability.csv")
+
+# --- TAB 4: DAILY REQUIREMENTS ---
+with tab_req:
+    st.subheader("Daily Bakery Shift Requirements")
+    req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
+    upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+    
+    if upload_req is not None:
+        file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
+        if st.session_state.get("last_req_file") != file_key:
+            loaded = read_excel_robust(upload_req)
+            if loaded is not None:
+                if req_mode == "Replace current data":
+                    st.session_state.manual_requirements = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_requirements = combined
+                st.session_state.last_req_file = file_key
+                save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        📋 Daily Shift Coverage Requirements (Mon-Sun)
+    </div>
+    """, unsafe_allow_html=True)
+    requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
+    st.session_state.manual_requirements = requirements_df
+    save_persisted_df(requirements_df, "requirements.csv")
+
+# --- TAB 5: FIXED SHIFTS ---
+with tab_fixed:
+    st.subheader("Fixed Baseline Shifts")
+    fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
+    upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+    
+    if upload_fixed is not None:
+        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
+        if st.session_state.get("last_fixed_file") != file_key:
+            loaded = read_excel_robust(upload_fixed)
+            if loaded is not None:
+                if fixed_mode == "Replace current data":
+                    st.session_state.manual_fixed = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_fixed = combined
+                st.session_state.last_fixed_file = file_key
+                save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        📌 Fixed Baseline Staff Shifts
+    </div>
+    """, unsafe_allow_html=True)
+    fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
+    st.session_state.manual_fixed = fixed_df
+    save_persisted_df(fixed_df, "fixed.csv")
