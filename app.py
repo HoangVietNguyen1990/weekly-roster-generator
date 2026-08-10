@@ -701,7 +701,6 @@ with tab5:
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border = thin_border
             
-            unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
             off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
             white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
             text_font = Font(name="Calibri", size=11)
@@ -722,11 +721,8 @@ with tab5:
                     # Store original value for color testing
                     val_str = str(value).strip().lower()
                     
-                    # Format cell colors based on value, and clear text if 'off' or 'unavailable'
-                    if "unavailable" in val_str:
-                        target_cell.fill = unavail_fill
-                        target_cell.value = ""
-                    elif val_str == "off":
+                    # Format all empty/off/unavailable cells with uniform light grey fill
+                    if "unavailable" in val_str or val_str == "off" or val_str == "nan" or val_str == "":
                         target_cell.fill = off_fill
                         target_cell.value = ""
                     else:
