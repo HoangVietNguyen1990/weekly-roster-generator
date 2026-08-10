@@ -96,35 +96,35 @@ st.markdown("""
         font-weight: 900 !important;
     }
 
-    /* TAB BAR CUSTOMIZATION - BIGGER CARDS WITH GENEROUS BREATHING ROOM */
+    /* TAB BAR CUSTOMIZATION - FULLY ROUNDED PILL BUTTONS (BORDER-RADIUS 28PX) & MUCH WIDER THAN TEXT */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 12px !important;
+        gap: 14px !important;
         background-color: rgba(9, 32, 28, 0.85) !important;
-        padding: 10px 14px !important;
-        border-radius: 16px !important;
+        padding: 12px 16px !important;
+        border-radius: 35px !important;
         border: 1px solid rgba(229, 169, 60, 0.35) !important;
     }
     .stTabs button[role="tab"],
     .stTabs [data-baseweb="tab"] {
-        height: 58px !important;
-        padding-left: 28px !important;
-        padding-right: 28px !important;
-        padding-top: 12px !important;
-        padding-bottom: 12px !important;
-        border-radius: 12px !important;
+        height: 52px !important;
+        padding-left: 36px !important;
+        padding-right: 36px !important;
+        border-radius: 28px !important;
         font-size: 1.05rem !important;
         transition: all 0.25s ease !important;
+        margin: 2px !important;
     }
     .stTabs button[role="tab"] *,
     .stTabs [data-baseweb="tab"] *,
     .stTabs [aria-selected="false"] * {
         color: #ffffff !important;
         opacity: 1 !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
     }
     .stTabs [aria-selected="false"] {
         background-color: rgba(255, 255, 255, 0.12) !important;
         border: 1px solid transparent !important;
+        border-radius: 28px !important;
     }
     .stTabs [data-baseweb="tab"]:hover {
         background-color: rgba(229, 169, 60, 0.3) !important;
@@ -132,12 +132,16 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         border: none !important;
-        box-shadow: 0 6px 18px rgba(229, 169, 60, 0.45) !important;
+        border-radius: 28px !important;
+        box-shadow: 0 6px 20px rgba(229, 169, 60, 0.5) !important;
     }
     .stTabs [aria-selected="true"] * {
         color: #0e2b26 !important;
         font-weight: 900 !important;
         opacity: 1 !important;
+    }
+    .stTabs [data-baseweb="tab-highlight-container"] {
+        display: none !important;
     }
 
     /* Radio Buttons High Contrast */
