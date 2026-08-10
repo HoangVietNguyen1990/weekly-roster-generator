@@ -96,23 +96,31 @@ st.markdown("""
         font-weight: 900 !important;
     }
 
-    /* TAB BAR CUSTOMIZATION - FULLY ROUNDED PILL BUTTONS (BORDER-RADIUS 28PX) & MUCH WIDER THAN TEXT */
+    /* TAB BAR CUSTOMIZATION - ULTRA-WIDE ROUNDED PILL BUTTONS */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 14px !important;
+        gap: 16px !important;
         background-color: rgba(9, 32, 28, 0.85) !important;
-        padding: 12px 16px !important;
-        border-radius: 35px !important;
+        padding: 14px 20px !important;
+        border-radius: 40px !important;
         border: 1px solid rgba(229, 169, 60, 0.35) !important;
     }
     .stTabs button[role="tab"],
     .stTabs [data-baseweb="tab"] {
-        height: 52px !important;
-        padding-left: 36px !important;
-        padding-right: 36px !important;
-        border-radius: 28px !important;
+        height: 54px !important;
+        padding-left: 55px !important;
+        padding-right: 55px !important;
+        border-radius: 30px !important;
         font-size: 1.05rem !important;
         transition: all 0.25s ease !important;
-        margin: 2px !important;
+        margin: 0 4px !important;
+    }
+    .stTabs button[role="tab"] p,
+    .stTabs [data-baseweb="tab"] p,
+    .stTabs button[role="tab"] span,
+    .stTabs [data-baseweb="tab"] span {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+        white-space: nowrap !important;
     }
     .stTabs button[role="tab"] *,
     .stTabs [data-baseweb="tab"] *,
@@ -124,7 +132,7 @@ st.markdown("""
     .stTabs [aria-selected="false"] {
         background-color: rgba(255, 255, 255, 0.12) !important;
         border: 1px solid transparent !important;
-        border-radius: 28px !important;
+        border-radius: 30px !important;
     }
     .stTabs [data-baseweb="tab"]:hover {
         background-color: rgba(229, 169, 60, 0.3) !important;
@@ -132,8 +140,8 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         border: none !important;
-        border-radius: 28px !important;
-        box-shadow: 0 6px 20px rgba(229, 169, 60, 0.5) !important;
+        border-radius: 30px !important;
+        box-shadow: 0 6px 22px rgba(229, 169, 60, 0.55) !important;
     }
     .stTabs [aria-selected="true"] * {
         color: #0e2b26 !important;
