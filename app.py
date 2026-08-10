@@ -66,24 +66,25 @@ st.markdown("""
         border-radius: 14px !important;
         overflow: hidden !important;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45) !important;
-        border: 2px solid rgba(229, 169, 60, 0.4) !important;
+        border: 2px solid #e5a93c !important;
         background-color: #ffffff !important;
     }
     
-    /* Table Header Text & Background Override */
+    /* Golden Amber Background (#E5A93C) with Dark Teal Text (#0E2B26) */
     div[data-testid="stDataEditor"] th, 
     div[data-testid="stDataFrame"] th, 
     div[class*="header"], 
     div[role="columnheader"] {
-        background-color: #081d19 !important;
-        color: #e5a93c !important;
-        font-weight: 800 !important;
+        background-color: #e5a93c !important;
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
+        color: #0e2b26 !important;
+        font-weight: 900 !important;
         font-size: 1.05rem !important;
-        border-bottom: 2px solid #e5a93c !important;
+        border-bottom: 2px solid #b86f14 !important;
     }
-    div[role="columnheader"] * {
-        color: #e5a93c !important;
-        font-weight: 800 !important;
+    div[role="columnheader"] *, div[role="columnheader"] p, div[role="columnheader"] span {
+        color: #0e2b26 !important;
+        font-weight: 900 !important;
     }
 
     /* Tab Bar Customization - High Contrast Inactive Tabs */
