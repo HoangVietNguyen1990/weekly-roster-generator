@@ -102,7 +102,7 @@ if 'manual_employees' not in st.session_state:
     st.session_state.manual_employees = pd.DataFrame([
         {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": 28, "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
         {"Name": "Stella", "Role": "Junior Team Member", "Age": 17, "Employment Type": "Casual", "Start Date": "2024-03-15"},
-        {"Name": "Ainsley", "Role": "Junior Team Member", "Age": 19, "Employment Type": "Casual", "Start Date": "2024-05-10"},
+        {"Name": "Ainsley Mactier", "Role": "Junior Team Member", "Age": 19, "Employment Type": "Casual", "Start Date": "2024-05-10"},
         {"Name": "Aimi", "Role": "Junior Team Member", "Age": 20, "Employment Type": "Casual", "Start Date": "2024-06-01"},
         {"Name": "Jude", "Role": "Senior Team Member", "Age": 25, "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
         {"Name": "Aroha", "Role": "Senior Team Member", "Age": 32, "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
@@ -234,6 +234,26 @@ def find_column(df, candidates, default=""):
             return c
     return default
 
+# Robust Name Matcher
+def find_matching_employee(raw_name, name_map):
+    raw_name_clean = str(raw_name).strip().lower()
+    if not raw_name_clean or raw_name_clean == "nan":
+        return None
+    # 1. Exact match
+    if raw_name_clean in name_map:
+        return name_map[raw_name_clean]
+    # 2. Prefix match (e.g. "Ainsley" matches "Ainsley Mactier", "Ana" matches "anastasia")
+    for norm_name, display_name in name_map.items():
+        if norm_name.startswith(raw_name_clean) or raw_name_clean.startswith(norm_name):
+            return display_name
+    # 3. First name matches first name
+    for norm_name, display_name in name_map.items():
+        first_raw = raw_name_clean.split()[0]
+        first_norm = norm_name.split()[0]
+        if first_raw == first_norm:
+            return display_name
+    return None
+
 # Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
     # Standardize column headers to lowercase and stripped
@@ -332,7 +352,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     if fixed_name_col:
         for _, fix_row in fixed.iterrows():
             raw_fixed_name = str(fix_row.get(fixed_name_col, "")).strip().lower()
-            name = name_map.get(raw_fixed_name)
+            name = find_matching_employee(raw_fixed_name, name_map)
             if name:
                 for day in days_of_week:
                     day_col = find_column(fixed, [day.lower(), day.lower()[:3]])
@@ -359,10 +379,11 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             raw_unavail_name = str(un_row.get(unavail_name_col, "")).strip().lower()
             unavail_day = str(un_row.get(unavail_day_col, "")).strip().lower()
             window = str(un_row.get(unavail_window_col, "All Day")).strip()
-            if raw_unavail_name and unavail_day:
+            matched_name = find_matching_employee(raw_unavail_name, name_map)
+            if matched_name and unavail_day:
                 for day in days_of_week:
                     if unavail_day == day.lower() or unavail_day == day.lower()[:3]:
-                        key = (raw_unavail_name, day.lower())
+                        key = (matched_name.lower(), day.lower())
                         if key not in unavail_map:
                             unavail_map[key] = []
                         unavail_map[key].append(window)
