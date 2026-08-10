@@ -23,10 +23,14 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* Force high contrast text globally on labels, paragraphs, and markdown */
-    p, span, label, div[data-testid="stWidgetLabel"] p, .stMarkdown p {
+    /* Target widget labels cleanly without breaking buttons or inputs */
+    div[data-testid="stWidgetLabel"] p, 
+    div[data-testid="stWidgetLabel"] span, 
+    div[data-testid="stWidgetLabel"] label,
+    .stMarkdown p {
         color: #ffffff !important;
-        font-weight: 500;
+        font-weight: 600 !important;
+        font-size: 1.05rem !important;
     }
     
     /* Header Banner Styling */
@@ -55,10 +59,10 @@ st.markdown("""
     /* Tab Bar Customization - High Contrast Inactive Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: rgba(9, 32, 28, 0.8);
+        background-color: rgba(9, 32, 28, 0.85);
         padding: 8px;
         border-radius: 14px;
-        border: 1px solid rgba(229, 169, 60, 0.3);
+        border: 1px solid rgba(229, 169, 60, 0.35);
     }
     .stTabs [data-baseweb="tab"] {
         height: 48px;
@@ -96,15 +100,38 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* File Uploader High Contrast */
-    section[data-testid="stFileUploader"] label, 
-    section[data-testid="stFileUploader"] span, 
-    section[data-testid="stFileUploader"] p,
-    section[data-testid="stFileUploader"] small {
-        color: #ffffff !important;
+    /* File Uploader Dropzone Styling */
+    [data-testid="stFileUploaderDropzone"] {
+        background-color: rgba(9, 32, 28, 0.85) !important;
+        border: 2px dashed rgba(229, 169, 60, 0.6) !important;
+        border-radius: 12px !important;
+        padding: 15px !important;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: #e5a93c !important;
+        background-color: rgba(9, 32, 28, 0.95) !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button {
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
+        color: #0e2b26 !important;
+        border: none !important;
+        font-weight: 800 !important;
+        border-radius: 8px !important;
+        padding: 8px 18px !important;
+    }
+    [data-testid="stFileUploaderDropzone"] button * {
+        color: #0e2b26 !important;
+        font-weight: 800 !important;
+    }
+    [data-testid="stFileUploaderDropzone"] small, 
+    [data-testid="stFileUploaderInstructions"] span,
+    [data-testid="stFileUploaderInstructions"] div,
+    [data-testid="stFileUploaderInstructions"] p {
+        color: #c8e6e0 !important;
+        font-weight: 500 !important;
     }
 
-    /* Buttons Styling - Golden Wheat Amber Gradient */
+    /* General Action Buttons */
     .stButton>button {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
         color: #0e2b26;
