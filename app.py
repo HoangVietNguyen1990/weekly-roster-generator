@@ -37,19 +37,20 @@ st.markdown("""
         opacity: 1 !important;
     }
     
-    /* Header Banner Styling */
+    /* Header Banner Styling - Ultra Standout Title */
     .header-style {
-        background: linear-gradient(135deg, #ffffff 0%, #f7d594 50%, #e5a93c 100%);
+        background: linear-gradient(135deg, #ffffff 0%, #f7d594 40%, #e5a93c 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-weight: 800;
-        font-size: 2.8rem;
-        margin-bottom: 4px;
-        letter-spacing: -0.5px;
+        font-weight: 900;
+        font-size: 3.2rem;
+        margin-bottom: 6px;
+        letter-spacing: -0.8px;
+        filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
     }
     .sub-header-style {
         color: #c8e6e0 !important;
-        font-size: 1.15rem;
+        font-size: 1.2rem;
         margin-bottom: 25px;
         font-weight: 400;
     }
@@ -58,6 +59,31 @@ st.markdown("""
     h1, h2, h3, h4, h5, h6 {
         color: #ffffff !important;
         font-weight: 700 !important;
+    }
+
+    /* TABLE HEADERS & DATA EDITOR STANDOUT STYLING */
+    div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45) !important;
+        border: 2px solid rgba(229, 169, 60, 0.4) !important;
+        background-color: #ffffff !important;
+    }
+    
+    /* Table Header Text & Background Override */
+    div[data-testid="stDataEditor"] th, 
+    div[data-testid="stDataFrame"] th, 
+    div[class*="header"], 
+    div[role="columnheader"] {
+        background-color: #081d19 !important;
+        color: #e5a93c !important;
+        font-weight: 800 !important;
+        font-size: 1.05rem !important;
+        border-bottom: 2px solid #e5a93c !important;
+    }
+    div[role="columnheader"] * {
+        color: #e5a93c !important;
+        font-weight: 800 !important;
     }
 
     /* Tab Bar Customization - High Contrast Inactive Tabs */
@@ -887,7 +913,7 @@ with tab5:
             note_hdr_cell = ws.cell(row=note_start_row, column=1)
             note_hdr_cell.value = "General Retail Industry Award - Required Breaks Reference Card:"
             note_hdr_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
-            note_hdr_cell.fill = note_hdr_cell
+            note_hdr_cell.fill = note_hdr_fill
             note_hdr_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
             note_hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
             
