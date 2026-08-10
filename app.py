@@ -246,154 +246,152 @@ def find_column(df, candidates, default=""):
 
 # Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt):
+    # Standardize column headers to lowercase and stripped
     employees = employees_raw.copy()
+    employees.columns = [str(c).strip().lower() for c in employees.columns]
+    
     unavailability = unavailability_raw.copy()
+    unavailability.columns = [str(c).strip().lower() for c in unavailability.columns]
+    
     requirements = requirements_raw.copy()
+    requirements.columns = [str(c).strip().lower() for c in requirements.columns]
+    
     fixed = fixed_raw.copy()
+    fixed.columns = [str(c).strip().lower() for c in fixed.columns]
 
-    # Standardize headers in case of leading/trailing spaces
-    employees.columns = [str(c).strip() for c in employees.columns]
-    unavailability.columns = [str(c).strip() for c in unavailability.columns]
-    requirements.columns = [str(c).strip() for c in requirements.columns]
-    fixed.columns = [str(c).strip() for c in fixed.columns]
+    # Map employees columns
+    name_col = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
+    start_col = find_column(employees, ["start date", "commencement date", "started", "startdate", "commence date", "commence"])
+    age_col = find_column(employees, ["age", "years"])
+    dob_col = find_column(employees, ["dob", "date of birth", "birth date"])
+    type_col = find_column(employees, ["employment type", "type", "status", "ft/pt/casual", "employmenttype"])
 
-    # Defensive renaming & fallback checks for Employees
-    emp_rename = {}
-    c_name = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
-    if c_name: 
-        emp_rename[c_name] = "Name"
-    c_start = find_column(employees, ["start date", "commencement date", "started", "startdate", "commence date", "commence"])
-    if c_start: 
-        emp_rename[c_start] = "Start Date"
-    c_age = find_column(employees, ["age", "years"])
-    if c_age: 
-        emp_rename[c_age] = "Age"
-    c_dob = find_column(employees, ["dob", "date of birth", "birth date"])
-    if c_dob: 
-        emp_rename[c_dob] = "DOB"
-    c_type = find_column(employees, ["employment type", "type", "status", "ft/pt/casual", "employmenttype"])
-    if c_type: 
-        emp_rename[c_type] = "Employment Type"
-    employees = employees.rename(columns=emp_rename)
-
-    if "Name" not in employees.columns:
-        employees["Name"] = employees.iloc[:, 0] if not employees.empty else "Unknown"
-    if "Start Date" not in employees.columns:
-        employees["Start Date"] = start_dt
-    if "Employment Type" not in employees.columns:
-        employees["Employment Type"] = "Casual"
-
-    # Calculate Age dynamically if DOB is present and Age is missing
-    if "DOB" in employees.columns and ("Age" not in employees.columns or employees["Age"].isna().all()):
-        try:
-            dob_parsed = pd.to_datetime(employees["DOB"], errors='coerce')
-            today = datetime.now()
-            employees["Age"] = dob_parsed.apply(lambda x: today.year - x.year - ((today.month, today.day) < (x.month, x.day)) if pd.notna(x) else 25)
-        except:
-            employees["Age"] = 25
-    if "Age" not in employees.columns:
-        employees["Age"] = 25
-
-    # Defensive renaming & fallback checks for Unavailability
-    unavail_rename = {}
-    c_u_name = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
-    if c_u_name: unavail_rename[c_u_name] = "Employee"
-    c_u_day = find_column(unavailability, ["day", "date", "weekday"])
-    if c_u_day: unavail_rename[c_u_day] = "Day"
-    c_u_window = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason"])
-    if c_u_window: unavail_rename[c_u_window] = "Time Window"
-    unavailability = unavailability.rename(columns=unavail_rename)
-
-    if "Employee" not in unavailability.columns:
-        unavailability["Employee"] = unavailability.iloc[:, 0] if not unavailability.empty else ""
-    if "Day" not in unavailability.columns:
-        unavailability["Day"] = unavailability.iloc[:, 1] if not unavailability.empty else ""
-    if "Time Window" not in unavailability.columns:
-        unavailability["Time Window"] = "All Day"
-
-    # Defensive renaming & fallback checks for Requirements
-    req_rename = {}
-    c_r_day = find_column(requirements, ["day", "date", "weekday"])
-    if c_r_day: req_rename[c_r_day] = "Day"
-    c_r_shift = find_column(requirements, ["shift", "time", "hours", "shift time"])
-    if c_r_shift: req_rename[c_r_shift] = "Shift"
-    c_r_count = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
-    if c_r_count: req_rename[c_r_count] = "Count Required"
-    requirements = requirements.rename(columns=req_rename)
-
-    if "Day" not in requirements.columns:
-        requirements["Day"] = requirements.iloc[:, 0] if not requirements.empty else ""
-    if "Shift" not in requirements.columns:
-        requirements["Shift"] = requirements.iloc[:, 1] if not requirements.empty else ""
-    if "Count Required" not in requirements.columns:
-        requirements["Count Required"] = 1
-
-    # Defensive renaming & fallback checks for Fixed Shifts
-    fixed_rename = {}
-    c_f_name = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
-    if c_f_name: fixed_rename[c_f_name] = "Employee"
-    fixed = fixed.rename(columns=fixed_rename)
-
-    if "Employee" not in fixed.columns:
-        fixed["Employee"] = fixed.iloc[:, 0] if not fixed.empty else ""
-
-    # Filter active employees
+    # Build active employees list
     active_employees = []
-    for _, emp in employees.iterrows():
-        name_val = emp.get("Name")
-        if pd.isna(name_val) or str(name_val).strip() == "":
+    for _, row in employees.iterrows():
+        raw_name = str(row.get(name_col, "")).strip() if name_col else ""
+        if not raw_name or raw_name.lower() in ["nan", ""]:
             continue
-        try:
-            start_date_parsed = pd.to_datetime(emp.get("Start Date"))
-            if start_date_parsed.date() <= start_dt:
-                active_employees.append(emp.to_dict())
-        except:
-            active_employees.append(emp.to_dict())
+            
+        is_active = True
+        if start_col:
+            try:
+                start_val = row.get(start_col)
+                if pd.notna(start_val):
+                    start_date_parsed = pd.to_datetime(start_val)
+                    if start_date_parsed.date() > start_dt:
+                        is_active = False
+            except:
+                pass
+                
+        if not is_active:
+            continue
+            
+        age = 25
+        if age_col and pd.notna(row.get(age_col)):
+            try:
+                age = int(row.get(age_col))
+            except:
+                pass
+        elif dob_col and pd.notna(row.get(dob_col)):
+            try:
+                dob_parsed = pd.to_datetime(row.get(dob_col))
+                today = datetime.now()
+                age = today.year - dob_parsed.year - ((today.month, today.day) < (dob_parsed.month, dob_parsed.day))
+            except:
+                pass
+                
+        emp_type = str(row.get(type_col, "Casual")).strip() if type_col else "Casual"
+        
+        active_employees.append({
+            "Name": raw_name,
+            "NormalizedName": raw_name.lower(),
+            "Age": age,
+            "Type": emp_type
+        })
 
     if not active_employees:
         return pd.DataFrame()
 
+    # Create mapping from normalized name to original name
+    name_map = {emp["NormalizedName"]: emp["Name"] for emp in active_employees}
+    
+    # Initialize Roster
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     roster_output = {emp["Name"]: {day: "off" for day in days_of_week} for emp in active_employees}
     weekly_shifts_count = {emp["Name"]: 0 for emp in active_employees}
     elizabeth_weekday_shifts = 0
 
     # 1. Apply fixed shifts first
-    for _, fix_row in fixed.iterrows():
-        name = fix_row.get("Employee")
-        if name in roster_output:
-            for day in days_of_week:
-                val = str(fix_row.get(day, "off")).strip()
-                if val.lower() not in ["off", "nan", ""]:
-                    roster_output[name][day] = val
-                    weekly_shifts_count[name] += 1
-                    if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
-                        elizabeth_weekday_shifts += 1
+    fixed_name_col = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
+    if fixed_name_col:
+        for _, fix_row in fixed.iterrows():
+            raw_fixed_name = str(fix_row.get(fixed_name_col, "")).strip().lower()
+            name = name_map.get(raw_fixed_name)
+            if name:
+                for day in days_of_week:
+                    day_col = find_column(fixed, [day.lower(), day.lower()[:3]])
+                    if day_col:
+                        val = str(fix_row.get(day_col, "off")).strip()
+                        if val.lower() not in ["off", "nan", ""]:
+                            roster_output[name][day] = val
+                            weekly_shifts_count[name] += 1
+                            if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
+                                elizabeth_weekday_shifts += 1
 
-    # 2. Check general day-off unavailability
-    for _, un_row in unavailability.iterrows():
-        name = un_row.get("Employee")
-        day = un_row.get("Day")
-        window = str(un_row.get("Time Window", "All Day")).strip().lower()
-        if name in roster_output and day in days_of_week:
-            if "all day" in window or "anytime" in window:
-                if roster_output[name][day] == "off":
-                    roster_output[name][day] = " unavailable"
+    # 2. Check unavailability
+    unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
+    unavail_day_col = find_column(unavailability, ["day", "date", "weekday"])
+    unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason"])
+
+    # Key: (normalized_name, day.lower()) -> list of unavailability windows
+    unavail_map = {}
+    if unavail_name_col and unavail_day_col and unavail_window_col:
+        for _, un_row in unavailability.iterrows():
+            raw_unavail_name = str(un_row.get(unavail_name_col, "")).strip().lower()
+            unavail_day = str(un_row.get(unavail_day_col, "")).strip().lower()
+            window = str(un_row.get(unavail_window_col, "All Day")).strip()
+            if raw_unavail_name and unavail_day:
+                for day in days_of_week:
+                    if unavail_day == day.lower() or unavail_day == day.lower()[:3]:
+                        key = (raw_unavail_name, day.lower())
+                        if key not in unavail_map:
+                            unavail_map[key] = []
+                        unavail_map[key].append(window)
+
+    # Mark day-off unavailability
+    for (norm_name, day_lower), windows in unavail_map.items():
+        name = name_map.get(norm_name)
+        if name:
+            for window in windows:
+                if "all day" in window.lower() or "anytime" in window.lower():
+                    for day in days_of_week:
+                        if day.lower() == day_lower:
+                            if roster_output[name][day] == "off":
+                                roster_output[name][day] = " unavailable"
 
     # 3. Schedule required shifts day by day
+    req_day_col = find_column(requirements, ["day", "date", "weekday"])
+    req_shift_col = find_column(requirements, ["shift", "time", "hours", "shift time"])
+    req_count_col = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
+
     for day in days_of_week:
-        day_reqs = requirements[requirements["Day"].astype(str).str.lower() == day.lower()]
         shifts_to_fill = []
-        for _, req in day_reqs.iterrows():
-            shift = req.get("Shift")
-            count = int(req.get("Count Required", 1))
-            parsed = parse_shift_range(shift)
-            if parsed:
-                start, end, duration = parsed
-                for _ in range(count):
-                    shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
-                    
-        # Sort shifts by duration descending (longest shift first)
+        if req_day_col and req_shift_col:
+            day_reqs = requirements[requirements[req_day_col].astype(str).str.lower().str.startswith(day.lower()[:3])]
+            for _, req in day_reqs.iterrows():
+                shift = str(req.get(req_shift_col, "")).strip()
+                count_val = req.get(req_count_col, 1)
+                try:
+                    count = int(count_val) if pd.notna(count_val) else 1
+                except:
+                    count = 1
+                parsed = parse_shift_range(shift)
+                if parsed:
+                    start, end, duration = parsed
+                    for _ in range(count):
+                        shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
+                        
         shifts_to_fill = sorted(shifts_to_fill, key=lambda x: x["duration"], reverse=True)
 
         for shift_info in shifts_to_fill:
@@ -402,10 +400,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
             for emp in active_employees:
                 name = emp["Name"]
-                try:
-                    age = int(emp.get("Age", 25))
-                except:
-                    age = 25
+                norm_name = emp["NormalizedName"]
+                age = emp["Age"]
                 
                 # Check if already working a shift today
                 if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
@@ -415,14 +411,14 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 if weekly_shifts_count[name] >= 5:
                     continue
 
-                # Check day-specific unavailability
+                # Check unavailability overlap
                 is_emp_unavailable = False
-                emp_unavail = unavailability[(unavailability["Employee"] == name) & (unavailability["Day"].astype(str).str.lower() == day.lower())]
-                for _, un_row in emp_unavail.iterrows():
-                    window = str(un_row.get("Time Window", "All Day"))
-                    if is_overlapping_unavailability(window, shift_info["start"], shift_info["end"]):
-                        is_emp_unavailable = True
-                        break
+                key = (norm_name, day.lower())
+                if key in unavail_map:
+                    for window in unavail_map[key]:
+                        if is_overlapping_unavailability(window, shift_info["start"], shift_info["end"]):
+                            is_emp_unavailable = True
+                            break
                 if is_emp_unavailable:
                     continue
 
