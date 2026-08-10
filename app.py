@@ -83,10 +83,9 @@ def read_excel_robust(uploaded_file):
         
         for idx, row in df_raw.iterrows():
             row_vals = [str(x).strip().lower() for x in row if pd.notna(x)]
-            # Ensure it is a multi-column row (skips titles/merged header banners) and has keywords
             if len(row_vals) >= 2:
                 matches = sum(1 for val in row_vals for kw in keywords if kw in val)
-                if matches >= 2:  # Must match at least 2 headers (e.g. NAME and Commence)
+                if matches >= 2:
                     header_row_idx = idx
                     break
                 
@@ -258,19 +257,31 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     requirements.columns = [str(c).strip() for c in requirements.columns]
     fixed.columns = [str(c).strip() for c in fixed.columns]
 
-    # Employees mapping
+    # Defensive renaming & fallback checks for Employees
     emp_rename = {}
     c_name = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
-    if c_name: emp_rename[c_name] = "Name"
+    if c_name: 
+        emp_rename[c_name] = "Name"
     c_start = find_column(employees, ["start date", "commencement date", "started", "startdate", "commence date", "commence"])
-    if c_start: emp_rename[c_start] = "Start Date"
+    if c_start: 
+        emp_rename[c_start] = "Start Date"
     c_age = find_column(employees, ["age", "years"])
-    if c_age: emp_rename[c_age] = "Age"
+    if c_age: 
+        emp_rename[c_age] = "Age"
     c_dob = find_column(employees, ["dob", "date of birth", "birth date"])
-    if c_dob: emp_rename[c_dob] = "DOB"
+    if c_dob: 
+        emp_rename[c_dob] = "DOB"
     c_type = find_column(employees, ["employment type", "type", "status", "ft/pt/casual", "employmenttype"])
-    if c_type: emp_rename[c_type] = "Employment Type"
+    if c_type: 
+        emp_rename[c_type] = "Employment Type"
     employees = employees.rename(columns=emp_rename)
+
+    if "Name" not in employees.columns:
+        employees["Name"] = employees.iloc[:, 0] if not employees.empty else "Unknown"
+    if "Start Date" not in employees.columns:
+        employees["Start Date"] = start_dt
+    if "Employment Type" not in employees.columns:
+        employees["Employment Type"] = "Casual"
 
     # Calculate Age dynamically if DOB is present and Age is missing
     if "DOB" in employees.columns and ("Age" not in employees.columns or employees["Age"].isna().all()):
@@ -280,8 +291,10 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             employees["Age"] = dob_parsed.apply(lambda x: today.year - x.year - ((today.month, today.day) < (x.month, x.day)) if pd.notna(x) else 25)
         except:
             employees["Age"] = 25
+    if "Age" not in employees.columns:
+        employees["Age"] = 25
 
-    # Unavailability mapping
+    # Defensive renaming & fallback checks for Unavailability
     unavail_rename = {}
     c_u_name = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
     if c_u_name: unavail_rename[c_u_name] = "Employee"
@@ -291,7 +304,14 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     if c_u_window: unavail_rename[c_u_window] = "Time Window"
     unavailability = unavailability.rename(columns=unavail_rename)
 
-    # Requirements mapping
+    if "Employee" not in unavailability.columns:
+        unavailability["Employee"] = unavailability.iloc[:, 0] if not unavailability.empty else ""
+    if "Day" not in unavailability.columns:
+        unavailability["Day"] = unavailability.iloc[:, 1] if not unavailability.empty else ""
+    if "Time Window" not in unavailability.columns:
+        unavailability["Time Window"] = "All Day"
+
+    # Defensive renaming & fallback checks for Requirements
     req_rename = {}
     c_r_day = find_column(requirements, ["day", "date", "weekday"])
     if c_r_day: req_rename[c_r_day] = "Day"
@@ -301,11 +321,21 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     if c_r_count: req_rename[c_r_count] = "Count Required"
     requirements = requirements.rename(columns=req_rename)
 
-    # Fixed mapping
+    if "Day" not in requirements.columns:
+        requirements["Day"] = requirements.iloc[:, 0] if not requirements.empty else ""
+    if "Shift" not in requirements.columns:
+        requirements["Shift"] = requirements.iloc[:, 1] if not requirements.empty else ""
+    if "Count Required" not in requirements.columns:
+        requirements["Count Required"] = 1
+
+    # Defensive renaming & fallback checks for Fixed Shifts
     fixed_rename = {}
     c_f_name = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
     if c_f_name: fixed_rename[c_f_name] = "Employee"
     fixed = fixed.rename(columns=fixed_rename)
+
+    if "Employee" not in fixed.columns:
+        fixed["Employee"] = fixed.iloc[:, 0] if not fixed.empty else ""
 
     # Filter active employees
     active_employees = []
