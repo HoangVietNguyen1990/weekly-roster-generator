@@ -602,7 +602,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                         continue
 
                 # Rule: Under-18 school hours (Mon-Fri 9:00 AM - 3:30 PM)
-                if age < 18 park and day not in ["Saturday", "Sunday"]:
+                if age < 18 and day not in ["Saturday", "Sunday"]:
                     if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
                         continue
 
