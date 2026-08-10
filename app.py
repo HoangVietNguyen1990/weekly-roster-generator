@@ -1,3 +1,4 @@
+import streamlit st
 import streamlit as st
 import pandas as pd
 import openpyxl
@@ -680,12 +681,32 @@ with tab5:
             
             headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             
-            # If using template, clean up rows or write in place
-            if upload_template is None:
-                ws.append(headers)
+            # Title banner
+            ws.merge_cells('A1:H1')
+            cell_title = ws['A1']
+            cell_title.value = "Brumby's Pakenham Weekly Roster"
+            cell_title.font = Font(name="Calibri", size=16, bold=True, color="1F4E78")
+            cell_title.alignment = Alignment(horizontal="left", vertical="center")
+            
+            # Week period banner
+            end_dt = start_date + timedelta(days=6)
+            period_str = f"Week Period: {start_date.strftime('%d.%m.%Y')} to {end_dt.strftime('%d.%m.%Y')}"
+            ws.merge_cells('A2:H2')
+            cell_period = ws['A2']
+            cell_period.value = period_str
+            cell_period.font = Font(name="Calibri", size=11, italic=True, color="595959")
+            cell_period.alignment = Alignment(horizontal="left", vertical="center")
+            
+            # Header Row
+            for col_num, header in enumerate(headers, 1):
+                cell = ws.cell(row=4, column=col_num)
+                cell.value = header
+                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
                 
-            header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
             thin_border = Border(
                 left=Side(style='thin', color='BFBFBF'),
                 right=Side(style='thin', color='BFBFBF'),
@@ -693,21 +714,14 @@ with tab5:
                 bottom=Side(style='thin', color='BFBFBF')
             )
             
-            if upload_template is None:
-                for col_num, header in enumerate(headers, 1):
-                    cell = ws.cell(row=1, column=col_num)
-                    cell.fill = header_fill
-                    cell.font = header_font
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                    cell.border = thin_border
-            
             off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
             white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
             text_font = Font(name="Calibri", size=11)
             
             from openpyxl.cell.cell import MergedCell
             
-            for row_idx, row_data in enumerate(edited_final_df.itertuples(index=False), 2):
+            # Data Rows start at row 5
+            for row_idx, row_data in enumerate(edited_final_df.itertuples(index=False), 5):
                 for col_idx, value in enumerate(row_data, 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
                     
@@ -739,9 +753,82 @@ with tab5:
                 ws.column_dimensions[col_letter].width = 25  # Monday to Sunday Columns
                 
             # Set precise row heights for better spacing and readability
-            ws.row_dimensions[1].height = 28  # Header row height
-            for r in range(2, len(edited_final_df) + 2):
+            ws.row_dimensions[1].height = 32  # Title banner height
+            ws.row_dimensions[2].height = 20  # Subtitle banner height
+            ws.row_dimensions[3].height = 12  # Spacer height
+            ws.row_dimensions[4].height = 28  # Header row height
+            
+            last_data_row = len(edited_final_df) + 4
+            for r in range(5, last_data_row + 1):
                 ws.row_dimensions[r].height = 22  # Data row heights
+                
+            # --- General Retail Industry Award Break Reference Note ---
+            note_start_row = last_data_row + 3
+            ws.row_dimensions[note_start_row].height = 26
+            ws.merge_cells(start_row=note_start_row, start_column=1, end_row=note_start_row, end_column=8)
+            note_hdr_cell = ws.cell(row=note_start_row, column=1)
+            note_hdr_cell.value = "General Retail Industry Award - Required Breaks Reference Card:"
+            note_hdr_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
+            note_hdr_cell.fill = note_hdr_fill
+            note_hdr_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
+            note_hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
+            
+            # Sub-headers for breaks
+            sub_hdr_row = note_start_row + 1
+            ws.row_dimensions[sub_hdr_row].height = 22
+            
+            ws.merge_cells(start_row=sub_hdr_row, start_column=1, end_row=sub_hdr_row, end_column=3)
+            c1 = ws.cell(row=sub_hdr_row, column=1)
+            c1.value = "Shift Duration"
+            
+            ws.merge_cells(start_row=sub_hdr_row, start_column=4, end_row=sub_hdr_row, end_column=6)
+            c2 = ws.cell(row=sub_hdr_row, column=4)
+            c2.value = "Paid Rest Break(s)"
+            
+            ws.merge_cells(start_row=sub_hdr_row, start_column=7, end_row=sub_hdr_row, end_column=8)
+            c3 = ws.cell(row=sub_hdr_row, column=7)
+            c3.value = "Unpaid Meal Break(s)"
+            
+            sub_hdr_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+            sub_font = Font(name="Calibri", size=10, bold=True)
+            for c in [c1, c2, c3]:
+                c.fill = sub_hdr_fill
+                c.font = sub_font
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = thin_border
+
+            # Break card content rows
+            breaks_data = [
+                ("Less than 4 hours", "None", "None"),
+                ("4 hours up to 5 hours", "1 x 10 minutes", "None"),
+                ("5 hours up to 7 hours", "1 x 10 minutes", "1 x 30 to 60 minutes"),
+                ("7 hours up to 10 hours", "2 x 10 minutes", "1 x 30 to 60 minutes"),
+                ("More than 10 hours", "2 x 10 minutes", "2 x 30 to 60 minutes")
+            ]
+            
+            curr_row = sub_hdr_row + 1
+            for duration_text, paid_breaks, unpaid_breaks in breaks_data:
+                ws.row_dimensions[curr_row].height = 20
+                
+                # Merge columns
+                ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
+                cell_dur = ws.cell(row=curr_row, column=1)
+                cell_dur.value = duration_text
+                
+                ws.merge_cells(start_row=curr_row, start_column=4, end_row=curr_row, end_column=6)
+                cell_paid = ws.cell(row=curr_row, column=4)
+                cell_paid.value = paid_breaks
+                
+                ws.merge_cells(start_row=curr_row, start_column=7, end_row=curr_row, end_column=8)
+                cell_unpaid = ws.cell(row=curr_row, column=7)
+                cell_unpaid.value = unpaid_breaks
+                
+                for c in [cell_dur, cell_paid, cell_unpaid]:
+                    c.font = Font(name="Calibri", size=10)
+                    c.alignment = Alignment(horizontal="center", vertical="center")
+                    c.border = thin_border
+                
+                curr_row += 1
             
             excel_data = io.BytesIO()
             wb.save(excel_data)
