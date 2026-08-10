@@ -169,30 +169,30 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* Hero Generate Button Styling */
+    /* Hero Generate Button Styling - Positioned Right Below Date Picker */
     .hero-generate-btn button {
         width: 100% !important;
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         color: #0e2b26 !important;
         border: none !important;
-        padding: 18px 36px !important;
-        border-radius: 14px !important;
+        padding: 14px 28px !important;
+        border-radius: 12px !important;
         font-weight: 900 !important;
-        font-size: 1.35rem !important;
+        font-size: 1.2rem !important;
         letter-spacing: 0.5px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 8px 25px rgba(229, 169, 60, 0.45) !important;
-        margin-top: 15px !important;
-        margin-bottom: 25px !important;
+        box-shadow: 0 6px 20px rgba(229, 169, 60, 0.45) !important;
+        margin-top: 4px !important;
+        margin-bottom: 15px !important;
     }
     .hero-generate-btn button p, .hero-generate-btn button span {
         color: #0e2b26 !important;
         font-weight: 900 !important;
-        font-size: 1.35rem !important;
+        font-size: 1.2rem !important;
     }
     .hero-generate-btn button:hover {
-        transform: translateY(-3px) scale(1.01) !important;
-        box-shadow: 0 12px 35px rgba(229, 169, 60, 0.65) !important;
+        transform: translateY(-2px) scale(1.01) !important;
+        box-shadow: 0 10px 28px rgba(229, 169, 60, 0.65) !important;
         background: linear-gradient(135deg, #f7d594 0%, #e5a93c 100%) !important;
     }
 
@@ -695,25 +695,26 @@ with tab_home:
     col1, col2 = st.columns([1, 1])
     with col1:
         start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
+        
+        # Position Hero Generate Button directly below the Date Picker
+        st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
+        if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
+            with st.spinner("Calculating optimal bakery roster locally..."):
+                try:
+                    emp_data = st.session_state.manual_employees
+                    unavail_data = st.session_state.manual_unavailability
+                    req_data = st.session_state.manual_requirements
+                    fixed_data = st.session_state.manual_fixed
+                    
+                    roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
+                    st.session_state.final_roster_df = roster_out_df
+                    st.success("🎉 Weekly Roster successfully generated!")
+                except Exception as e:
+                    st.error(f"Failed to generate roster: {e}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
     with col2:
         upload_template = st.file_uploader("📋 Custom Layout Template (.xlsx)", type=["xlsx"], key="home_template_upload")
-
-    # Big Hero Generate Button
-    st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
-    if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
-        with st.spinner("Calculating optimal bakery roster locally..."):
-            try:
-                emp_data = st.session_state.manual_employees
-                unavail_data = st.session_state.manual_unavailability
-                req_data = st.session_state.manual_requirements
-                fixed_data = st.session_state.manual_fixed
-                
-                roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
-                st.session_state.final_roster_df = roster_out_df
-                st.success("🎉 Weekly Roster successfully generated!")
-            except Exception as e:
-                st.error(f"Failed to generate roster: {e}")
-    st.markdown('</div>', unsafe_allow_html=True)
 
     # Display generated roster & export controls
     if "final_roster_df" in st.session_state:
