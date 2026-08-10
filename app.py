@@ -158,18 +158,22 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* FILE UPLOADER BUTTON SPECIFIC - CLEAN WHITE BUTTON WITH DARK TEAL TEXT */
-    [data-testid="stFileUploaderDropzone"] button,
-    [data-testid="stFileUploaderDropzone"] button * {
+    /* FILE UPLOADER BUTTON SPECIFIC - CLEAN SINGLE GOLDEN BUTTON NO NESTING */
+    [data-testid="stFileUploaderDropzone"] button {
+        background-color: #e5a93c !important;
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         color: #0e2b26 !important;
-        background: #ffffff !important;
-        font-weight: 800 !important;
-        border: 1px solid #e5a93c !important;
+        border: none !important;
         border-radius: 8px !important;
-        opacity: 1 !important;
+        box-shadow: none !important;
+        padding: 8px 18px !important;
     }
-    [data-testid="stFileUploaderDropzone"] button:hover {
-        background: #f7d594 !important;
+    [data-testid="stFileUploaderDropzone"] button * {
+        background: transparent !important;
+        color: #0e2b26 !important;
+        border: none !important;
+        box-shadow: none !important;
+        font-weight: 800 !important;
     }
 
     /* Hero Generate Button Styling - Tight Under Date Picker */
