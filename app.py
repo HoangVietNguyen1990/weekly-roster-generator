@@ -8,67 +8,127 @@ from datetime import datetime, timedelta
 
 # Set page configuration with a modern design
 st.set_page_config(
-    page_title="Weekly Roster Creator",
-    page_icon="📅",
+    page_title="Brumby's Bakery Roster Creator",
+    page_icon="🥐",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom premium styling
+# Custom premium Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    .main {
-        background-color: #0f111a;
-        color: #ffffff;
+    /* Main App Background - Deep Emerald & Forest Teal Gradient */
+    .stApp {
+        background: linear-gradient(135deg, #0e2b26 0%, #16443c 50%, #1f574d 100%);
+        color: #fdfbf7;
     }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #1e2235;
-        border-radius: 8px 8px 0px 0px;
-        color: #a0aec0;
-        padding-left: 20px;
-        padding-right: 20px;
-        font-weight: 600;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #3b82f6 !important;
-        color: white !important;
-    }
-    .stButton>button {
-        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-        color: white;
-        border: none;
-        padding: 10px 24px;
-        border-radius: 8px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-    }
+    
+    /* Header Banner Styling */
     .header-style {
-        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        background: linear-gradient(135deg, #ffffff 0%, #f7d594 50%, #e5a93c 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800;
-        font-size: 3rem;
-        margin-bottom: 20px;
+        font-size: 2.8rem;
+        margin-bottom: 4px;
+        letter-spacing: -0.5px;
+    }
+    .sub-header-style {
+        color: #b0d4cd;
+        font-size: 1.15rem;
+        margin-bottom: 25px;
+        font-weight: 400;
+    }
+
+    /* Tab Bar Customization */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: rgba(14, 43, 38, 0.6);
+        padding: 8px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        white-space: pre-wrap;
+        background-color: rgba(255, 255, 255, 0.06);
+        border-radius: 10px;
+        color: #c4ded8;
+        padding-left: 22px;
+        padding-right: 22px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        transition: all 0.25s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: rgba(229, 169, 60, 0.15);
+        color: #fdfbf7;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
+        color: #0e2b26 !important;
+        font-weight: 800 !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.35);
+    }
+
+    /* Buttons Styling - Golden Wheat Amber Gradient */
+    .stButton>button {
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
+        color: #0e2b26;
+        border: none;
+        padding: 12px 28px;
+        border-radius: 10px;
+        font-weight: 800;
+        font-size: 1.05rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.35);
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(229, 169, 60, 0.55);
+        background: linear-gradient(135deg, #f7d594 0%, #e5a93c 100%);
+        color: #081d19;
+    }
+
+    /* Download Button Specific Accent */
+    .stDownloadButton>button {
+        background: linear-gradient(135deg, #2e7d6e 0%, #1b5349 100%);
+        color: #ffffff;
+        border: 1px solid #e5a93c;
+        padding: 12px 28px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+    }
+    .stDownloadButton>button:hover {
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
+        color: #0e2b26;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(229, 169, 60, 0.4);
+    }
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #09201c;
+        border-right: 1px solid rgba(229, 169, 60, 0.2);
+    }
+
+    /* Radio buttons / selectors */
+    .stRadio label {
+        color: #e2f0ed !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="header-style">Weekly Roster Creator</h1>', unsafe_allow_html=True)
-st.write("Generate optimized, law-compliant rosters locally and instantly (no AI API Keys required).")
+st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham — Weekly Staff Roster</h1>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header-style">Law-compliant, automated shift scheduling tailored for artisan bakeries.</p>', unsafe_allow_html=True)
 
 # --- SIDEBAR CONFIGURATION ---
-st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
-st.sidebar.title("App Controls")
-st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
+st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
+st.sidebar.title("🍞 Bakery Roster Controls")
+st.sidebar.info("This application runs locally and uses an offline deterministic constraint solver to optimize staff rostering based on General Retail Award rules and bakery template requirements.")
 
 # --- DISK PERSISTENCE ENGINE ---
 DATA_DIR = "data"
@@ -167,16 +227,16 @@ if 'manual_fixed' not in st.session_state:
 
 # --- TABS FOR INPUT ---
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "👥 Employees", 
+    "👥 Staff Members", 
     "🚫 Unavailability", 
     "📋 Daily Requirements", 
     "📌 Fixed Shifts", 
-    "⚙️ Generate & Export"
+    "⚙️ Roster Engine & Export"
 ])
 
 # Tab 1: Employees
 with tab1:
-    st.subheader("Manage Employees")
+    st.subheader("Manage Bakery Employees")
     emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
     
@@ -199,7 +259,7 @@ with tab1:
 
 # Tab 2: Unavailability
 with tab2:
-    st.subheader("Log Unavailability")
+    st.subheader("Log Staff Unavailability")
     unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
     
@@ -222,7 +282,7 @@ with tab2:
 
 # Tab 3: Daily Requirements
 with tab3:
-    st.subheader("Daily Shift Requirements")
+    st.subheader("Daily Bakery Shift Requirements")
     req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
     
