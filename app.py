@@ -23,14 +23,18 @@ st.markdown("""
         color: #ffffff;
     }
 
-    /* Target widget labels cleanly without breaking buttons or inputs */
-    div[data-testid="stWidgetLabel"] p, 
-    div[data-testid="stWidgetLabel"] span, 
-    div[data-testid="stWidgetLabel"] label,
-    .stMarkdown p {
+    /* GLOBAL TEXT OVERRIDE FOR ALL LABELS & WIDGET TITLES */
+    label, 
+    label p, 
+    label span, 
+    div[data-testid="stWidgetLabel"], 
+    div[data-testid="stWidgetLabel"] *, 
+    .stMarkdown, 
+    .stMarkdown p, 
+    .stMarkdown span {
         color: #ffffff !important;
         font-weight: 600 !important;
-        font-size: 1.05rem !important;
+        opacity: 1 !important;
     }
     
     /* Header Banner Styling */
@@ -64,43 +68,43 @@ st.markdown("""
         border-radius: 14px;
         border: 1px solid rgba(229, 169, 60, 0.35);
     }
-    .stTabs [data-baseweb="tab"] {
-        height: 48px;
-        white-space: pre-wrap;
-        background-color: rgba(255, 255, 255, 0.12);
-        border-radius: 10px;
+    .stTabs button[role="tab"],
+    .stTabs [data-baseweb="tab"],
+    .stTabs [data-baseweb="tab"] *,
+    .stTabs [aria-selected="false"],
+    .stTabs [aria-selected="false"] * {
         color: #ffffff !important;
-        padding-left: 22px;
-        padding-right: 22px;
-        font-weight: 600;
-        border: 1px solid transparent;
-        transition: all 0.25s ease;
+        opacity: 1 !important;
+        font-weight: 600 !important;
     }
-    .stTabs [data-baseweb="tab"] p, .stTabs [data-baseweb="tab"] span {
-        color: #ffffff !important;
+    .stTabs [aria-selected="false"] {
+        background-color: rgba(255, 255, 255, 0.12) !important;
+        border-radius: 10px !important;
     }
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(229, 169, 60, 0.3);
-        color: #ffffff !important;
+        background-color: rgba(229, 169, 60, 0.3) !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         border: none !important;
-        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.4);
+        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.4) !important;
     }
-    .stTabs [aria-selected="true"] p, .stTabs [aria-selected="true"] span {
+    .stTabs [aria-selected="true"],
+    .stTabs [aria-selected="true"] * {
         color: #0e2b26 !important;
         font-weight: 800 !important;
+        opacity: 1 !important;
     }
 
     /* Radio Buttons High Contrast */
-    .stRadio label, .stRadio div, .stRadio span, .stRadio p {
+    .stRadio label, .stRadio div, .stRadio span, .stRadio p, .stRadio * {
         color: #ffffff !important;
         font-size: 1rem !important;
         font-weight: 600 !important;
+        opacity: 1 !important;
     }
 
-    /* File Uploader Dropzone Styling */
+    /* File Uploader Dropzone & Instruction Text High Contrast */
     [data-testid="stFileUploaderDropzone"] {
         background-color: rgba(9, 32, 28, 0.85) !important;
         border: 2px dashed rgba(229, 169, 60, 0.6) !important;
@@ -111,24 +115,22 @@ st.markdown("""
         border-color: #e5a93c !important;
         background-color: rgba(9, 32, 28, 0.95) !important;
     }
-    [data-testid="stFileUploaderDropzone"] button {
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
-        color: #0e2b26 !important;
-        border: none !important;
-        font-weight: 800 !important;
-        border-radius: 8px !important;
-        padding: 8px 18px !important;
+    [data-testid="stFileUploaderDropzone"] *,
+    [data-testid="stFileUploaderInstructions"] *,
+    section[data-testid="stFileUploader"] * {
+        color: #ffffff !important;
+        opacity: 1 !important;
     }
+
+    /* FILE UPLOADER BUTTON SPECIFIC - GOLDEN WHEAT WITH DARK TEXT */
+    [data-testid="stFileUploaderDropzone"] button,
     [data-testid="stFileUploaderDropzone"] button * {
         color: #0e2b26 !important;
+        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         font-weight: 800 !important;
-    }
-    [data-testid="stFileUploaderDropzone"] small, 
-    [data-testid="stFileUploaderInstructions"] span,
-    [data-testid="stFileUploaderInstructions"] div,
-    [data-testid="stFileUploaderInstructions"] p {
-        color: #c8e6e0 !important;
-        font-weight: 500 !important;
+        border: none !important;
+        border-radius: 8px !important;
+        opacity: 1 !important;
     }
 
     /* General Action Buttons */
@@ -885,7 +887,7 @@ with tab5:
             note_hdr_cell = ws.cell(row=note_start_row, column=1)
             note_hdr_cell.value = "General Retail Industry Award - Required Breaks Reference Card:"
             note_hdr_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
-            note_hdr_cell.fill = note_hdr_fill
+            note_hdr_cell.fill = note_hdr_cell
             note_hdr_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
             note_hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
             
