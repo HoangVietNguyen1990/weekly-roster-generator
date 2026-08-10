@@ -96,18 +96,27 @@ st.markdown("""
         font-weight: 900 !important;
     }
 
-    /* Tab Bar Customization - High Contrast Inactive Tabs */
+    /* TAB BAR CUSTOMIZATION - BIGGER CARDS WITH GENEROUS BREATHING ROOM */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background-color: rgba(9, 32, 28, 0.85);
-        padding: 8px;
-        border-radius: 14px;
-        border: 1px solid rgba(229, 169, 60, 0.35);
+        gap: 12px !important;
+        background-color: rgba(9, 32, 28, 0.85) !important;
+        padding: 10px 14px !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(229, 169, 60, 0.35) !important;
     }
     .stTabs button[role="tab"],
-    .stTabs [data-baseweb="tab"],
+    .stTabs [data-baseweb="tab"] {
+        height: 58px !important;
+        padding-left: 28px !important;
+        padding-right: 28px !important;
+        padding-top: 12px !important;
+        padding-bottom: 12px !important;
+        border-radius: 12px !important;
+        font-size: 1.05rem !important;
+        transition: all 0.25s ease !important;
+    }
+    .stTabs button[role="tab"] *,
     .stTabs [data-baseweb="tab"] *,
-    .stTabs [aria-selected="false"],
     .stTabs [aria-selected="false"] * {
         color: #ffffff !important;
         opacity: 1 !important;
@@ -115,7 +124,7 @@ st.markdown("""
     }
     .stTabs [aria-selected="false"] {
         background-color: rgba(255, 255, 255, 0.12) !important;
-        border-radius: 10px !important;
+        border: 1px solid transparent !important;
     }
     .stTabs [data-baseweb="tab"]:hover {
         background-color: rgba(229, 169, 60, 0.3) !important;
@@ -123,12 +132,11 @@ st.markdown("""
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         border: none !important;
-        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.4) !important;
+        box-shadow: 0 6px 18px rgba(229, 169, 60, 0.45) !important;
     }
-    .stTabs [aria-selected="true"],
     .stTabs [aria-selected="true"] * {
         color: #0e2b26 !important;
-        font-weight: 800 !important;
+        font-weight: 900 !important;
         opacity: 1 !important;
     }
 
