@@ -475,6 +475,29 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                     for _ in range(count):
                         shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
                         
+        # Get fixed shifts already applied for this day to subtract from requirements
+        fixed_shifts_today = []
+        for name in roster_output:
+            val = roster_output[name][day]
+            if val != "off" and val != " unavailable":
+                fixed_shifts_today.append(val)
+                
+        # Subtract fixed shifts from required shifts to fill
+        remaining_shifts_to_fill = []
+        for shift_req in shifts_to_fill:
+            filled_idx = -1
+            req_clean = shift_req["shift"].strip().lower().replace(" ", "")
+            for idx, fixed_shift in enumerate(fixed_shifts_today):
+                fixed_clean = str(fixed_shift).strip().lower().replace(" ", "")
+                if req_clean == fixed_clean:
+                    filled_idx = idx
+                    break
+            if filled_idx >= 0:
+                fixed_shifts_today.pop(filled_idx)  # Consume this fixed shift
+            else:
+                remaining_shifts_to_fill.append(shift_req)
+                
+        shifts_to_fill = remaining_shifts_to_fill
         shifts_to_fill = sorted(shifts_to_fill, key=lambda x: x["duration"], reverse=True)
 
         if debug_logs is not None:
