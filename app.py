@@ -703,6 +703,7 @@ with tab5:
             
             unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
             off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+            white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
             text_font = Font(name="Calibri", size=11)
             
             from openpyxl.cell.cell import MergedCell
@@ -729,6 +730,7 @@ with tab5:
                         target_cell.fill = off_fill
                         target_cell.value = ""
                     else:
+                        target_cell.fill = white_fill  # Force clean solid white background for scheduled shifts
                         target_cell.value = value
                         
                     target_cell.font = text_font
