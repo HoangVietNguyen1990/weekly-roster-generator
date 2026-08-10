@@ -73,8 +73,8 @@ st.sidebar.title("Google AI Studio Setup")
 api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get your API key from Google AI Studio")
 model_option = st.sidebar.selectbox(
     "Select Gemini Model",
-    ["gemini-2.5-pro", "gemini-2.5-flash"],
-    help="Pro is highly recommended for complex scheduling logic."
+    ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
+    help="Pro/newer models are recommended for complex logic, while Flash models are faster and have higher free-tier quotas."
 )
 
 st.sidebar.markdown("---")
