@@ -63,7 +63,7 @@ st.markdown("""
 
     /* GLIDE DATA GRID & ST.DATA_EDITOR CANVAS HEADER OVERRIDES */
     div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
-        border-radius: 14px !important;
+        border-radius: 0 0 14px 14px !important;
         overflow: hidden !important;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45) !important;
         border: 2px solid #e5a93c !important;
@@ -348,6 +348,11 @@ with tab1:
                 st.session_state.last_emp_file = file_key
                 save_persisted_df(st.session_state.manual_employees, "employees.csv")
                 
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+        👥 Bakery Staff Members List
+    </div>
+    """, unsafe_allow_html=True)
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
     st.session_state.manual_employees = employees_df
     save_persisted_df(employees_df, "employees.csv")
@@ -371,6 +376,11 @@ with tab2:
                 st.session_state.last_unavail_file = file_key
                 save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
                 
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+        🚫 Staff Weekly Unavailability Constraints
+    </div>
+    """, unsafe_allow_html=True)
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
     st.session_state.manual_unavailability = unavailability_df
     save_persisted_df(unavailability_df, "unavailability.csv")
@@ -394,6 +404,11 @@ with tab3:
                 st.session_state.last_req_file = file_key
                 save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
                 
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+        📋 Daily Shift Coverage Requirements (Mon-Sun)
+    </div>
+    """, unsafe_allow_html=True)
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
     st.session_state.manual_requirements = requirements_df
     save_persisted_df(requirements_df, "requirements.csv")
@@ -417,6 +432,11 @@ with tab4:
                 st.session_state.last_fixed_file = file_key
                 save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
                 
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+        📌 Fixed Baseline Staff Shifts
+    </div>
+    """, unsafe_allow_html=True)
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
     st.session_state.manual_fixed = fixed_df
     save_persisted_df(fixed_df, "fixed.csv")
@@ -820,7 +840,11 @@ with tab5:
         if final_df.empty:
             st.warning("⚠️ Roster generated is empty. Please verify that your Employees tab lists active employee names.")
         else:
-            st.markdown("### 📝 Final Generated Roster (Double-click any cell to manually override/edit)")
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 20px;">
+                📝 Final Generated Weekly Roster (Double-click any cell to manually override/edit)
+            </div>
+            """, unsafe_allow_html=True)
             edited_final_df = st.data_editor(final_df, num_rows="dynamic", key="final_roster_editor")
             st.session_state.final_roster_df = edited_final_df
             
