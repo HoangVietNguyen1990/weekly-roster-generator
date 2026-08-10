@@ -178,14 +178,21 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     st.subheader("Manage Employees")
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
+    emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
+    
     if upload_emp is not None:
-        file_key = f"processed_{upload_emp.name}_{upload_emp.size}"
+        file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
         if st.session_state.get("last_emp_file") != file_key:
             loaded = read_excel_robust(upload_emp)
             if loaded is not None:
-                st.session_state.manual_employees = loaded
+                if emp_mode == "Replace current data":
+                    st.session_state.manual_employees = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_employees = combined
                 st.session_state.last_emp_file = file_key
-                save_persisted_df(loaded, "employees.csv")
+                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
     st.session_state.manual_employees = employees_df
     save_persisted_df(employees_df, "employees.csv")
@@ -194,14 +201,21 @@ with tab1:
 with tab2:
     st.subheader("Log Unavailability")
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
+    unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
+    
     if upload_unavail is not None:
-        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}"
+        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
         if st.session_state.get("last_unavail_file") != file_key:
             loaded = read_excel_robust(upload_unavail)
             if loaded is not None:
-                st.session_state.manual_unavailability = loaded
+                if unavail_mode == "Replace current data":
+                    st.session_state.manual_unavailability = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_unavailability = combined
                 st.session_state.last_unavail_file = file_key
-                save_persisted_df(loaded, "unavailability.csv")
+                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
     st.session_state.manual_unavailability = unavailability_df
     save_persisted_df(unavailability_df, "unavailability.csv")
@@ -210,14 +224,21 @@ with tab2:
 with tab3:
     st.subheader("Daily Shift Requirements")
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+    req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
+    
     if upload_req is not None:
-        file_key = f"processed_{upload_req.name}_{upload_req.size}"
+        file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
         if st.session_state.get("last_req_file") != file_key:
             loaded = read_excel_robust(upload_req)
             if loaded is not None:
-                st.session_state.manual_requirements = loaded
+                if req_mode == "Replace current data":
+                    st.session_state.manual_requirements = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_requirements = combined
                 st.session_state.last_req_file = file_key
-                save_persisted_df(loaded, "requirements.csv")
+                save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
     st.session_state.manual_requirements = requirements_df
     save_persisted_df(requirements_df, "requirements.csv")
@@ -226,14 +247,21 @@ with tab3:
 with tab4:
     st.subheader("Fixed Baseline Shifts")
     upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+    fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
+    
     if upload_fixed is not None:
-        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
+        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
         if st.session_state.get("last_fixed_file") != file_key:
             loaded = read_excel_robust(upload_fixed)
             if loaded is not None:
-                st.session_state.manual_fixed = loaded
+                if fixed_mode == "Replace current data":
+                    st.session_state.manual_fixed = loaded
+                else:
+                    combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
+                    st.session_state.manual_fixed = combined
                 st.session_state.last_fixed_file = file_key
-                save_persisted_df(loaded, "fixed.csv")
+                save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
     st.session_state.manual_fixed = fixed_df
     save_persisted_df(fixed_df, "fixed.csv")
