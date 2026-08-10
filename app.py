@@ -69,7 +69,7 @@ st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
 st.sidebar.title("App Controls")
 st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
 
-# Helper to read excel sheets robustly, skipping empty headers and titles
+# Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
     if uploaded_file is None:
         return None
@@ -92,6 +92,13 @@ def read_excel_robust(uploaded_file):
         # Re-read from that header row index
         df = pd.read_excel(uploaded_file, header=header_row_idx)
         df.columns = [str(c).strip() for c in df.columns]
+        
+        # Convert all columns to strings to make them fully editable in st.data_editor
+        for col in df.columns:
+            if pd.api.types.is_datetime64_any_dtype(df[col]):
+                df[col] = df[col].dt.strftime('%Y-%m-%d')
+            else:
+                df[col] = df[col].astype(str).replace("NaT", "").replace("nan", "")
         return df
     except Exception as e:
         st.error(f"Error parsing Excel file structure: {e}")
@@ -121,8 +128,8 @@ if 'manual_unavailability' not in st.session_state:
 
 if 'manual_requirements' not in st.session_state:
     st.session_state.manual_requirements = pd.DataFrame([
-        {"Shift": "7:30am-12:30pm", "Monday": 2, "Tuesday": 2, "Wednesday": 2, "Thursday": 2, "Friday": 2, "Saturday": 0, "Sunday": 0},
-        {"Shift": "12:30pm-5:30pm", "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1, "Saturday": 2, "Sunday": 2},
+        {"Shift": "7:30am-12:30pm", "Monday": "2", "Tuesday": "2", "Wednesday": "2", "Thursday": "2", "Friday": "2", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "12:30pm-5:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "2", "Sunday": "2"},
     ])
 
 if 'manual_fixed' not in st.session_state:
