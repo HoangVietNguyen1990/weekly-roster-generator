@@ -61,7 +61,7 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* GLIDE DATA GRID & ST.DATA_EDITOR CANVAS HEADER OVERRIDES */
+    /* TABLE HEADERS: GREEN BACKGROUND (#081D19) WITH BOLD WHITE TEXT (#FFFFFF) ACROSS ALL TABS */
     div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
         border-radius: 0 0 14px 14px !important;
         overflow: hidden !important;
@@ -69,30 +69,30 @@ st.markdown("""
         border: 2px solid #e5a93c !important;
         background-color: #ffffff !important;
         
-        /* Glide Data Grid Header Color CSS Variables */
-        --gdg-bg-header: #e5a93c !important;
-        --gdg-bg-header-has-focus: #d48827 !important;
-        --gdg-text-header: #0e2b26 !important;
-        --gdg-text-header-selected: #0e2b26 !important;
+        /* Glide Data Grid Header Canvas CSS Variables */
+        --gdg-bg-header: #081d19 !important;
+        --gdg-bg-header-has-focus: #133b34 !important;
+        --gdg-text-header: #ffffff !important;
+        --gdg-text-header-selected: #ffffff !important;
         --gdg-font-family: 'Inter', sans-serif !important;
     }
     
-    /* Fallback DOM Header Element Styling */
+    /* Fallback DOM Header Element Styling - Green Background & White Text */
     div[data-testid="stDataEditor"] th, 
     div[data-testid="stDataFrame"] th, 
     div[class*="header"], 
     div[class*="Header"],
     div[role="columnheader"],
     div[class*="gdg-header"] {
-        background-color: #e5a93c !important;
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
-        color: #0e2b26 !important;
+        background-color: #081d19 !important;
+        background: linear-gradient(135deg, #081d19 0%, #16443c 100%) !important;
+        color: #ffffff !important;
         font-weight: 900 !important;
         font-size: 1.05rem !important;
-        border-bottom: 2px solid #b86f14 !important;
+        border-bottom: 2px solid #e5a93c !important;
     }
     div[role="columnheader"] *, div[role="columnheader"] p, div[role="columnheader"] span {
-        color: #0e2b26 !important;
+        color: #ffffff !important;
         font-weight: 900 !important;
     }
 
@@ -349,7 +349,7 @@ with tab1:
                 save_persisted_df(st.session_state.manual_employees, "employees.csv")
                 
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
         👥 Bakery Staff Members List
     </div>
     """, unsafe_allow_html=True)
@@ -377,7 +377,7 @@ with tab2:
                 save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
                 
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
         🚫 Staff Weekly Unavailability Constraints
     </div>
     """, unsafe_allow_html=True)
@@ -405,7 +405,7 @@ with tab3:
                 save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
                 
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
         📋 Daily Shift Coverage Requirements (Mon-Sun)
     </div>
     """, unsafe_allow_html=True)
@@ -433,7 +433,7 @@ with tab4:
                 save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
                 
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 15px;">
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
         📌 Fixed Baseline Staff Shifts
     </div>
     """, unsafe_allow_html=True)
@@ -841,7 +841,7 @@ with tab5:
             st.warning("⚠️ Roster generated is empty. Please verify that your Employees tab lists active employee names.")
         else:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #0e2b26 !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; box-shadow: 0 4px 12px rgba(229,169,60,0.3); margin-top: 20px;">
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 20px;">
                 📝 Final Generated Weekly Roster (Double-click any cell to manually override/edit)
             </div>
             """, unsafe_allow_html=True)
