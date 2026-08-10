@@ -336,7 +336,7 @@ with tab5:
                             target_cell = cell
                             if isinstance(cell, MergedCell):
                                 for merged_range in ws.merged_cells.ranges:
-                                    if (row_idx, col_idx) in merged_range:
+                                    if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
                                         target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
                                         break
                                         
