@@ -159,6 +159,7 @@ with tab1:
                 st.session_state.manual_employees = loaded
                 st.session_state.last_emp_file = file_key
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
+    st.session_state.manual_employees = employees_df
 
 # Tab 2: Unavailability
 with tab2:
@@ -172,6 +173,7 @@ with tab2:
                 st.session_state.manual_unavailability = loaded
                 st.session_state.last_unavail_file = file_key
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
+    st.session_state.manual_unavailability = unavailability_df
 
 # Tab 3: Daily Requirements
 with tab3:
@@ -185,6 +187,7 @@ with tab3:
                 st.session_state.manual_requirements = loaded
                 st.session_state.last_req_file = file_key
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
+    st.session_state.manual_requirements = requirements_df
 
 # Tab 4: Fixed Shifts
 with tab4:
@@ -198,24 +201,28 @@ with tab4:
                 st.session_state.manual_fixed = loaded
                 st.session_state.last_fixed_file = file_key
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
+    st.session_state.manual_fixed = fixed_df
 
 # Helpers for parsing times
 def parse_time_to_decimal(time_str):
-    time_str = str(time_str).strip().lower().replace(" ", "")
-    is_pm = "pm" in time_str
-    time_str = time_str.replace("am", "").replace("pm", "")
-    if ":" in time_str:
-        parts = time_str.split(":")
-        hours = int(parts[0])
-        minutes = int(parts[1])
-    else:
-        hours = int(time_str)
-        minutes = 0
-    if is_pm and hours < 12:
-        hours += 12
-    elif not is_pm and hours == 12:
-        hours = 0
-    return hours + minutes / 60.0
+    try:
+        time_str = str(time_str).strip().lower().replace(" ", "")
+        is_pm = "pm" in time_str
+        time_str = time_str.replace("am", "").replace("pm", "")
+        if ":" in time_str:
+            parts = time_str.split(":")
+            hours = int(parts[0])
+            minutes = int(parts[1])
+        else:
+            hours = int(time_str)
+            minutes = 0
+        if is_pm and hours < 12:
+            hours += 12
+        elif not is_pm and hours == 12:
+            hours = 0
+        return hours + minutes / 60.0
+    except:
+        return 0.0
 
 def parse_shift_range(shift_str):
     if not shift_str or str(shift_str).strip().lower() in ["off", "unavailable", "nan", ""]:
