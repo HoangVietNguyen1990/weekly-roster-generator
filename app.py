@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-import google.generativeai as genai
-import json
 import io
 from datetime import datetime, timedelta
 
@@ -64,30 +62,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<h1 class="header-style">Weekly Roster Creator</h1>', unsafe_allow_html=True)
-st.write("Generate optimized, law-compliant rosters using Google AI Studio's Gemini models.")
+st.write("Generate optimized, law-compliant rosters locally and instantly (no AI API Keys required).")
 
 # --- SIDEBAR CONFIGURATION ---
-st.sidebar.image("https://img.icons8.com/color/96/google-logo.png", width=80)
-st.sidebar.title("Google AI Studio Setup")
-
-api_key = st.sidebar.text_input("Enter Gemini API Key", type="password", help="Get your API key from Google AI Studio")
-model_option = st.sidebar.selectbox(
-    "Select Gemini Model",
-    ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
-    help="Pro/newer models are recommended for complex logic, while Flash models are faster and have higher free-tier quotas."
-)
-
-st.sidebar.markdown("---")
-st.sidebar.markdown("### How to Get an API Key:")
-st.sidebar.markdown("1. Go to [Google AI Studio](https://aistudio.google.com/)\n2. Click **Get API Key**\n3. Create key in a new or existing project\n4. Paste it here!")
+st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
+st.sidebar.title("App Controls")
+st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
 
 # Initialize Session States for manual inputs if they don't exist
 if 'manual_employees' not in st.session_state:
     st.session_state.manual_employees = pd.DataFrame([
         {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": 28, "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
-        {"Name": "Stella", "Role": "Junior Team Member", "Age": 18, "Employment Type": "Casual", "Start Date": "2024-03-15"},
+        {"Name": "Stella", "Role": "Junior Team Member", "Age": 17, "Employment Type": "Casual", "Start Date": "2024-03-15"},
         {"Name": "Ainsley", "Role": "Junior Team Member", "Age": 19, "Employment Type": "Casual", "Start Date": "2024-05-10"},
         {"Name": "Aimi", "Role": "Junior Team Member", "Age": 20, "Employment Type": "Casual", "Start Date": "2024-06-01"},
+        {"Name": "Jude", "Role": "Senior Team Member", "Age": 25, "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
+        {"Name": "Aroha", "Role": "Senior Team Member", "Age": 32, "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
+        {"Name": "Robert", "Role": "Senior Team Member", "Age": 45, "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
     ])
 
 if 'manual_unavailability' not in st.session_state:
@@ -95,6 +86,9 @@ if 'manual_unavailability' not in st.session_state:
         {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
         {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
         {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
     ])
 
 if 'manual_requirements' not in st.session_state:
@@ -102,11 +96,21 @@ if 'manual_requirements' not in st.session_state:
         {"Day": "Monday", "Shift": "7:30am-12:30pm", "Count Required": 2},
         {"Day": "Monday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
         {"Day": "Tuesday", "Shift": "7:30am-12:30pm", "Count Required": 2},
+        {"Day": "Tuesday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
+        {"Day": "Wednesday", "Shift": "7:30am-12:30pm", "Count Required": 2},
+        {"Day": "Wednesday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
+        {"Day": "Thursday", "Shift": "7:30am-12:30pm", "Count Required": 2},
+        {"Day": "Thursday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
+        {"Day": "Friday", "Shift": "7:30am-12:30pm", "Count Required": 2},
+        {"Day": "Friday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
+        {"Day": "Saturday", "Shift": "8:30am-1:30pm", "Count Required": 2},
+        {"Day": "Sunday", "Shift": "9:00am-2:00pm", "Count Required": 2},
     ])
 
 if 'manual_fixed' not in st.session_state:
     st.session_state.manual_fixed = pd.DataFrame([
         {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "off", "Friday": "off", "Saturday": "off", "Sunday": "off"},
+        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
     ])
 
 # --- TABS FOR INPUT ---
@@ -118,7 +122,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "⚙️ Generate & Export"
 ])
 
-# Helper function to check/load uploaded files or fallback to manual data
 def get_data(uploaded_file, manual_df):
     if uploaded_file is not None:
         try:
@@ -132,61 +135,211 @@ def get_data(uploaded_file, manual_df):
 with tab1:
     st.subheader("Manage Employees")
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
-    
-    st.markdown("### Edit Employee Data Manually")
-    employees_df = st.data_editor(
-        st.session_state.manual_employees,
-        num_rows="dynamic",
-        key="edit_employees"
-    )
-    if upload_emp:
-        emp_loaded = pd.read_excel(upload_emp)
-        st.dataframe(emp_loaded)
+    employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
 
 # Tab 2: Unavailability
 with tab2:
     st.subheader("Log Unavailability")
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
-    
-    st.markdown("### Edit Unavailability Data Manually")
-    unavailability_df = st.data_editor(
-        st.session_state.manual_unavailability,
-        num_rows="dynamic",
-        key="edit_unavailability"
-    )
-    if upload_unavail:
-        unavail_loaded = pd.read_excel(upload_unavail)
-        st.dataframe(unavail_loaded)
+    unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
 
 # Tab 3: Daily Requirements
 with tab3:
     st.subheader("Daily Shift Requirements")
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
-    
-    st.markdown("### Edit Shift Requirements Manually")
-    requirements_df = st.data_editor(
-        st.session_state.manual_requirements,
-        num_rows="dynamic",
-        key="edit_requirements"
-    )
-    if upload_req:
-        req_loaded = pd.read_excel(upload_req)
-        st.dataframe(req_loaded)
+    requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
 
 # Tab 4: Fixed Shifts
 with tab4:
     st.subheader("Fixed Baseline Shifts")
     upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+    fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
+
+# Helpers for parsing times
+def parse_time_to_decimal(time_str):
+    time_str = str(time_str).strip().lower().replace(" ", "")
+    is_pm = "pm" in time_str
+    time_str = time_str.replace("am", "").replace("pm", "")
+    if ":" in time_str:
+        parts = time_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1])
+    else:
+        hours = int(time_str)
+        minutes = 0
+    if is_pm and hours < 12:
+        hours += 12
+    elif not is_pm and hours == 12:
+        hours = 0
+    return hours + minutes / 60.0
+
+def parse_shift_range(shift_str):
+    if not shift_str or str(shift_str).strip().lower() in ["off", "unavailable", "nan", ""]:
+        return None
+    try:
+        parts = str(shift_str).split("-")
+        start = parse_time_to_decimal(parts[0])
+        end = parse_time_to_decimal(parts[1])
+        # Handle overnight shifts or duration calculation
+        duration = end - start if end > start else (24 - start) + end
+        return start, end, duration
+    except:
+        return None
+
+def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
+    unavail_str = str(unavail_str).strip().lower()
+    if "all day" in unavail_str or "anytime" in unavail_str:
+        return True
+    if "before" in unavail_str:
+        time_part = unavail_str.replace("before", "").strip()
+        t = parse_time_to_decimal(time_part)
+        return shift_start < t
+    if "after" in unavail_str:
+        time_part = unavail_str.replace("after", "").strip()
+        t = parse_time_to_decimal(time_part)
+        return shift_end > t
+    r = parse_shift_range(unavail_str)
+    if r:
+        u_start, u_end, _ = r
+        return max(shift_start, u_start) < min(shift_end, u_end)
+    return False
+
+# Deterministic solver
+def solve_roster(employees, unavailability, requirements, fixed, start_dt):
+    # Standardize columns
+    employees.columns = [c.strip() for c in employees.columns]
+    unavailability.columns = [c.strip() for c in unavailability.columns]
+    requirements.columns = [c.strip() for c in requirements.columns]
+    fixed.columns = [c.strip() for c in fixed.columns]
     
-    st.markdown("### Edit Fixed Shifts Manually")
-    fixed_df = st.data_editor(
-        st.session_state.manual_fixed,
-        num_rows="dynamic",
-        key="edit_fixed"
-    )
-    if upload_fixed:
-        fixed_loaded = pd.read_excel(upload_fixed)
-        st.dataframe(fixed_loaded)
+    # Filter active employees
+    active_employees = []
+    for _, emp in employees.iterrows():
+        try:
+            start_date_parsed = pd.to_datetime(emp.get("Start Date", start_dt))
+            if start_date_parsed.date() <= start_dt:
+                active_employees.append(emp.to_dict())
+        except:
+            active_employees.append(emp.to_dict())
+
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    roster_output = {emp["Name"]: {day: "off" for day in days_of_week} for emp in active_employees}
+    weekly_shifts_count = {emp["Name"]: 0 for emp in active_employees}
+    elizabeth_weekday_shifts = 0
+
+    # 1. Apply fixed shifts first
+    for _, fix_row in fixed.iterrows():
+        name = fix_row.get("Employee")
+        if name in roster_output:
+            for day in days_of_week:
+                val = str(fix_row.get(day, "off")).strip()
+                if val.lower() not in ["off", "nan", ""]:
+                    roster_output[name][day] = val
+                    weekly_shifts_count[name] += 1
+                    if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
+                        elizabeth_weekday_shifts += 1
+
+    # 2. Check general day-off unavailability
+    for _, un_row in unavailability.iterrows():
+        name = un_row.get("Employee")
+        day = un_row.get("Day")
+        window = str(un_row.get("Time Window", "All Day")).strip().lower()
+        if name in roster_output and day in days_of_week:
+            if "all day" in window or "anytime" in window:
+                # If they don't have a fixed shift, mark as unavailable
+                if roster_output[name][day] == "off":
+                    roster_output[name][day] = " unavailable"
+
+    # 3. Schedule required shifts day by day
+    for day in days_of_week:
+        # Get shifts required for this day
+        day_reqs = requirements[requirements["Day"].str.lower() == day.lower()]
+        shifts_to_fill = []
+        for _, req in day_reqs.iterrows():
+            shift = req.get("Shift")
+            count = int(req.get("Count Required", 1))
+            parsed = parse_shift_range(shift)
+            if parsed:
+                start, end, duration = parsed
+                for _ in range(count):
+                    shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
+                    
+        # Sort shifts by duration descending (longest shift first)
+        shifts_to_fill = sorted(shifts_to_fill, key=lambda x: x["duration"], reverse=True)
+
+        for shift_info in shifts_to_fill:
+            best_candidate = None
+            best_score = -999999
+
+            for emp in active_employees:
+                name = emp["Name"]
+                age = int(emp.get("Age", 25))
+                role = str(emp.get("Role", "Team Member"))
+                
+                # Check if already working a shift today
+                if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
+                    continue
+                
+                # Check weekly shift limit
+                if weekly_shifts_count[name] >= 5:
+                    continue
+
+                # Check day-specific unavailability
+                is_emp_unavailable = False
+                emp_unavail = unavailability[(unavailability["Employee"] == name) & (unavailability["Day"].str.lower() == day.lower())]
+                for _, un_row in emp_unavail.iterrows():
+                    window = str(un_row.get("Time Window", "All Day"))
+                    if is_overlapping_unavailability(window, shift_info["start"], shift_info["end"]):
+                        is_emp_unavailable = True
+                        break
+                if is_emp_unavailable:
+                    continue
+
+                # Rule: Elizabeth cap and weekends
+                if name == "Elizabeth":
+                    if day in ["Saturday", "Sunday"]:
+                        continue
+                    if elizabeth_weekday_shifts >= 2:
+                        continue
+
+                # Rule: Under-18 school hours (Mon-Fri 9:00 AM - 3:30 PM)
+                if age < 18 and day not in ["Saturday", "Sunday"]:
+                    # check overlap with 9.0 to 15.5
+                    if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
+                        continue
+
+                # Calculate heuristic score
+                score = 0
+                
+                # Balance shifts score (penalize if already got shifts)
+                score -= weekly_shifts_count[name] * 20
+                
+                # Junior rate preference (lower age gets priority for longer shifts)
+                if age < 21:
+                    score += (21 - age) * shift_info["duration"] * 2
+                
+                # Elizabeth early morning shift preference
+                if name == "Elizabeth" and shift_info["start"] in [7.0, 7.5]:
+                    score += 100
+
+                if score > best_score:
+                    best_score = score
+                    best_candidate = name
+
+            if best_candidate:
+                roster_output[best_candidate][day] = shift_info["shift"]
+                weekly_shifts_count[best_candidate] += 1
+                if best_candidate == "Elizabeth" and day not in ["Saturday", "Sunday"]:
+                    elizabeth_weekday_shifts += 1
+
+    # Form dataframe output
+    roster_rows = []
+    for name, sched in roster_output.items():
+        row = {"Employee": name}
+        row.update(sched)
+        roster_rows.append(row)
+    return pd.DataFrame(roster_rows)
+
 
 # Tab 5: Generate & Export
 with tab5:
@@ -197,174 +350,85 @@ with tab5:
         start_date = st.date_input("Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
         upload_template = st.file_uploader("Upload Roster Layout Template (Optional)", type=["xlsx"], key="template_upload")
     
-    with col2:
-        st.info("Ensure you have input your Google AI Studio API Key in the sidebar before proceeding.")
-    
     if st.button("Generate Weekly Roster"):
-        if not api_key:
-            st.error("Please enter a valid Gemini API Key in the sidebar.")
-        else:
-            with st.spinner("Analyzing files and generating roster using Google AI Studio Gemini API..."):
-                try:
-                    # Configure API
-                    genai.configure(api_key=api_key)
+        with st.spinner("Calculating optimal roster locally..."):
+            try:
+                final_employees = get_data(upload_emp, employees_df)
+                final_unavail = get_data(upload_unavail, unavailability_df)
+                final_req = get_data(upload_req, requirements_df)
+                final_fixed = get_data(upload_fixed, fixed_df)
+                
+                roster_out_df = solve_roster(final_employees, final_unavail, final_req, final_fixed, start_date)
+                
+                st.success("Roster successfully generated!")
+                st.dataframe(roster_out_df)
+                
+                # Create Excel download
+                if upload_template is not None:
+                    wb = openpyxl.load_workbook(upload_template)
+                else:
+                    wb = openpyxl.Workbook()
                     
-                    # Prepare DataFrames to send
-                    final_employees = get_data(upload_emp, employees_df)
-                    final_unavail = get_data(upload_unavail, unavailability_df)
-                    final_req = get_data(upload_req, requirements_df)
-                    final_fixed = get_data(upload_fixed, fixed_df)
-                    
-                    # Construct Prompt for Gemini
-                    prompt = f"""
-                    You are an expert workforce scheduler. You must generate a weekly roster starting on {start_date.strftime('%Y-%m-%d')} (Monday).
-                    
-                    ### INPUT DATA:
-                    1. Employees List:
-                    {final_employees.to_markdown(index=False)}
-                    
-                    2. Unavailability List:
-                    {final_unavail.to_markdown(index=False)}
-                    
-                    3. Daily Shift Requirements:
-                    {final_req.to_markdown(index=False)}
-                    
-                    4. Fixed baseline shifts:
-                    {final_fixed.to_markdown(index=False)}
-                    
-                    ### ROSTER CONSTRAINTS & RULES:
-                    - Only roster active employees whose Start Date is before or equal to {start_date.strftime('%Y-%m-%d')}.
-                    - **Elizabeth**: Max 2 weekday shifts, no weekend shifts (Saturday and Sunday must be 'off' or ' unavailable'). Prefer early morning shifts starting at 7:00 AM or 7:30 AM.
-                    - **School Students (Under 18)**: Cannot work weekday (Mon-Fri) shifts during school hours (9:00 AM - 3:30 PM).
-                    - **Cost-Optimization**: Sort daily shifts by duration descending. Prioritize junior staff (under 21) for longer shifts first.
-                    - **Workweek Limits**: Max 5 workdays per employee per week. Distribute shifts evenly.
-                    - **Fixed Shifts**: Keep baseline fixed shifts as specified. Treat any cells with "off" as empty/schedulable.
-                    - **Unavailability**: Mark cells as " unavailable" if an employee is unavailable for the day/shift.
-                    
-                    ### OUTPUT FORMAT:
-                    You must return a JSON object with a single key "roster" mapping to an array of employee schedules.
-                    Do not return any markdown wraps (like ```json), just the raw JSON text.
-                    Each employee schedule must contain:
-                    - "Employee": Name of the employee.
-                    - "Monday": Shift description or "off" or " unavailable"
-                    - "Tuesday": Shift description or "off" or " unavailable"
-                    - "Wednesday": Shift description or "off" or " unavailable"
-                    - "Thursday": Shift description or "off" or " unavailable"
-                    - "Friday": Shift description or "off" or " unavailable"
-                    - "Saturday": Shift description or "off" or " unavailable"
-                    - "Sunday": Shift description or "off" or " unavailable"
-                    
-                    Example Output Structure:
-                    {{
-                        "roster": [
-                            {{
-                                "Employee": "Elizabeth",
-                                "Monday": "7:30am-12:30pm",
-                                "Tuesday": "off",
-                                "Wednesday": "7:30am-12:30pm",
-                                "Thursday": "off",
-                                "Friday": "off",
-                                "Saturday": " unavailable",
-                                "Sunday": " unavailable"
-                            }}
-                        ]
-                    }}
-                    """
-                    
-                    # Call Gemini
-                    model = genai.GenerativeModel(model_option)
-                    response = model.generate_content(prompt)
-                    
-                    # Parse JSON Output
-                    raw_text = response.text.strip()
-                    if raw_text.startswith("```json"):
-                        raw_text = raw_text[7:]
-                    if raw_text.endswith("```"):
-                        raw_text = raw_text[:-3]
-                    raw_text = raw_text.strip()
-                    
-                    roster_data = json.loads(raw_text)
-                    roster_out_df = pd.DataFrame(roster_data["roster"])
-                    
-                    st.success("Roster successfully generated!")
-                    st.dataframe(roster_out_df)
-                    
-                    # Create downloadable Excel workbook
-                    # Use uploaded template or create new
-                    wb = None
-                    if upload_template is not None:
-                        wb = openpyxl.load_workbook(upload_template)
-                    else:
-                        wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = f"Roster {start_date.strftime('%d.%m.%Y')}"
+                
+                headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                ws.append(headers)
+                
+                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+                thin_border = Border(
+                    left=Side(style='thin', color='BFBFBF'),
+                    right=Side(style='thin', color='BFBFBF'),
+                    top=Side(style='thin', color='BFBFBF'),
+                    bottom=Side(style='thin', color='BFBFBF')
+                )
+                
+                for col_num, header in enumerate(headers, 1):
+                    cell = ws.cell(row=1, column=col_num)
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                    cell.border = thin_border
+                
+                unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+                off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+                text_font = Font(name="Calibri", size=11)
+                
+                from openpyxl.cell.cell import MergedCell
+                
+                for row_idx, row_data in enumerate(roster_out_df.itertuples(index=False), 2):
+                    for col_idx, value in enumerate(row_data, 1):
+                        cell = ws.cell(row=row_idx, column=col_idx)
                         
-                    ws = wb.active
-                    ws.title = f"Roster {start_date.strftime('%d.%m.%Y')}"
-                    
-                    # Write headers
-                    headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                    ws.append(headers)
-                    
-                    # Style headers
-                    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-                    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                    thin_border = Border(
-                        left=Side(style='thin', color='BFBFBF'),
-                        right=Side(style='thin', color='BFBFBF'),
-                        top=Side(style='thin', color='BFBFBF'),
-                        bottom=Side(style='thin', color='BFBFBF')
-                    )
-                    
-                    for col_num, header in enumerate(headers, 1):
-                        cell = ws.cell(row=1, column=col_num)
-                        cell.fill = header_fill
-                        cell.font = header_font
-                        cell.alignment = Alignment(horizontal="center", vertical="center")
-                        cell.border = thin_border
-                    
-                    # Write rows and apply styles
-                    unavail_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
-                    off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-                    text_font = Font(name="Calibri", size=11)
-                    
-                    from openpyxl.cell.cell import MergedCell
-                    
-                    for row_idx, row_data in enumerate(roster_out_df.itertuples(index=False), 2):
-                        for col_idx, value in enumerate(row_data, 1):
-                            cell = ws.cell(row=row_idx, column=col_idx)
-                            
-                            # If it is a merged cell, write to the top-left cell of the merged range
-                            target_cell = cell
-                            if isinstance(cell, MergedCell):
-                                for merged_range in ws.merged_cells.ranges:
-                                    if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
-                                        target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                                        break
-                                        
-                            target_cell.value = value
-                            target_cell.font = text_font
-                            target_cell.alignment = Alignment(horizontal="center", vertical="center")
-                            target_cell.border = thin_border
-                            
-                            # Color coding for readability
-                            val_str = str(value).strip().lower()
-                            if "unavailable" in val_str:
-                                target_cell.fill = unavail_fill
-                            elif val_str == "off":
-                                target_cell.fill = off_fill
-                    
-                    # Save to byte stream for Streamlit download
-                    excel_data = io.BytesIO()
-                    wb.save(excel_data)
-                    excel_data.seek(0)
-                    
-                    st.download_button(
-                        label="📥 Download Roster Excel File",
-                        data=excel_data,
-                        file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                    
-                except Exception as e:
-                    st.error(f"Failed to generate roster or parse Gemini response: {e}")
-                    if 'response' in locals() and response:
-                        st.text_area("Raw API Response for Debugging", response.text)
+                        target_cell = cell
+                        if isinstance(cell, MergedCell):
+                            for merged_range in ws.merged_cells.ranges:
+                                if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
+                                    target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                                    break
+                                    
+                        target_cell.value = value
+                        target_cell.font = text_font
+                        target_cell.alignment = Alignment(horizontal="center", vertical="center")
+                        target_cell.border = thin_border
+                        
+                        val_str = str(value).strip().lower()
+                        if "unavailable" in val_str:
+                            target_cell.fill = unavail_fill
+                        elif val_str == "off":
+                            target_cell.fill = off_fill
+                
+                excel_data = io.BytesIO()
+                wb.save(excel_data)
+                excel_data.seek(0)
+                
+                st.download_button(
+                    label="📥 Download Roster Excel File",
+                    data=excel_data,
+                    file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                
+            except Exception as e:
+                st.error(f"Failed to generate roster: {e}")

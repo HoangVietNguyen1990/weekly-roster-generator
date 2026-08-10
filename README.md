@@ -1,6 +1,6 @@
 # 📅 Weekly Roster Creator App
 
-A shareable, web-based tool built in Python and Streamlit that uses Google AI Studio's Gemini models to automatically generate optimized, award-compliant weekly rosters.
+A shareable, web-based tool built in Python and Streamlit that automatically generates optimized, award-compliant weekly rosters completely offline (no API keys required).
 
 ## 🚀 How to Host & Share this App (for FREE)
 
@@ -20,16 +20,6 @@ You can deploy and share this app online without installing Python on your compu
 3. Select your repository (`weekly-roster-generator`), branch (`main` or `master`), and main file path (`app.py`).
 4. Click **Deploy!**
 5. Within 1-2 minutes, your app will be online. You can copy the browser URL and share it with anyone!
-
----
-
-## 🔑 How to Get a Google AI Studio API Key
-
-To run the generator inside the app, users will need an API key:
-1. Go to [Google AI Studio](https://aistudio.google.com/).
-2. Click the **Get API Key** button in the top left.
-3. Click **Create API Key** (you can generate a free tier key).
-4. Copy the API key and paste it directly into the app sidebar!
 
 ---
 
