@@ -14,13 +14,19 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom premium Emerald & Golden Wheat Bakery styling
+# Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
     /* Main App Background - Deep Emerald & Forest Teal Gradient */
     .stApp {
         background: linear-gradient(135deg, #0e2b26 0%, #16443c 50%, #1f574d 100%);
-        color: #fdfbf7;
+        color: #ffffff;
+    }
+
+    /* Force high contrast text globally on labels, paragraphs, and markdown */
+    p, span, label, div[data-testid="stWidgetLabel"] p, .stMarkdown p {
+        color: #ffffff !important;
+        font-weight: 500;
     }
     
     /* Header Banner Styling */
@@ -34,42 +40,68 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
     .sub-header-style {
-        color: #b0d4cd;
+        color: #c8e6e0 !important;
         font-size: 1.15rem;
         margin-bottom: 25px;
         font-weight: 400;
     }
 
-    /* Tab Bar Customization */
+    /* Subheadings */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
+
+    /* Tab Bar Customization - High Contrast Inactive Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
-        background-color: rgba(14, 43, 38, 0.6);
+        background-color: rgba(9, 32, 28, 0.8);
         padding: 8px;
         border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(229, 169, 60, 0.3);
     }
     .stTabs [data-baseweb="tab"] {
         height: 48px;
         white-space: pre-wrap;
-        background-color: rgba(255, 255, 255, 0.06);
+        background-color: rgba(255, 255, 255, 0.12);
         border-radius: 10px;
-        color: #c4ded8;
+        color: #ffffff !important;
         padding-left: 22px;
         padding-right: 22px;
         font-weight: 600;
         border: 1px solid transparent;
         transition: all 0.25s ease;
     }
+    .stTabs [data-baseweb="tab"] p, .stTabs [data-baseweb="tab"] span {
+        color: #ffffff !important;
+    }
     .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(229, 169, 60, 0.15);
-        color: #fdfbf7;
+        background-color: rgba(229, 169, 60, 0.3);
+        color: #ffffff !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
+        border: none !important;
+        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.4);
+    }
+    .stTabs [aria-selected="true"] p, .stTabs [aria-selected="true"] span {
         color: #0e2b26 !important;
         font-weight: 800 !important;
-        border: none !important;
-        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.35);
+    }
+
+    /* Radio Buttons High Contrast */
+    .stRadio label, .stRadio div, .stRadio span, .stRadio p {
+        color: #ffffff !important;
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+
+    /* File Uploader High Contrast */
+    section[data-testid="stFileUploader"] label, 
+    section[data-testid="stFileUploader"] span, 
+    section[data-testid="stFileUploader"] p,
+    section[data-testid="stFileUploader"] small {
+        color: #ffffff !important;
     }
 
     /* Buttons Styling - Golden Wheat Amber Gradient */
@@ -94,7 +126,7 @@ st.markdown("""
     /* Download Button Specific Accent */
     .stDownloadButton>button {
         background: linear-gradient(135deg, #2e7d6e 0%, #1b5349 100%);
-        color: #ffffff;
+        color: #ffffff !important;
         border: 1px solid #e5a93c;
         padding: 12px 28px;
         border-radius: 10px;
@@ -104,20 +136,18 @@ st.markdown("""
     }
     .stDownloadButton>button:hover {
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
-        color: #0e2b26;
+        color: #0e2b26 !important;
         transform: translateY(-2px);
         box-shadow: 0 6px 18px rgba(229, 169, 60, 0.4);
     }
 
-    /* Sidebar Styling */
+    /* Sidebar Styling High Contrast */
     section[data-testid="stSidebar"] {
         background-color: #09201c;
         border-right: 1px solid rgba(229, 169, 60, 0.2);
     }
-
-    /* Radio buttons / selectors */
-    .stRadio label {
-        color: #e2f0ed !important;
+    section[data-testid="stSidebar"] * {
+        color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
