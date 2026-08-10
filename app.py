@@ -326,19 +326,31 @@ with tab5:
                     off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
                     text_font = Font(name="Calibri", size=11)
                     
+                    from openpyxl.cell.cell import MergedCell
+                    
                     for row_idx, row_data in enumerate(roster_out_df.itertuples(index=False), 2):
                         for col_idx, value in enumerate(row_data, 1):
-                            cell = ws.cell(row=row_idx, column=col_idx, value=value)
-                            cell.font = text_font
-                            cell.alignment = Alignment(horizontal="center", vertical="center")
-                            cell.border = thin_border
+                            cell = ws.cell(row=row_idx, column=col_idx)
+                            
+                            # If it is a merged cell, write to the top-left cell of the merged range
+                            target_cell = cell
+                            if isinstance(cell, MergedCell):
+                                for merged_range in ws.merged_cells.ranges:
+                                    if (row_idx, col_idx) in merged_range:
+                                        target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
+                                        break
+                                        
+                            target_cell.value = value
+                            target_cell.font = text_font
+                            target_cell.alignment = Alignment(horizontal="center", vertical="center")
+                            target_cell.border = thin_border
                             
                             # Color coding for readability
                             val_str = str(value).strip().lower()
                             if "unavailable" in val_str:
-                                cell.fill = unavail_fill
+                                target_cell.fill = unavail_fill
                             elif val_str == "off":
-                                cell.fill = off_fill
+                                target_cell.fill = off_fill
                     
                     # Save to byte stream for Streamlit download
                     excel_data = io.BytesIO()
