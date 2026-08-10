@@ -122,37 +122,48 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "⚙️ Generate & Export"
 ])
 
-def get_data(uploaded_file, manual_df):
-    if uploaded_file is not None:
-        try:
-            return pd.read_excel(uploaded_file)
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-            return manual_df
-    return manual_df
-
 # Tab 1: Employees
 with tab1:
     st.subheader("Manage Employees")
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
+    if upload_emp is not None:
+        try:
+            st.session_state.manual_employees = pd.read_excel(upload_emp)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
 
 # Tab 2: Unavailability
 with tab2:
     st.subheader("Log Unavailability")
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
+    if upload_unavail is not None:
+        try:
+            st.session_state.manual_unavailability = pd.read_excel(upload_unavail)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
 
 # Tab 3: Daily Requirements
 with tab3:
     st.subheader("Daily Shift Requirements")
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+    if upload_req is not None:
+        try:
+            st.session_state.manual_requirements = pd.read_excel(upload_req)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
 
 # Tab 4: Fixed Shifts
 with tab4:
     st.subheader("Fixed Baseline Shifts")
     upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+    if upload_fixed is not None:
+        try:
+            st.session_state.manual_fixed = pd.read_excel(upload_fixed)
+        except Exception as e:
+            st.error(f"Error loading file: {e}")
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
 
 # Helpers for parsing times
@@ -180,7 +191,6 @@ def parse_shift_range(shift_str):
         parts = str(shift_str).split("-")
         start = parse_time_to_decimal(parts[0])
         end = parse_time_to_decimal(parts[1])
-        # Handle overnight shifts or duration calculation
         duration = end - start if end > start else (24 - start) + end
         return start, end, duration
     except:
@@ -204,17 +214,64 @@ def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
         return max(shift_start, u_start) < min(shift_end, u_end)
     return False
 
+def find_column(df, candidates, default=""):
+    for c in df.columns:
+        if str(c).strip().lower() in candidates:
+            return c
+    return default
+
 # Deterministic solver
-def solve_roster(employees, unavailability, requirements, fixed, start_dt):
-    # Standardize columns
-    employees.columns = [c.strip() for c in employees.columns]
-    unavailability.columns = [c.strip() for c in unavailability.columns]
-    requirements.columns = [c.strip() for c in requirements.columns]
-    fixed.columns = [c.strip() for c in fixed.columns]
-    
+def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt):
+    # Make copies and standardize column names dynamically to prevent KeyError
+    employees = employees_raw.copy()
+    unavailability = unavailability_raw.copy()
+    requirements = requirements_raw.copy()
+    fixed = fixed_raw.copy()
+
+    # Employees mapping
+    emp_rename = {}
+    c_name = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
+    if c_name: emp_rename[c_name] = "Name"
+    c_start = find_column(employees, ["start date", "commencement date", "started", "startdate"])
+    if c_start: emp_rename[c_start] = "Start Date"
+    c_age = find_column(employees, ["age", "dob", "date of birth", "years"])
+    if c_age: emp_rename[c_age] = "Age"
+    c_type = find_column(employees, ["employment type", "type", "status", "ft/pt/casual", "employmenttype"])
+    if c_type: emp_rename[c_type] = "Employment Type"
+    employees = employees.rename(columns=emp_rename)
+
+    # Unavailability mapping
+    unavail_rename = {}
+    c_u_name = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
+    if c_u_name: unavail_rename[c_u_name] = "Employee"
+    c_u_day = find_column(unavailability, ["day", "date", "weekday"])
+    if c_u_day: unavail_rename[c_u_day] = "Day"
+    c_u_window = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason"])
+    if c_u_window: unavail_rename[c_u_window] = "Time Window"
+    unavailability = unavailability.rename(columns=unavail_rename)
+
+    # Requirements mapping
+    req_rename = {}
+    c_r_day = find_column(requirements, ["day", "date", "weekday"])
+    if c_r_day: req_rename[c_r_day] = "Day"
+    c_r_shift = find_column(requirements, ["shift", "time", "hours", "shift time"])
+    if c_r_shift: req_rename[c_r_shift] = "Shift"
+    c_r_count = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
+    if c_r_count: req_rename[c_r_count] = "Count Required"
+    requirements = requirements.rename(columns=req_rename)
+
+    # Fixed mapping
+    fixed_rename = {}
+    c_f_name = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
+    if c_f_name: fixed_rename[c_f_name] = "Employee"
+    fixed = fixed.rename(columns=fixed_rename)
+
     # Filter active employees
     active_employees = []
     for _, emp in employees.iterrows():
+        name_val = emp.get("Name")
+        if pd.isna(name_val) or str(name_val).strip() == "":
+            continue
         try:
             start_date_parsed = pd.to_datetime(emp.get("Start Date", start_dt))
             if start_date_parsed.date() <= start_dt:
@@ -246,14 +303,12 @@ def solve_roster(employees, unavailability, requirements, fixed, start_dt):
         window = str(un_row.get("Time Window", "All Day")).strip().lower()
         if name in roster_output and day in days_of_week:
             if "all day" in window or "anytime" in window:
-                # If they don't have a fixed shift, mark as unavailable
                 if roster_output[name][day] == "off":
                     roster_output[name][day] = " unavailable"
 
     # 3. Schedule required shifts day by day
     for day in days_of_week:
-        # Get shifts required for this day
-        day_reqs = requirements[requirements["Day"].str.lower() == day.lower()]
+        day_reqs = requirements[requirements["Day"].astype(str).str.lower() == day.lower()]
         shifts_to_fill = []
         for _, req in day_reqs.iterrows():
             shift = req.get("Shift")
@@ -274,7 +329,6 @@ def solve_roster(employees, unavailability, requirements, fixed, start_dt):
             for emp in active_employees:
                 name = emp["Name"]
                 age = int(emp.get("Age", 25))
-                role = str(emp.get("Role", "Team Member"))
                 
                 # Check if already working a shift today
                 if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
@@ -286,7 +340,7 @@ def solve_roster(employees, unavailability, requirements, fixed, start_dt):
 
                 # Check day-specific unavailability
                 is_emp_unavailable = False
-                emp_unavail = unavailability[(unavailability["Employee"] == name) & (unavailability["Day"].str.lower() == day.lower())]
+                emp_unavail = unavailability[(unavailability["Employee"] == name) & (unavailability["Day"].astype(str).str.lower() == day.lower())]
                 for _, un_row in emp_unavail.iterrows():
                     window = str(un_row.get("Time Window", "All Day"))
                     if is_overlapping_unavailability(window, shift_info["start"], shift_info["end"]):
@@ -304,17 +358,14 @@ def solve_roster(employees, unavailability, requirements, fixed, start_dt):
 
                 # Rule: Under-18 school hours (Mon-Fri 9:00 AM - 3:30 PM)
                 if age < 18 and day not in ["Saturday", "Sunday"]:
-                    # check overlap with 9.0 to 15.5
                     if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
                         continue
 
                 # Calculate heuristic score
                 score = 0
-                
-                # Balance shifts score (penalize if already got shifts)
                 score -= weekly_shifts_count[name] * 20
                 
-                # Junior rate preference (lower age gets priority for longer shifts)
+                # Junior rate preference
                 if age < 21:
                     score += (21 - age) * shift_info["duration"] * 2
                 
@@ -353,12 +404,8 @@ with tab5:
     if st.button("Generate Weekly Roster"):
         with st.spinner("Calculating optimal roster locally..."):
             try:
-                final_employees = get_data(upload_emp, employees_df)
-                final_unavail = get_data(upload_unavail, unavailability_df)
-                final_req = get_data(upload_req, requirements_df)
-                final_fixed = get_data(upload_fixed, fixed_df)
-                
-                roster_out_df = solve_roster(final_employees, final_unavail, final_req, final_fixed, start_date)
+                # Use current state dataframes
+                roster_out_df = solve_roster(employees_df, unavailability_df, requirements_df, fixed_df, start_date)
                 
                 st.success("Roster successfully generated!")
                 st.dataframe(roster_out_df)
