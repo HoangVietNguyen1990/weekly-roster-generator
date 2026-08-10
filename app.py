@@ -158,18 +158,10 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* FILE UPLOADER BUTTON SPECIFIC - GOLDEN WHEAT WITH DARK TEXT */
-    [data-testid="stFileUploaderDropzone"] button,
-    [data-testid="stFileUploaderDropzone"] button * {
-        color: #0e2b26 !important;
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
-        font-weight: 800 !important;
-        border: none !important;
-        border-radius: 8px !important;
-        opacity: 1 !important;
+    /* Hero Generate Button Styling - Tight Under Date Picker */
+    .hero-generate-btn {
+        margin-top: -10px !important;
     }
-
-    /* Hero Generate Button Styling - Positioned Right Below Date Picker */
     .hero-generate-btn button {
         width: 100% !important;
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
@@ -182,8 +174,8 @@ st.markdown("""
         letter-spacing: 0.5px !important;
         transition: all 0.3s ease !important;
         box-shadow: 0 6px 20px rgba(229, 169, 60, 0.45) !important;
-        margin-top: 4px !important;
-        margin-bottom: 15px !important;
+        margin-top: 0px !important;
+        margin-bottom: 5px !important;
     }
     .hero-generate-btn button p, .hero-generate-btn button span {
         color: #0e2b26 !important;
@@ -694,9 +686,10 @@ with tab_home:
     
     col1, col2 = st.columns([1, 1])
     with col1:
+        st.markdown('<div style="background: rgba(9, 32, 28, 0.6); padding: 16px; border-radius: 14px; border: 1px solid rgba(229,169,60,0.35);">', unsafe_allow_html=True)
         start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
         
-        # Position Hero Generate Button directly below the Date Picker
+        # Position Hero Generate Button TIGHT right under the Date Picker
         st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
         if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
             with st.spinner("Calculating optimal bakery roster locally..."):
@@ -711,7 +704,7 @@ with tab_home:
                     st.success("🎉 Weekly Roster successfully generated!")
                 except Exception as e:
                     st.error(f"Failed to generate roster: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div></div>', unsafe_allow_html=True)
 
     with col2:
         upload_template = st.file_uploader("📋 Custom Layout Template (.xlsx)", type=["xlsx"], key="home_template_upload")
