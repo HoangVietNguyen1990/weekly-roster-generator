@@ -121,18 +121,8 @@ if 'manual_unavailability' not in st.session_state:
 
 if 'manual_requirements' not in st.session_state:
     st.session_state.manual_requirements = pd.DataFrame([
-        {"Day": "Monday", "Shift": "7:30am-12:30pm", "Count Required": 2},
-        {"Day": "Monday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
-        {"Day": "Tuesday", "Shift": "7:30am-12:30pm", "Count Required": 2},
-        {"Day": "Tuesday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
-        {"Day": "Wednesday", "Shift": "7:30am-12:30pm", "Count Required": 2},
-        {"Day": "Wednesday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
-        {"Day": "Thursday", "Shift": "7:30am-12:30pm", "Count Required": 2},
-        {"Day": "Thursday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
-        {"Day": "Friday", "Shift": "7:30am-12:30pm", "Count Required": 2},
-        {"Day": "Friday", "Shift": "12:30pm-5:30pm", "Count Required": 1},
-        {"Day": "Saturday", "Shift": "8:30am-1:30pm", "Count Required": 2},
-        {"Day": "Sunday", "Shift": "9:00am-2:00pm", "Count Required": 2},
+        {"Shift": "7:30am-12:30pm", "Monday": 2, "Tuesday": 2, "Wednesday": 2, "Thursday": 2, "Friday": 2, "Saturday": 0, "Sunday": 0},
+        {"Shift": "12:30pm-5:30pm", "Monday": 1, "Tuesday": 1, "Wednesday": 1, "Thursday": 1, "Friday": 1, "Saturday": 2, "Sunday": 2},
     ])
 
 if 'manual_fixed' not in st.session_state:
@@ -334,6 +324,10 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
     # 1. Apply fixed shifts first
     fixed_name_col = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
+    # Fallback to column 0 if no matching header name
+    if not fixed_name_col and not fixed.empty:
+        fixed_name_col = fixed.columns[0]
+        
     fixed_applied = 0
     if fixed_name_col:
         for _, fix_row in fixed.iterrows():
@@ -357,7 +351,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     # 2. Check unavailability
     unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
     unavail_day_col = find_column(unavailability, ["day", "date", "weekday"])
-    unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason"])
+    unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason", "time constraint", "constraint"])
 
     unavail_map = {}
     if unavail_name_col and unavail_day_col and unavail_window_col:
@@ -387,15 +381,37 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     # 3. Schedule required shifts day by day
     req_day_col = find_column(requirements, ["day", "date", "weekday"])
     req_shift_col = find_column(requirements, ["shift", "time", "hours", "shift time"])
-    req_count_col = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
+    
+    # Check if requirements contains columns matching days of the week (Grid Format)
+    has_day_cols = any(find_column(requirements, [day.lower(), day.lower()[:3]]) for day in days_of_week)
 
     if debug_logs is not None:
         debug_logs["shifts_per_day"] = {}
 
     for day in days_of_week:
         shifts_to_fill = []
-        if req_day_col and req_shift_col:
-            # Clean and match day name robustly (strip whitespace, lowercase, match first 3 letters)
+        
+        if has_day_cols and req_shift_col:
+            # Grid Format: Days are columns, rows are shifts, cell values are counts
+            day_col = find_column(requirements, [day.lower(), day.lower()[:3]])
+            if day_col:
+                for _, req in requirements.iterrows():
+                    shift = str(req.get(req_shift_col, "")).strip()
+                    count_val = req.get(day_col)
+                    if pd.notna(count_val):
+                        try:
+                            count = int(float(count_val))
+                        except:
+                            count = 0
+                        if count > 0:
+                            parsed = parse_shift_range(shift)
+                            if parsed:
+                                start, end, duration = parsed
+                                for _ in range(count):
+                                    shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
+        elif req_day_col and req_shift_col:
+            # Flat Format: Rows are (Day, Shift, Count)
+            req_count_col = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
             clean_day_series = requirements[req_day_col].astype(str).str.strip().str.lower()
             day_reqs = requirements[clean_day_series.str.startswith(day.lower()[:3])]
             
