@@ -717,17 +717,23 @@ with tab5:
                                 if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
                                     target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
                                     break
-                                
-                    target_cell.value = value
+                    
+                    # Store original value for color testing
+                    val_str = str(value).strip().lower()
+                    
+                    # Format cell colors based on value, and clear text if 'off' or 'unavailable'
+                    if "unavailable" in val_str:
+                        target_cell.fill = unavail_fill
+                        target_cell.value = ""
+                    elif val_str == "off":
+                        target_cell.fill = off_fill
+                        target_cell.value = ""
+                    else:
+                        target_cell.value = value
+                        
                     target_cell.font = text_font
                     target_cell.alignment = Alignment(horizontal="center", vertical="center")
                     target_cell.border = thin_border
-                    
-                    val_str = str(value).strip().lower()
-                    if "unavailable" in val_str:
-                        target_cell.fill = unavail_fill
-                    elif val_str == "off":
-                        target_cell.fill = off_fill
             
             excel_data = io.BytesIO()
             wb.save(excel_data)
