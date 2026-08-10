@@ -69,7 +69,7 @@ st.sidebar.image("https://img.icons8.com/fluency/96/calendar.png", width=80)
 st.sidebar.title("App Controls")
 st.sidebar.info("This app runs locally on your browser/server. It uses a deterministic constraint solver to optimize staff rostering based on your rules and templates.")
 
-# Helper to read excel sheets robustly, skipping empty headers
+# Helper to read excel sheets robustly, skipping empty headers and titles
 def read_excel_robust(uploaded_file):
     if uploaded_file is None:
         return None
@@ -83,10 +83,12 @@ def read_excel_robust(uploaded_file):
         
         for idx, row in df_raw.iterrows():
             row_vals = [str(x).strip().lower() for x in row if pd.notna(x)]
-            matches = sum(1 for val in row_vals for kw in keywords if kw in val)
-            if matches >= 1:  # Relaxed to 1 or more keyword matches to catch "NAME" headers
-                header_row_idx = idx
-                break
+            # Ensure it is a multi-column row (skips titles/merged header banners) and has keywords
+            if len(row_vals) >= 2:
+                matches = sum(1 for val in row_vals for kw in keywords if kw in val)
+                if matches >= 2:  # Must match at least 2 headers (e.g. NAME and Commence)
+                    header_row_idx = idx
+                    break
                 
         # Re-read from that header row index
         df = pd.read_excel(uploaded_file, header=header_row_idx)
