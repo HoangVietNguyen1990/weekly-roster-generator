@@ -145,9 +145,12 @@ with tab1:
     st.subheader("Manage Employees")
     upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
     if upload_emp is not None:
-        loaded = read_excel_robust(upload_emp)
-        if loaded is not None:
-            st.session_state.manual_employees = loaded
+        file_key = f"processed_{upload_emp.name}_{upload_emp.size}"
+        if st.session_state.get("last_emp_file") != file_key:
+            loaded = read_excel_robust(upload_emp)
+            if loaded is not None:
+                st.session_state.manual_employees = loaded
+                st.session_state.last_emp_file = file_key
     employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
 
 # Tab 2: Unavailability
@@ -155,9 +158,12 @@ with tab2:
     st.subheader("Log Unavailability")
     upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
     if upload_unavail is not None:
-        loaded = read_excel_robust(upload_unavail)
-        if loaded is not None:
-            st.session_state.manual_unavailability = loaded
+        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}"
+        if st.session_state.get("last_unavail_file") != file_key:
+            loaded = read_excel_robust(upload_unavail)
+            if loaded is not None:
+                st.session_state.manual_unavailability = loaded
+                st.session_state.last_unavail_file = file_key
     unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
 
 # Tab 3: Daily Requirements
@@ -165,9 +171,12 @@ with tab3:
     st.subheader("Daily Shift Requirements")
     upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
     if upload_req is not None:
-        loaded = read_excel_robust(upload_req)
-        if loaded is not None:
-            st.session_state.manual_requirements = loaded
+        file_key = f"processed_{upload_req.name}_{upload_req.size}"
+        if st.session_state.get("last_req_file") != file_key:
+            loaded = read_excel_robust(upload_req)
+            if loaded is not None:
+                st.session_state.manual_requirements = loaded
+                st.session_state.last_req_file = file_key
     requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
 
 # Tab 4: Fixed Shifts
@@ -175,9 +184,12 @@ with tab4:
     st.subheader("Fixed Baseline Shifts")
     upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
     if upload_fixed is not None:
-        loaded = read_excel_robust(upload_fixed)
-        if loaded is not None:
-            st.session_state.manual_fixed = loaded
+        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
+        if st.session_state.get("last_fixed_file") != file_key:
+            loaded = read_excel_robust(upload_fixed)
+            if loaded is not None:
+                st.session_state.manual_fixed = loaded
+                st.session_state.last_fixed_file = file_key
     fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
 
 # Helpers for parsing times
