@@ -61,20 +61,29 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* TABLE HEADERS & DATA EDITOR STANDOUT STYLING */
+    /* GLIDE DATA GRID & ST.DATA_EDITOR CANVAS HEADER OVERRIDES */
     div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
         border-radius: 14px !important;
         overflow: hidden !important;
         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45) !important;
         border: 2px solid #e5a93c !important;
         background-color: #ffffff !important;
+        
+        /* Glide Data Grid Header Color CSS Variables */
+        --gdg-bg-header: #e5a93c !important;
+        --gdg-bg-header-has-focus: #d48827 !important;
+        --gdg-text-header: #0e2b26 !important;
+        --gdg-text-header-selected: #0e2b26 !important;
+        --gdg-font-family: 'Inter', sans-serif !important;
     }
     
-    /* Golden Amber Background (#E5A93C) with Dark Teal Text (#0E2B26) */
+    /* Fallback DOM Header Element Styling */
     div[data-testid="stDataEditor"] th, 
     div[data-testid="stDataFrame"] th, 
     div[class*="header"], 
-    div[role="columnheader"] {
+    div[class*="Header"],
+    div[role="columnheader"],
+    div[class*="gdg-header"] {
         background-color: #e5a93c !important;
         background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
         color: #0e2b26 !important;
