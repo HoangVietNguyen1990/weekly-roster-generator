@@ -245,7 +245,7 @@ def find_column(df, candidates, default=""):
     return default
 
 # Deterministic solver
-def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt):
+def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
     # Standardize column headers to lowercase and stripped
     employees = employees_raw.copy()
     employees.columns = [str(c).strip().lower() for c in employees.columns]
@@ -258,6 +258,12 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     
     fixed = fixed_raw.copy()
     fixed.columns = [str(c).strip().lower() for c in fixed.columns]
+
+    if debug_logs is not None:
+        debug_logs["employees_cols"] = list(employees.columns)
+        debug_logs["unavail_cols"] = list(unavailability.columns)
+        debug_logs["requirements_cols"] = list(requirements.columns)
+        debug_logs["fixed_cols"] = list(fixed.columns)
 
     # Map employees columns
     name_col = find_column(employees, ["name", "employee", "employee name", "staff name", "staff"])
@@ -310,6 +316,10 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             "Type": emp_type
         })
 
+    if debug_logs is not None:
+        debug_logs["active_employees_count"] = len(active_employees)
+        debug_logs["active_employees_list"] = [e["Name"] for e in active_employees]
+
     if not active_employees:
         return pd.DataFrame()
 
@@ -324,6 +334,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
     # 1. Apply fixed shifts first
     fixed_name_col = find_column(fixed, ["employee", "name", "employee name", "staff name", "staff"])
+    fixed_applied = 0
     if fixed_name_col:
         for _, fix_row in fixed.iterrows():
             raw_fixed_name = str(fix_row.get(fixed_name_col, "")).strip().lower()
@@ -336,15 +347,18 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                         if val.lower() not in ["off", "nan", ""]:
                             roster_output[name][day] = val
                             weekly_shifts_count[name] += 1
+                            fixed_applied += 1
                             if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
                                 elizabeth_weekday_shifts += 1
+
+    if debug_logs is not None:
+        debug_logs["fixed_applied_count"] = fixed_applied
 
     # 2. Check unavailability
     unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
     unavail_day_col = find_column(unavailability, ["day", "date", "weekday"])
     unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason"])
 
-    # Key: (normalized_name, day.lower()) -> list of unavailability windows
     unavail_map = {}
     if unavail_name_col and unavail_day_col and unavail_window_col:
         for _, un_row in unavailability.iterrows():
@@ -375,10 +389,16 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     req_shift_col = find_column(requirements, ["shift", "time", "hours", "shift time"])
     req_count_col = find_column(requirements, ["count required", "count", "required", "staff needed", "personnel", "quantity", "countrequired"])
 
+    if debug_logs is not None:
+        debug_logs["shifts_per_day"] = {}
+
     for day in days_of_week:
         shifts_to_fill = []
         if req_day_col and req_shift_col:
-            day_reqs = requirements[requirements[req_day_col].astype(str).str.lower().str.startswith(day.lower()[:3])]
+            # Clean and match day name robustly (strip whitespace, lowercase, match first 3 letters)
+            clean_day_series = requirements[req_day_col].astype(str).str.strip().str.lower()
+            day_reqs = requirements[clean_day_series.str.startswith(day.lower()[:3])]
+            
             for _, req in day_reqs.iterrows():
                 shift = str(req.get(req_shift_col, "")).strip()
                 count_val = req.get(req_count_col, 1)
@@ -393,6 +413,9 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                         shifts_to_fill.append({"shift": shift, "start": start, "end": end, "duration": duration})
                         
         shifts_to_fill = sorted(shifts_to_fill, key=lambda x: x["duration"], reverse=True)
+
+        if debug_logs is not None:
+            debug_logs["shifts_per_day"][day] = len(shifts_to_fill)
 
         for shift_info in shifts_to_fill:
             best_candidate = None
@@ -477,7 +500,13 @@ with tab5:
     if st.button("Generate Weekly Roster"):
         with st.spinner("Calculating optimal roster locally..."):
             try:
-                roster_out_df = solve_roster(employees_df, unavailability_df, requirements_df, fixed_df, start_date)
+                # Debug logging structure
+                debug_logs = {}
+                roster_out_df = solve_roster(employees_df, unavailability_df, requirements_df, fixed_df, start_date, debug_logs)
+                
+                # Render diagnostics always, so we can see what's happening
+                st.markdown("### 📊 Generation Diagnostic Log:")
+                st.json(debug_logs)
                 
                 if roster_out_df.empty:
                     st.warning("⚠️ Roster generated is empty. Please verify that your Employees tab lists active employee names, and the Start Dates are not in the future.")
