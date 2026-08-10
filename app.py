@@ -428,8 +428,6 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     # Initialize Roster
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     roster_output = {emp["Name"]: {day: "off" for day in days_of_week} for emp in active_employees}
-    weekly_shifts_count = {emp["Name"]: 0_000 # dummy large
-                           for emp in active_employees} # wait, weekly_shifts_count needs to be initialized to 0
     weekly_shifts_count = {emp["Name"]: 0 for emp in active_employees}
     elizabeth_weekday_shifts = 0
 
@@ -737,10 +735,10 @@ with tab5:
                     target_cell.alignment = Alignment(horizontal="center", vertical="center")
                     target_cell.border = thin_border
 
-            # Set precise column widths to prevent text clipping
-            ws.column_dimensions['A'].width = 22  # Employee Column
+            # Set HUGE column widths to prevent text clipping
+            ws.column_dimensions['A'].width = 30  # Employee Column
             for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H']:
-                ws.column_dimensions[col_letter].width = 20  # Monday to Sunday Columns
+                ws.column_dimensions[col_letter].width = 25  # Monday to Sunday Columns
                 
             # Set precise row heights for better spacing and readability
             ws.row_dimensions[1].height = 28  # Header row height
