@@ -61,9 +61,9 @@ st.markdown("""
         margin-bottom: 20px;
     }
 </style>
-""", unsafe_allowed_html=True)
+""", unsafe_allow_html=True)
 
-st.markdown('<h1 class="header-style">Weekly Roster Creator</h1>', unsafe_allowed_html=True)
+st.markdown('<h1 class="header-style">Weekly Roster Creator</h1>', unsafe_allow_html=True)
 st.write("Generate optimized, law-compliant rosters using Google AI Studio's Gemini models.")
 
 # --- SIDEBAR CONFIGURATION ---
