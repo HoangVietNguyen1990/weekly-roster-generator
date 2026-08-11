@@ -271,19 +271,97 @@ st.markdown("""
 import json
 
 # --- DISK PERSISTENCE ENGINE ---
-DATA_DIR = "data"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 USER_PROFILES_FILE = os.path.join(DATA_DIR, "user_profiles.json")
 
+DEFAULT_PROFILES = {
+  "admin": {
+    "username": "admin",
+    "password": "admin123",
+    "role": "Manager",
+    "employee_name": "Bakery Manager",
+    "profile": {
+      "full_name": "Bakery Manager", "address": "", "home_phone": "", "mobile": "",
+      "email": "manager@brumbys.com.au", "dob": "", "gender": "", "tfn": "",
+      "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "",
+      "employment_level": "Store Manager", "super_fund": "", "super_policy": "",
+      "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "",
+      "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": ""
+    }
+  },
+  "ainsley.mactier": {
+    "username": "ainsley.mactier",
+    "password": "TempPass123!",
+    "role": "Employee",
+    "employee_name": "Ainsley Mactier",
+    "profile": {
+      "full_name": "Ainsley Brenda Mactier",
+      "address": "8 Knapton Ave, Beaconsfield Upper, Vic 3808",
+      "home_phone": "0359192106",
+      "mobile": "0479122444",
+      "email": "ainsley.mac@outlook.com",
+      "dob": "14th August 2006",
+      "gender": "Female",
+      "tfn": "520700",
+      "store": "Brumby's Pakenham",
+      "classification": "Casual",
+      "commencement_date": "2024-05-10",
+      "employment_level": "Junior Team Member",
+      "super_fund": "Australian Super",
+      "super_policy": "9124950",
+      "super_address": "",
+      "super_contact": "",
+      "super_abn": "",
+      "bank_name": "Commonwealth",
+      "bank_branch": "",
+      "bank_bsb": "062 948",
+      "bank_account": "2847 7286",
+      "account_name": "Ainsley Mactier"
+    }
+  },
+  "elizabeth": {
+    "username": "elizabeth", "password": "TempPass123!", "role": "Employee", "employee_name": "Elizabeth",
+    "profile": { "full_name": "Elizabeth", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Part-Time", "commencement_date": "2024-01-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "stella": {
+    "username": "stella", "password": "TempPass123!", "role": "Employee", "employee_name": "Stella",
+    "profile": { "full_name": "Stella", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-03-15", "employment_level": "Junior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "aimi": {
+    "username": "aimi", "password": "TempPass123!", "role": "Employee", "employee_name": "Aimi",
+    "profile": { "full_name": "Aimi", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-06-01", "employment_level": "Junior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "jude": {
+    "username": "jude", "password": "TempPass123!", "role": "Employee", "employee_name": "Jude",
+    "profile": { "full_name": "Jude", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2024-01-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "aroha": {
+    "username": "aroha", "password": "TempPass123!", "role": "Employee", "employee_name": "Aroha",
+    "profile": { "full_name": "Aroha", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-11-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "robert": {
+    "username": "robert", "password": "TempPass123!", "role": "Employee", "employee_name": "Robert",
+    "profile": { "full_name": "Robert", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-10-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  }
+}
+
 def load_user_profiles():
+    profiles = {}
     if os.path.exists(USER_PROFILES_FILE):
         try:
             with open(USER_PROFILES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                profiles = json.load(f)
         except Exception:
-            pass
-    return {}
+            profiles = {}
+            
+    if not profiles or "admin" not in profiles:
+        profiles = DEFAULT_PROFILES.copy()
+        save_user_profiles(profiles)
+        
+    return profiles
 
 def save_user_profiles(profiles):
     try:
@@ -337,8 +415,9 @@ if not st.session_state.authenticated:
         
         if st.button("🚀 Login to Portal", key="btn_login"):
             login_user_clean = login_user.strip().lower()
-            if login_user_clean in user_profiles:
-                account = user_profiles[login_user_clean]
+            current_profiles = load_user_profiles()
+            if login_user_clean in current_profiles:
+                account = current_profiles[login_user_clean]
                 if account.get("password") == login_pass:
                     st.session_state.authenticated = True
                     st.session_state.logged_in_user = login_user_clean
@@ -348,7 +427,7 @@ if not st.session_state.authenticated:
                 else:
                     st.error("Incorrect password. Please check your credentials.")
             else:
-                st.error("Username not found. Please verify your login username.")
+                st.error(f"Username '{login_user_clean}' not found. Available accounts: {', '.join(current_profiles.keys())}")
                 
         st.markdown("""
             <hr style="border-color: rgba(229, 169, 60, 0.3); margin: 20px 0;">
