@@ -589,17 +589,11 @@ if not st.session_state.authenticated:
                     st.success(f"Welcome back, {account.get('employee_name', login_user_clean)}!")
                     st.rerun()
                 else:
-                    st.error("Incorrect password. Please check your credentials.")
+                    st.error("🔒 Invalid username or password. Please check your credentials.")
             else:
-                st.error(f"Username '{login_user_clean}' not found. Available accounts: {', '.join(current_profiles.keys())}")
+                st.error("🔒 Invalid username or password. Please check your credentials.")
                 
         st.markdown("""
-            <hr style="border-color: rgba(229, 169, 60, 0.3); margin: 20px 0;">
-            <p style="font-size: 0.88rem; color: #c8e6e0 !important; text-align: center;">
-                <b>Default Credentials:</b><br>
-                👑 Manager: <code>admin</code> / <code>admin123</code><br>
-                👤 Employee (e.g. Ainsley Mactier): <code>ainsley.mactier</code> / <code>TempPass123!</code>
-            </p>
         </div>
         """, unsafe_allow_html=True)
     st.stop()
