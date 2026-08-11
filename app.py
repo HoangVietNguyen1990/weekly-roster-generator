@@ -679,20 +679,23 @@ def render_employee_availability_manager(user_key):
         
         day_inputs = {}
         for d in days_list:
-            col_check, col_type, col_detail = st.columns([1.2, 1.2, 2])
+            col_check, col_type, col_detail = st.columns([1.2, 1.2, 2.5])
             with col_check:
                 is_checked = st.checkbox(f"🔴 {d}", key=f"chk_{d}_{user_key}")
             with col_type:
                 time_type = st.radio(f"Time for {d}", ["All Day", "Specific Time"], key=f"rad_{d}_{user_key}", label_visibility="collapsed")
             with col_detail:
+                # Input text box ALWAYS visible for every row
+                spec_time_input = st.text_input(
+                    f"Window for {d}", 
+                    value="", 
+                    placeholder="Type window e.g. Before 3:30pm, After 5pm, 7:30am-12:30pm", 
+                    key=f"input_spec_{d}_{user_key}", 
+                    label_visibility="collapsed"
+                ).strip()
+                
                 if time_type == "Specific Time":
-                    spec_time = st.text_input(
-                        f"Window for {d}", 
-                        value="Before 3:30pm", 
-                        placeholder="e.g. Before 3:30pm, After 5:00pm, or 7:30am-12:30pm", 
-                        key=f"input_spec_{d}_{user_key}", 
-                        label_visibility="collapsed"
-                    ).strip()
+                    spec_time = spec_time_input if spec_time_input else "Specific Time"
                 else:
                     spec_time = "All Day"
                     
