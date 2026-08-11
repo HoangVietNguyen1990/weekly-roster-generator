@@ -772,41 +772,98 @@ def render_employee_availability_manager(user_key):
                     st.success("Constraint deleted.")
                     st.rerun()
 
-# Helper function to render Whole Team Unavailability Calendar Matrix for Manager
-def render_team_unavailability_matrix():
+# Helper function to render Visual Monthly Calendar Grid with Color-Coded Event Badges for Manager
+def render_team_monthly_calendar_grid():
+    import calendar
+    from datetime import date
+    
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📅 Whole Team Weekly Unavailability Matrix (Real-Time Live Sync Calendar)
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 14px 22px; border-radius: 14px 14px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        📅 Bakery Team Monthly Calendar & Unavailability Grid
     </div>
     """, unsafe_allow_html=True)
+    
+    # Month / Year Selection Controls
+    col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+    with col_nav2:
+        selected_month_str = st.selectbox(
+            "Select Month & Year View", 
+            ["August 2026", "September 2026", "October 2026", "November 2026", "December 2026", "January 2027"],
+            index=0,
+            key="cal_grid_month_picker"
+        )
+        
+    month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    parts = selected_month_str.split()
+    sel_month_name = parts[0]
+    sel_year = int(parts[1])
+    sel_month = month_names.index(sel_month_name) + 1
+    
+    # Render 7 day headers (Sun to Sat)
+    days_hdr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    cols_hdr = st.columns(7)
+    for i, h in enumerate(days_hdr):
+        with cols_hdr[i]:
+            st.markdown(f'<div style="text-align: center; font-weight: 800; color: #e5a93c; background: #0c2b25; padding: 8px; border-radius: 8px; font-size: 0.95rem;">{h}</div>', unsafe_allow_html=True)
+            
+    # Set calendar to Sunday-first (firstweekday=6)
+    cal = calendar.Calendar(firstweekday=6)
+    month_days = cal.monthdayscalendar(sel_year, sel_month)
     
     unavail_df = st.session_state.manual_unavailability
     emp_col = find_column(unavail_df, ["employee", "name", "staff"], "Employee")
     day_col = find_column(unavail_df, ["day", "date", "weekday"], "Day")
     win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability"], "Time Window")
+
+    fixed_df = st.session_state.manual_fixed if "manual_fixed" in st.session_state else None
+    weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
-    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
-    emp_list = []
-    if "manual_employees" in st.session_state and "Name" in st.session_state.manual_employees.columns:
-        emp_list = [str(x).strip() for x in st.session_state.manual_employees["Name"].dropna().unique() if str(x).strip()]
-    if not emp_list:
-        emp_list = ["Elizabeth", "Stella", "Ainsley Mactier", "Aimi", "Jude", "Aroha", "Robert"]
-        
-    matrix_rows = []
-    for emp in emp_list:
-        r = {"Employee": emp}
-        for d in days:
-            matches = unavail_df[(unavail_df[emp_col].astype(str).str.strip().str.lower() == emp.lower()) & 
-                                 (unavail_df[day_col].astype(str).str.strip().str.lower().str.startswith(d.lower()[:3]))]
-            if not matches.empty:
-                r[d] = " | ".join(matches[win_col].astype(str).tolist())
-            else:
-                r[d] = "Available"
-        matrix_rows.append(r)
-        
-    df_matrix = pd.DataFrame(matrix_rows)
-    st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+    for week in month_days:
+        week_cols = st.columns(7)
+        for i, day_num in enumerate(week):
+            with week_cols[i]:
+                if day_num == 0:
+                    st.markdown('<div style="min-height: 105px; background: rgba(255,255,255,0.02); border-radius: 8px; margin-top: 4px;"></div>', unsafe_allow_html=True)
+                else:
+                    dt_obj = date(sel_year, sel_month, day_num)
+                    day_name = weekday_names[dt_obj.weekday()]
+                    
+                    chips_html = []
+                    
+                    # 1. Unavailability Chips
+                    if unavail_df is not None and not unavail_df.empty and emp_col and day_col and win_col:
+                        for _, urow in unavail_df.iterrows():
+                            u_emp = str(urow.get(emp_col, "")).strip()
+                            u_day = str(urow.get(day_col, "")).strip()
+                            u_win = str(urow.get(win_col, "")).strip()
+                            
+                            if u_day.lower().startswith(day_name.lower()[:3]):
+                                short_name = u_emp.split()[0] if u_emp else ""
+                                if "all day" in u_win.lower():
+                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🔴 {short_name} (All Day)</div>')
+                                else:
+                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🟨 {short_name} ({u_win[:10]})</div>')
+
+                    # 2. Fixed Shift Chips
+                    if fixed_df is not None and not fixed_df.empty:
+                        f_emp_col = find_column(fixed_df, ["employee", "name", "staff"], "Employee")
+                        f_day_col = find_column(fixed_df, [day_name.lower(), day_name.lower()[:3]])
+                        if f_emp_col and f_day_col:
+                            for _, frow in fixed_df.iterrows():
+                                f_emp = str(frow.get(f_emp_col, "")).strip()
+                                f_val = str(frow.get(f_day_col, "")).strip()
+                                if f_val and f_val.lower() not in ["off", "unavailable", "nan", ""]:
+                                    short_name = f_emp.split()[0] if f_emp else ""
+                                    chips_html.append(f'<div style="background-color: #38a169; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{f_emp}: {f_val}">🟩 {short_name} ({f_val[:8]})</div>')
+                                    
+                    chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.72rem; font-style: italic;">Clear</div>'
+                    
+                    st.markdown(f"""
+                    <div style="min-height: 105px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px;">
+                        <div style="font-weight: 800; font-size: 0.85rem; color: #e5a93c; border-bottom: 1px solid #1f5c50; margin-bottom: 4px; padding-bottom: 2px;">{day_num}</div>
+                        {chips_block}
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # IF EMPLOYEE, RENDER 2 TABS (PERSONAL INFO & AVAILABILITY CALENDAR)
 if not is_manager:
@@ -1301,8 +1358,8 @@ if is_manager:
     with tab_unavail:
         st.subheader("Log Staff Unavailability")
         
-        # Whole Team Unavailability Matrix (Real-Time Live Sync)
-        render_team_unavailability_matrix()
+        # Bakery Team Monthly Calendar & Unavailability Grid
+        render_team_monthly_calendar_grid()
         
         st.markdown("<br>", unsafe_allow_html=True)
         unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
