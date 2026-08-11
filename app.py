@@ -564,14 +564,12 @@ user_profiles = load_user_profiles()
 
 # LOGIN PAGE IF NOT AUTHENTICATED
 if not st.session_state.authenticated:
-    st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham — Portal</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header-style">Please log in with your username and password to access your bakery account.</p>', unsafe_allow_html=True)
-    
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 30px; border-radius: 20px; border: 2px solid #e5a93c; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <h2 style="color: #e5a93c !important; margin-top: 0; text-align: center;">🔐 Staff Portal Login</h2>
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 35px 30px; border-radius: 20px; border: 2px solid #e5a93c; box-shadow: 0 12px 36px rgba(0,0,0,0.6); margin-top: 40px;">
+            <h2 style="color: #e5a93c !important; margin-top: 0; text-align: center; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
+            <p style="color: #c8e6e0 !important; font-size: 0.95rem; text-align: center; margin-bottom: 25px;">Please log in with your username and password to access your bakery account.</p>
         """, unsafe_allow_html=True)
         
         login_user = st.text_input("Username", key="input_user")
