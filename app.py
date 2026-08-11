@@ -561,11 +561,8 @@ if is_manager:
         "📌 Fixed Shifts"
     ])
 else:
-    # Employee sees 2 tabs: Personal Information & Availability Calendar
-    tab_my_info, tab_my_avail = st.tabs([
-        "📋 Personal Information Form",
-        "📅 My Availability & Constraints"
-    ])
+    # Employee sees only their personal information form tab
+    tab_my_info, = st.tabs(["📋 My Personal Information Form"])
 
 # Helper function to render Confidential Profile Form
 def render_confidential_profile_form(user_key, is_admin=False):
@@ -764,12 +761,10 @@ def render_team_unavailability_matrix():
     df_matrix = pd.DataFrame(matrix_rows)
     st.dataframe(df_matrix, use_container_width=True, hide_index=True)
 
-# IF EMPLOYEE, RENDER 2 TABS (PERSONAL INFO & AVAILABILITY CALENDAR)
+# IF EMPLOYEE, RENDER PERSONAL INFORMATION FORM
 if not is_manager:
     with tab_my_info:
         render_confidential_profile_form(st.session_state.logged_in_user)
-    with tab_my_avail:
-        render_employee_availability_manager(st.session_state.logged_in_user)
 
 
 # Helpers for parsing times
