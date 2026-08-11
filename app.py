@@ -465,7 +465,17 @@ if st.sidebar.button("🚪 Logout", key="btn_logout"):
 
 st.sidebar.info("This application runs locally and optimizes staff rostering and confidential profile management.")
 
-st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
+col_head1, col_head2 = st.columns([3.5, 1])
+with col_head1:
+    st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
+    st.markdown(f'<p class="sub-header-style">Welcome back, <b>{display_name}</b> ({role_title})</p>', unsafe_allow_html=True)
+with col_head2:
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    if st.button("🚪 Logout", key="btn_logout_header", use_container_width=True):
+        st.session_state.authenticated = False
+        st.session_state.logged_in_user = None
+        st.session_state.user_role = None
+        st.rerun()
 
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
@@ -551,8 +561,11 @@ if is_manager:
         "📌 Fixed Shifts"
     ])
 else:
-    # Employee ONLY sees their personal information tab
-    tab_my_info, = st.tabs(["👤 My Personal Information Form"])
+    # Employee sees 2 tabs: Personal Information & Availability Calendar
+    tab_my_info, tab_my_avail = st.tabs([
+        "📋 Personal Information Form",
+        "📅 My Availability & Constraints"
+    ])
 
 # Helper function to render Confidential Profile Form
 def render_confidential_profile_form(user_key, is_admin=False):
@@ -646,10 +659,117 @@ def render_confidential_profile_form(user_key, is_admin=False):
             save_user_profiles(user_profiles)
             st.success("✅ Profile information updated and saved successfully!")
 
-# IF EMPLOYEE, RENDER THEIR PERSONAL INFO IN MY_INFO TAB
+# Helper function for Employee Availability Management & Auto-Sync
+def render_employee_availability_manager(user_key):
+    user_data = user_profiles.get(user_key, {})
+    emp_name = user_data.get("employee_name", user_key)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 24px; border-radius: 14px; border: 2px solid #e5a93c; margin-bottom: 20px;">
+        <h2 style="color: #e5a93c !important; margin: 0;">📅 My Unavailability Calendar & Shift Constraints</h2>
+        <p style="color: #c8e6e0 !important; margin-top: 4px; margin-bottom: 0;">Logged in Employee: <b>{emp_name}</b>. Add or update your weekly availability constraints below. Entries auto-sync directly to the master bakery roster.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 1. Add Constraint Controls
+    with st.form(key=f"form_add_unavail_{user_key}"):
+        st.markdown("### ➕ Log New Unavailability Constraint")
+        col1, col2, col3 = st.columns([1, 1.2, 1.5])
+        with col1:
+            sel_day = st.selectbox("Select Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key=f"sel_day_{user_key}")
+        with col2:
+            preset_window = st.selectbox("Constraint / Window", ["All Day", "Before 3:30pm", "After 5:00pm", "Custom Shift Window"], key=f"sel_window_{user_key}")
+        with col3:
+            custom_window = st.text_input("Custom Window Details (if selected)", value="7:30am-12:30pm", key=f"input_custom_win_{user_key}")
+            
+        submit_unavail = st.form_submit_button("📌 Add Unavailability Constraint")
+        
+        if submit_unavail:
+            target_window = custom_window.strip() if preset_window == "Custom Shift Window" else preset_window
+            if target_window:
+                df_curr = st.session_state.manual_unavailability.copy()
+                emp_col = find_column(df_curr, ["employee", "name", "staff"], "Employee")
+                day_col = find_column(df_curr, ["day", "date", "weekday"], "Day")
+                win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
+                
+                new_entry = {emp_col: emp_name, day_col: sel_day, win_col: target_window}
+                df_updated = pd.concat([df_curr, pd.DataFrame([new_entry])], ignore_index=True)
+                st.session_state.manual_unavailability = df_updated
+                save_persisted_df(df_updated, "unavailability.csv")
+                st.success(f"✅ Added unavailability constraint for {sel_day}: {target_window}")
+
+    st.markdown("---")
+    st.markdown("### 📋 My Active Logged Constraints")
+    df_curr = st.session_state.manual_unavailability.copy()
+    emp_col = find_column(df_curr, ["employee", "name", "staff"], "Employee")
+    day_col = find_column(df_curr, ["day", "date", "weekday"], "Day")
+    win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
+    
+    # Match employee name robustly
+    mask = df_curr[emp_col].astype(str).str.strip().str.lower() == emp_name.lower()
+    user_rows = df_curr[mask].copy()
+    
+    if user_rows.empty:
+        st.info("🎉 You have no logged unavailability constraints. You are listed as Available all week!")
+    else:
+        for idx, row in user_rows.iterrows():
+            day_val = row.get(day_col, "")
+            win_val = row.get(win_col, "")
+            c1, c2, c3 = st.columns([2, 3, 1])
+            with c1:
+                st.markdown(f"🗓️ **{day_val}**")
+            with c2:
+                badge_bg = "#9b2c2c" if "all day" in str(win_val).lower() else "#b7791f"
+                st.markdown(f'<span style="background-color: {badge_bg}; color: white; padding: 4px 14px; border-radius: 12px; font-weight: 700;">{win_val}</span>', unsafe_allow_html=True)
+            with c3:
+                if st.button("🗑️ Delete", key=f"btn_delete_unavail_{idx}"):
+                    st.session_state.manual_unavailability = df_curr.drop(idx).reset_index(drop=True)
+                    save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                    st.success("Constraint deleted.")
+                    st.rerun()
+
+# Helper function to render Whole Team Unavailability Calendar Matrix for Manager
+def render_team_unavailability_matrix():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        📅 Whole Team Weekly Unavailability Matrix (Real-Time Live Sync Calendar)
+    </div>
+    """, unsafe_allow_html=True)
+    
+    unavail_df = st.session_state.manual_unavailability
+    emp_col = find_column(unavail_df, ["employee", "name", "staff"], "Employee")
+    day_col = find_column(unavail_df, ["day", "date", "weekday"], "Day")
+    win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability"], "Time Window")
+    
+    days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    emp_list = []
+    if "manual_employees" in st.session_state and "Name" in st.session_state.manual_employees.columns:
+        emp_list = [str(x).strip() for x in st.session_state.manual_employees["Name"].dropna().unique() if str(x).strip()]
+    if not emp_list:
+        emp_list = ["Elizabeth", "Stella", "Ainsley Mactier", "Aimi", "Jude", "Aroha", "Robert"]
+        
+    matrix_rows = []
+    for emp in emp_list:
+        r = {"Employee": emp}
+        for d in days:
+            matches = unavail_df[(unavail_df[emp_col].astype(str).str.strip().str.lower() == emp.lower()) & 
+                                 (unavail_df[day_col].astype(str).str.strip().str.lower().str.startswith(d.lower()[:3]))]
+            if not matches.empty:
+                r[d] = " | ".join(matches[win_col].astype(str).tolist())
+            else:
+                r[d] = "Available"
+        matrix_rows.append(r)
+        
+    df_matrix = pd.DataFrame(matrix_rows)
+    st.dataframe(df_matrix, use_container_width=True, hide_index=True)
+
+# IF EMPLOYEE, RENDER 2 TABS (PERSONAL INFO & AVAILABILITY CALENDAR)
 if not is_manager:
     with tab_my_info:
         render_confidential_profile_form(st.session_state.logged_in_user)
+    with tab_my_avail:
+        render_employee_availability_manager(st.session_state.logged_in_user)
 
 
 # Helpers for parsing times
@@ -1142,6 +1262,11 @@ if is_manager:
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
         st.subheader("Log Staff Unavailability")
+        
+        # Whole Team Unavailability Matrix (Real-Time Live Sync)
+        render_team_unavailability_matrix()
+        
+        st.markdown("<br>", unsafe_allow_html=True)
         unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
         upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
         
