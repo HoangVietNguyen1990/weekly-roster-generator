@@ -148,6 +148,37 @@ st.markdown("""
         font-weight: 900 !important;
         opacity: 1 !important;
     }
+
+    /* EXPANDER HEADER & SUMMARY TEXT - BRIGHT HIGH CONTRAST (#FFFFFF & GOLD #E5A93C) */
+    .stExpander, 
+    div[data-testid="stExpander"], 
+    details {
+        background-color: #123b33 !important;
+        border: 2px solid #e5a93c !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    .stExpander summary, 
+    div[data-testid="stExpander"] summary,
+    details summary {
+        background-color: #16443c !important;
+        border-radius: 10px !important;
+        color: #ffffff !important;
+        padding: 10px 14px !important;
+    }
+    .stExpander summary *, 
+    div[data-testid="stExpander"] summary *, 
+    div[data-testid="stExpander"] summary p, 
+    div[data-testid="stExpander"] summary span, 
+    details summary p, 
+    details summary span,
+    [data-testid="stExpanderToggleIcon"],
+    svg[data-testid="stExpanderToggleIcon"] {
+        color: #f7d594 !important;
+        font-weight: 800 !important;
+        font-size: 1.05rem !important;
+        fill: #f7d594 !important;
+    }
     .stTabs [data-baseweb="tab-highlight-container"] {
         display: none !important;
     }
