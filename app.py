@@ -556,6 +556,7 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
         {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
     ])
     st.session_state.manual_unavailability = load_persisted_df("unavailability.csv", default_unavail)
+    save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
 if 'manual_requirements' not in st.session_state:
     default_req = pd.DataFrame([
@@ -1411,9 +1412,11 @@ if is_manager:
             🚫 Staff Weekly Unavailability Constraints
         </div>
         """, unsafe_allow_html=True)
-        unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
-        st.session_state.manual_unavailability = unavailability_df
-        save_persisted_df(unavailability_df, "unavailability.csv")
+        if st.session_state.manual_unavailability is not None and not st.session_state.manual_unavailability.empty:
+            unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability_v4")
+            if unavailability_df is not None and not unavailability_df.empty:
+                st.session_state.manual_unavailability = unavailability_df
+                save_persisted_df(unavailability_df, "unavailability.csv")
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
