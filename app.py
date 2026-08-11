@@ -355,6 +355,62 @@ st.markdown("""
     section[data-testid="section-sidebar"] * {
         color: #ffffff !important;
     }
+
+    /* GLOBAL INPUT & WIDGET TEXT CONTRAST ENHANCEMENTS */
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input,
+    div[data-baseweb="textarea"] textarea,
+    div[data-baseweb="select"] div,
+    div[data-baseweb="select"] input,
+    div[data-baseweb="select"] span,
+    .stTextInput input, 
+    .stNumberInput input, 
+    .stDateInput input, 
+    .stSelectbox div[role="combobox"], 
+    .stTextArea textarea {
+        background-color: #0c2b25 !important;
+        color: #ffffff !important;
+        border: 1px solid #e5a93c !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        opacity: 1 !important;
+        border-radius: 8px !important;
+    }
+
+    /* DROPDOWN OPTIONS & MENU LIST CONTRAST */
+    div[data-baseweb="popover"] *,
+    div[data-baseweb="menu"] *,
+    div[role="option"] {
+        background-color: #081d19 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    div[role="option"]:hover, 
+    div[role="option"][aria-selected="true"] {
+        background-color: #16443c !important;
+        color: #f7d594 !important;
+    }
+
+    /* CHECKBOX & RADIO LABELS HIGH CONTRAST */
+    .stCheckbox label, .stCheckbox span, .stCheckbox p,
+    .stRadio label, .stRadio span, .stRadio p {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 0.98rem !important;
+        opacity: 1 !important;
+    }
+
+    /* STREAMLIT ALERT / NOTIFICATION BOX CONTRAST */
+    .stAlert, div[data-testid="stAlert"] {
+        background-color: #0c2b25 !important;
+        border: 1px solid #e5a93c !important;
+        border-radius: 12px !important;
+        color: #ffffff !important;
+    }
+    .stAlert *, div[data-testid="stAlert"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
