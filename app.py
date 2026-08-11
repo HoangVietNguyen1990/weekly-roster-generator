@@ -830,36 +830,24 @@ def render_team_monthly_calendar_grid():
                     
                     chips_html = []
                     
-                    # 1. Unavailability Chips
+                    # Unavailability Chips (Employee Names who are not available)
                     if unavail_df is not None and not unavail_df.empty and emp_col and day_col and win_col:
                         for _, urow in unavail_df.iterrows():
                             u_emp = str(urow.get(emp_col, "")).strip()
                             u_day = str(urow.get(day_col, "")).strip()
                             u_win = str(urow.get(win_col, "")).strip()
                             
-                            if u_day.lower().startswith(day_name.lower()[:3]):
-                                short_name = u_emp.split()[0] if u_emp else ""
+                            if u_emp and u_day and u_day.lower().startswith(day_name.lower()[:3]):
+                                display_name = u_emp
                                 if "all day" in u_win.lower():
-                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🔴 {short_name} (All Day)</div>')
+                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🔴 {display_name} (All Day)</div>')
                                 else:
-                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🟨 {short_name} ({u_win[:10]})</div>')
-
-                    # 2. Fixed Shift Chips
-                    if fixed_df is not None and not fixed_df.empty:
-                        f_emp_col = find_column(fixed_df, ["employee", "name", "staff"], "Employee")
-                        f_day_col = find_column(fixed_df, [day_name.lower(), day_name.lower()[:3]])
-                        if f_emp_col and f_day_col:
-                            for _, frow in fixed_df.iterrows():
-                                f_emp = str(frow.get(f_emp_col, "")).strip()
-                                f_val = str(frow.get(f_day_col, "")).strip()
-                                if f_val and f_val.lower() not in ["off", "unavailable", "nan", ""]:
-                                    short_name = f_emp.split()[0] if f_emp else ""
-                                    chips_html.append(f'<div style="background-color: #38a169; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{f_emp}: {f_val}">🟩 {short_name} ({f_val[:8]})</div>')
+                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🟨 {display_name} ({u_win})</div>')
                                     
-                    chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.72rem; font-style: italic;">Clear</div>'
+                    chips_block = "".join(chips_html) if chips_html else '<div style="color: #4a5568; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
                     
                     st.markdown(f"""
-                    <div style="min-height: 105px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px;">
+                    <div style="min-height: 110px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px;">
                         <div style="font-weight: 800; font-size: 0.85rem; color: #e5a93c; border-bottom: 1px solid #1f5c50; margin-bottom: 4px; padding-bottom: 2px;">{day_num}</div>
                         {chips_block}
                     </div>
