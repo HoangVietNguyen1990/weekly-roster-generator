@@ -475,6 +475,58 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# Helper function to render Change Password form
+def render_change_password_form(user_key, is_admin=False):
+    user_data = user_profiles.get(user_key, {})
+    emp_name = user_data.get("employee_name", user_key)
+    
+    with st.expander(f"🔑 Change Password for {emp_name}", expanded=False):
+        with st.form(key=f"form_change_pw_{user_key}"):
+            if not is_admin:
+                curr_pw = st.text_input("Current Password", type="password", key=f"cp_curr_pw_{user_key}")
+            else:
+                curr_pw = None
+                
+            new_pw = st.text_input("New Password", type="password", key=f"cp_new_pw_{user_key}")
+            confirm_pw = st.text_input("Confirm New Password", type="password", key=f"cp_conf_pw_{user_key}")
+            
+            submit_pw = st.form_submit_button("🔒 Save New Password")
+            
+            if submit_pw:
+                actual_pw = user_data.get("password", "")
+                if not is_admin and curr_pw != actual_pw:
+                    st.error("❌ Incorrect current password.")
+                elif not new_pw.strip():
+                    st.error("❌ New password cannot be empty.")
+                elif new_pw != confirm_pw:
+                    st.error("❌ New passwords do not match.")
+                else:
+                    user_profiles[user_key]["password"] = new_pw.strip()
+                    save_user_profiles(user_profiles)
+                    st.success(f"✅ Password for {emp_name} updated successfully!")
+
+# Sidebar Change Password Expander
+with st.sidebar.expander("🔑 Change My Password", expanded=False):
+    with st.form(key=f"form_sidebar_pw_{curr_user_key}"):
+        sb_curr_pw = st.text_input("Current Password", type="password", key=f"sb_cp_curr_{curr_user_key}")
+        sb_new_pw = st.text_input("New Password", type="password", key=f"sb_cp_new_{curr_user_key}")
+        sb_conf_pw = st.text_input("Confirm New Password", type="password", key=f"sb_cp_conf_{curr_user_key}")
+        
+        sb_submit_pw = st.form_submit_button("🔒 Update Password")
+        
+        if sb_submit_pw:
+            actual_pw = curr_user_info.get("password", "")
+            if sb_curr_pw != actual_pw:
+                st.error("❌ Incorrect current password.")
+            elif not sb_new_pw.strip():
+                st.error("❌ New password cannot be empty.")
+            elif sb_new_pw != sb_conf_pw:
+                st.error("❌ New passwords do not match.")
+            else:
+                user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
+                save_user_profiles(user_profiles)
+                st.success("✅ Your password has been updated successfully!")
+
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     st.session_state.authenticated = False
     st.session_state.logged_in_user = None
@@ -681,6 +733,10 @@ def render_confidential_profile_form(user_key, is_admin=False):
             }
             save_user_profiles(user_profiles)
             st.success("✅ Profile information updated and saved successfully!")
+
+    # Integrated Change Password Expander
+    st.markdown("<br>", unsafe_allow_html=True)
+    render_change_password_form(user_key, is_admin=is_admin)
 
 # Helper function for Employee Availability Management & Auto-Sync
 def render_employee_availability_manager(user_key):
