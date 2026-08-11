@@ -97,56 +97,86 @@ st.markdown("""
     }
 
     /* TAB BAR CUSTOMIZATION - ULTRA-WIDE ROUNDED PILL BUTTONS */
+    /* TACTILE 3D TABS STYLING */
     .stTabs [data-baseweb="tab-list"] {
         gap: 16px !important;
-        background-color: rgba(9, 32, 28, 0.85) !important;
-        padding: 14px 20px !important;
+        background-color: rgba(6, 24, 20, 0.95) !important;
+        padding: 16px 24px !important;
         border-radius: 40px !important;
-        border: 1px solid rgba(229, 169, 60, 0.35) !important;
+        border: 2px solid rgba(229, 169, 60, 0.45) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0,0,0,0.5) !important;
     }
     .stTabs button[role="tab"],
     .stTabs [data-baseweb="tab"] {
         height: 54px !important;
-        padding-left: 55px !important;
-        padding-right: 55px !important;
-        border-radius: 30px !important;
+        padding-left: 36px !important;
+        padding-right: 36px !important;
+        border-radius: 28px !important;
         font-size: 1.05rem !important;
-        transition: all 0.25s ease !important;
+        transition: all 0.15s ease-in-out !important;
         margin: 0 4px !important;
-    }
-    .stTabs button[role="tab"] p,
-    .stTabs [data-baseweb="tab"] p,
-    .stTabs button[role="tab"] span,
-    .stTabs [data-baseweb="tab"] span {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-        white-space: nowrap !important;
-    }
-    .stTabs button[role="tab"] *,
-    .stTabs [data-baseweb="tab"] *,
-    .stTabs [aria-selected="false"] * {
-        color: #ffffff !important;
-        opacity: 1 !important;
-        font-weight: 700 !important;
+        cursor: pointer !important;
     }
     .stTabs [aria-selected="false"] {
-        background-color: rgba(255, 255, 255, 0.12) !important;
-        border: 1px solid transparent !important;
-        border-radius: 30px !important;
+        background: linear-gradient(180deg, #1d574c 0%, #134038 50%, #0b2923 100%) !important;
+        border: 2px solid #1f5c50 !important;
+        box-shadow: 0 5px 0 #061814, 0 6px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
     }
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: rgba(229, 169, 60, 0.3) !important;
+    .stTabs [aria-selected="false"]:hover {
+        background: linear-gradient(180deg, #24685b 0%, #184c42 50%, #0d332c 100%) !important;
+        border-color: #e5a93c !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 7px 0 #061814, 0 8px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+    }
+    .stTabs [aria-selected="false"] * {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%) !important;
-        border: none !important;
-        border-radius: 30px !important;
-        box-shadow: 0 6px 22px rgba(229, 169, 60, 0.55) !important;
+        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+        border: 2px solid #ffe8be !important;
+        box-shadow: 0 6px 0 #734c0e, 0 10px 24px rgba(229, 169, 60, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+        transform: translateY(-2px) !important;
     }
     .stTabs [aria-selected="true"] * {
-        color: #0e2b26 !important;
+        color: #081d19 !important;
         font-weight: 900 !important;
-        opacity: 1 !important;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+    }
+
+    /* TACTILE 3D BUTTONS STYLING (ALL BUTTONS & FORM SUBMIT BUTTONS) */
+    .stButton > button,
+    .stFormSubmitButton > button,
+    button[data-testid="baseButton-secondary"],
+    button[data-testid="baseButton-primary"] {
+        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+        border: 2px solid #ffe8be !important;
+        border-radius: 14px !important;
+        color: #081d19 !important;
+        font-weight: 900 !important;
+        font-size: 1.05rem !important;
+        padding: 12px 24px !important;
+        box-shadow: 0 5px 0 #734c0e, 0 8px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+        transition: all 0.15s ease-in-out !important;
+        cursor: pointer !important;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+    }
+    .stButton > button:hover,
+    .stFormSubmitButton > button:hover {
+        background: linear-gradient(180deg, #fff0d4 0%, #f0b548 45%, #c78822 100%) !important;
+        box-shadow: 0 6px 0 #734c0e, 0 12px 24px rgba(229, 169, 60, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+        transform: translateY(-2px) !important;
+    }
+    .stButton > button:active,
+    .stFormSubmitButton > button:active {
+        box-shadow: 0 2px 0 #734c0e, 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 0, 0, 0.2) !important;
+        transform: translateY(3px) !important;
+    }
+    .stButton > button *,
+    .stFormSubmitButton > button * {
+        color: #081d19 !important;
+        font-weight: 900 !important;
     }
 
     /* TACTILE 3D EXPANDER BUTTON STYLING */
