@@ -543,13 +543,12 @@ if 'manual_fixed' not in st.session_state:
 is_manager = (st.session_state.user_role == "Manager")
 
 if is_manager:
-    tab_home, tab_emp, tab_unavail, tab_req, tab_fixed, tab_admin_profiles = st.tabs([
+    tab_home, tab_emp, tab_unavail, tab_req, tab_fixed = st.tabs([
         "🏠 Home / Roster Generator",
         "👥 Staff Members", 
         "🚫 Unavailability", 
         "📋 Daily Requirements", 
-        "📌 Fixed Shifts",
-        "👤 Employee Profiles (Admin)"
+        "📌 Fixed Shifts"
     ])
 else:
     # Employee ONLY sees their personal information tab
@@ -1103,12 +1102,42 @@ if is_manager:
                     
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-            👥 Bakery Staff Members List
+            👥 Bakery Staff Members List (Editable Table)
         </div>
         """, unsafe_allow_html=True)
         employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
         st.session_state.manual_employees = employees_df
         save_persisted_df(employees_df, "employees.csv")
+
+        # --- INTEGRATED CONFIDENTIAL EMPLOYEE PROFILE VIEWER ---
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 20px;">
+            📜 Click / Select Employee to Open Confidential Profile Form
+        </div>
+        """, unsafe_allow_html=True)
+
+        emp_options = {k: v.get("employee_name", k) for k, v in user_profiles.items() if v.get("role") == "Employee"}
+        if emp_options:
+            selected_user_key = st.selectbox(
+                "👇 Select staff member from table above to open their confidential profile page:",
+                options=list(emp_options.keys()),
+                format_func=lambda x: f"👤 {emp_options[x]} (Username: {x})",
+                key="select_emp_profile_in_tab"
+            )
+            
+            if selected_user_key:
+                render_confidential_profile_form(selected_user_key, is_admin=True)
+                
+                with st.expander(f"🔑 Reset Password for {emp_options[selected_user_key]}"):
+                    new_pw = st.text_input("New Password", type="password", key=f"tab_reset_pw_{selected_user_key}")
+                    if st.button("Update Employee Password", key=f"tab_btn_reset_pw_{selected_user_key}"):
+                        if new_pw.strip():
+                            user_profiles[selected_user_key]["password"] = new_pw.strip()
+                            save_user_profiles(user_profiles)
+                            st.success(f"✅ Password for {emp_options[selected_user_key]} updated successfully!")
+                        else:
+                            st.error("Password cannot be empty.")
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
@@ -1193,31 +1222,3 @@ if is_manager:
         fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
         st.session_state.manual_fixed = fixed_df
         save_persisted_df(fixed_df, "fixed.csv")
-
-    # --- TAB 6: ADMIN EMPLOYEE CONFIDENTIAL PROFILES ---
-    with tab_admin_profiles:
-        st.subheader("👥 Employee Confidential Profiles Management (Admin)")
-        emp_options = {k: v.get("employee_name", k) for k, v in user_profiles.items() if v.get("role") == "Employee"}
-        
-        if not emp_options:
-            st.info("No employee accounts registered.")
-        else:
-            selected_user = st.selectbox(
-                "Select Employee to View or Edit Profile:", 
-                options=list(emp_options.keys()), 
-                format_func=lambda x: f"{emp_options[x]} (Username: {x})"
-            )
-            
-            if selected_user:
-                render_confidential_profile_form(selected_user, is_admin=True)
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander(f"🔑 Reset Password for {emp_options[selected_user]}"):
-                    new_pw = st.text_input(f"New Password", type="password", key=f"reset_pw_{selected_user}")
-                    if st.button("Update Employee Password", key=f"btn_reset_pw_{selected_user}"):
-                        if new_pw.strip():
-                            user_profiles[selected_user]["password"] = new_pw.strip()
-                            save_user_profiles(user_profiles)
-                            st.success(f"✅ Password for {emp_options[selected_user]} updated successfully!")
-                        else:
-                            st.error("Password cannot be empty.")
