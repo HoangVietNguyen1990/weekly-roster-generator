@@ -149,22 +149,40 @@ st.markdown("""
         opacity: 1 !important;
     }
 
-    /* EXPANDER HEADER & SUMMARY TEXT - BRIGHT HIGH CONTRAST (#FFFFFF & GOLD #E5A93C) */
+    /* TACTILE 3D EXPANDER BUTTON STYLING */
     .stExpander, 
     div[data-testid="stExpander"], 
     details {
-        background-color: #123b33 !important;
-        border: 2px solid #e5a93c !important;
-        border-radius: 12px !important;
-        margin-bottom: 12px !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin-bottom: 14px !important;
     }
     .stExpander summary, 
     div[data-testid="stExpander"] summary,
     details summary {
-        background-color: #16443c !important;
-        border-radius: 10px !important;
-        color: #ffffff !important;
-        padding: 10px 14px !important;
+        background: linear-gradient(180deg, #1d574c 0%, #144038 50%, #0b2923 100%) !important;
+        border: 2px solid #e5a93c !important;
+        border-radius: 12px !important;
+        color: #f7d594 !important;
+        padding: 12px 18px !important;
+        box-shadow: 0 5px 0 #061814, 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+        transition: all 0.15s ease-in-out !important;
+        cursor: pointer !important;
+    }
+    .stExpander summary:hover,
+    div[data-testid="stExpander"] summary:hover,
+    details summary:hover {
+        background: linear-gradient(180deg, #23665a 0%, #184c42 50%, #0e332c 100%) !important;
+        border-color: #f7d594 !important;
+        box-shadow: 0 6px 0 #061814, 0 10px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+        transform: translateY(-1px) !important;
+    }
+    .stExpander summary:active,
+    div[data-testid="stExpander"] summary:active,
+    details summary:active {
+        box-shadow: 0 2px 0 #061814, 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 0, 0, 0.2) !important;
+        transform: translateY(3px) !important;
     }
     .stExpander summary *, 
     div[data-testid="stExpander"] summary *, 
@@ -178,6 +196,17 @@ st.markdown("""
         font-weight: 800 !important;
         font-size: 1.05rem !important;
         fill: #f7d594 !important;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    }
+    div[data-testid="stExpanderDetails"],
+    details[open] > div {
+        background: #0f2e29 !important;
+        border: 2px solid #e5a93c !important;
+        border-top: none !important;
+        border-radius: 0 0 12px 12px !important;
+        padding: 16px !important;
+        margin-top: -6px !important;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4) !important;
     }
     .stTabs [data-baseweb="tab-highlight-container"] {
         display: none !important;
