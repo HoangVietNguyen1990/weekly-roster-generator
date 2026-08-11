@@ -825,20 +825,22 @@ def render_team_monthly_calendar_grid():
     cal = calendar.Calendar(firstweekday=6)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
+    default_unavail = pd.DataFrame([
+        {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
+        {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
+        {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
+        {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
+        {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
+        {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
+    ])
+
     unavail_df = st.session_state.get("manual_unavailability", None)
-    if unavail_df is None or unavail_df.empty:
-        unavail_df = pd.DataFrame([
-            {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
-            {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
-            {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
-            {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
-            {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
-            {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
-            {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
-            {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
-            {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
-            {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
-        ])
+    if unavail_df is None or not isinstance(unavail_df, pd.DataFrame) or unavail_df.empty:
+        unavail_df = default_unavail.copy()
         st.session_state.manual_unavailability = unavail_df
         save_persisted_df(unavail_df, "unavailability.csv")
 
@@ -855,6 +857,27 @@ def render_team_monthly_calendar_grid():
         if (not win_col or win_col not in unavail_df.columns) and len(unavail_df.columns) >= 3:
             win_col = unavail_df.columns[2]
 
+    # Filter out empty or 'nan' rows
+    clean_rows = []
+    if emp_col and day_col and win_col and not unavail_df.empty:
+        for _, r in unavail_df.iterrows():
+            e = str(r.get(emp_col, "")).strip()
+            d = str(r.get(day_col, "")).strip()
+            w = str(r.get(win_col, "")).strip()
+            if e and e.lower() not in ["nan", "none", ""] and d and d.lower() not in ["nan", "none", ""]:
+                clean_rows.append({emp_col: e, day_col: d, win_col: w})
+                
+    if not clean_rows:
+        unavail_df = default_unavail.copy()
+        st.session_state.manual_unavailability = unavail_df
+        save_persisted_df(unavail_df, "unavailability.csv")
+        clean_rows = default_unavail.to_dict('records')
+        emp_col = "Employee"
+        day_col = "Day"
+        win_col = "Time Window"
+        
+    clean_unavail_df = pd.DataFrame(clean_rows)
+
     weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
     for week in month_days:
@@ -870,20 +893,19 @@ def render_team_monthly_calendar_grid():
                     chips_html = []
                     
                     # Unavailability Chips (Employee Names who are not available)
-                    if unavail_df is not None and not unavail_df.empty and emp_col and day_col and win_col:
-                        for _, urow in unavail_df.iterrows():
-                            u_emp = str(urow.get(emp_col, "")).strip()
-                            u_day = str(urow.get(day_col, "")).strip()
-                            u_win = str(urow.get(win_col, "")).strip()
-                            
-                            # Match day name (e.g. 'Monday', 'Mon', '🔴 Monday')
-                            if u_emp and u_day and (day_name.lower()[:3] in u_day.lower()):
-                                display_name = u_emp
-                                win_disp = u_win if u_win else "Unavailable"
-                                if "all day" in win_disp.lower():
-                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🔴 {display_name} (All Day)</div>')
-                                else:
-                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🟨 {display_name} ({win_disp})</div>')
+                    for _, urow in clean_unavail_df.iterrows():
+                        u_emp = str(urow.get(emp_col, "")).strip()
+                        u_day = str(urow.get(day_col, "")).strip()
+                        u_win = str(urow.get(win_col, "")).strip()
+                        
+                        # Match day name (e.g. 'Monday', 'Mon', '🔴 Monday')
+                        if u_emp and u_day and (day_name.lower()[:3] in u_day.lower()):
+                            display_name = u_emp
+                            win_disp = u_win if u_win else "Unavailable"
+                            if "all day" in win_disp.lower():
+                                chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🔴 {display_name} (All Day)</div>')
+                            else:
+                                chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🟨 {display_name} ({win_disp})</div>')
                                     
                     chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
                     
@@ -1385,7 +1407,27 @@ if is_manager:
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
-        st.subheader("Log Staff Unavailability")
+        col_hdr_u1, col_hdr_u2 = st.columns([3, 1])
+        with col_hdr_u1:
+            st.subheader("Log Staff Unavailability")
+        with col_hdr_u2:
+            if st.button("🔄 Reset Sample Data", key="btn_reset_unavail_sample"):
+                default_unavail_reset = pd.DataFrame([
+                    {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
+                    {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
+                    {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
+                    {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
+                    {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
+                    {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
+                    {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
+                    {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
+                    {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
+                    {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
+                ])
+                st.session_state.manual_unavailability = default_unavail_reset
+                save_persisted_df(default_unavail_reset, "unavailability.csv")
+                st.success("Reset data!")
+                st.rerun()
         
         # Bakery Team Monthly Calendar & Unavailability Grid
         render_team_monthly_calendar_grid()
