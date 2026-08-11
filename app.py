@@ -376,6 +376,8 @@ def load_persisted_df(filename, default_df):
         try:
             # Read all columns as string to avoid formatting locks
             df = pd.read_csv(path, dtype=str)
+            if df is None or df.empty:
+                return default_df
             return df
         except:
             return default_df
@@ -540,7 +542,7 @@ if 'manual_employees' not in st.session_state:
     ])
     st.session_state.manual_employees = load_persisted_df("employees.csv", default_emp)
 
-if 'manual_unavailability' not in st.session_state:
+if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
     default_unavail = pd.DataFrame([
         {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
         {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
@@ -548,6 +550,10 @@ if 'manual_unavailability' not in st.session_state:
         {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
         {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
         {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
+        {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
+        {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
+        {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
+        {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
     ])
     st.session_state.manual_unavailability = load_persisted_df("unavailability.csv", default_unavail)
 
