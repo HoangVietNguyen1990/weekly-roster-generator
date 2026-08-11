@@ -575,7 +575,8 @@ if not st.session_state.authenticated:
         login_user = st.text_input("Username", key="input_user")
         login_pass = st.text_input("Password", type="password", key="input_pass")
         
-        if st.button("🚀 Login to Portal", key="btn_login"):
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🚀 Login to Portal", use_container_width=True, key="btn_login"):
             login_user_clean = login_user.strip().lower()
             current_profiles = load_user_profiles()
             if login_user_clean in current_profiles:
