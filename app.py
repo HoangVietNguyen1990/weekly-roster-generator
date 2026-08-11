@@ -268,17 +268,29 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham — Weekly Staff Roster</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header-style">Law-compliant, automated shift scheduling tailored for artisan bakeries.</p>', unsafe_allow_html=True)
-
-# --- SIDEBAR CONFIGURATION ---
-st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
-st.sidebar.title("🍞 Bakery Roster Controls")
-st.sidebar.info("This application runs locally and uses an offline deterministic constraint solver to optimize staff rostering based on General Retail Award rules and bakery template requirements.")
+import json
 
 # --- DISK PERSISTENCE ENGINE ---
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
+
+USER_PROFILES_FILE = os.path.join(DATA_DIR, "user_profiles.json")
+
+def load_user_profiles():
+    if os.path.exists(USER_PROFILES_FILE):
+        try:
+            with open(USER_PROFILES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def save_user_profiles(profiles):
+    try:
+        with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
+            json.dump(profiles, f, indent=2)
+    except Exception as e:
+        st.error(f"Error saving user profiles: {e}")
 
 def load_persisted_df(filename, default_df):
     path = os.path.join(DATA_DIR, filename)
@@ -297,6 +309,84 @@ def save_persisted_df(df, filename):
         df.astype(str).to_csv(path, index=False)
     except:
         pass
+
+# Initialize Session States with Disk Cache
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'logged_in_user' not in st.session_state:
+    st.session_state.logged_in_user = None
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = None
+
+user_profiles = load_user_profiles()
+
+# LOGIN PAGE IF NOT AUTHENTICATED
+if not st.session_state.authenticated:
+    st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham — Portal</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header-style">Please log in with your username and password to access your bakery account.</p>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 30px; border-radius: 20px; border: 2px solid #e5a93c; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <h2 style="color: #e5a93c !important; margin-top: 0; text-align: center;">🔐 Staff Portal Login</h2>
+        """, unsafe_allow_html=True)
+        
+        login_user = st.text_input("Username", key="input_user")
+        login_pass = st.text_input("Password", type="password", key="input_pass")
+        
+        if st.button("🚀 Login to Portal", key="btn_login"):
+            login_user_clean = login_user.strip().lower()
+            if login_user_clean in user_profiles:
+                account = user_profiles[login_user_clean]
+                if account.get("password") == login_pass:
+                    st.session_state.authenticated = True
+                    st.session_state.logged_in_user = login_user_clean
+                    st.session_state.user_role = account.get("role", "Employee")
+                    st.success(f"Welcome back, {account.get('employee_name', login_user_clean)}!")
+                    st.rerun()
+                else:
+                    st.error("Incorrect password. Please check your credentials.")
+            else:
+                st.error("Username not found. Please verify your login username.")
+                
+        st.markdown("""
+            <hr style="border-color: rgba(229, 169, 60, 0.3); margin: 20px 0;">
+            <p style="font-size: 0.88rem; color: #c8e6e0 !important; text-align: center;">
+                <b>Default Credentials:</b><br>
+                👑 Manager: <code>admin</code> / <code>admin123</code><br>
+                👤 Employee (e.g. Ainsley Mactier): <code>ainsley.mactier</code> / <code>TempPass123!</code>
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    st.stop()
+
+# --- SIDEBAR CONFIGURATION (AUTHENTICATED) ---
+st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
+st.sidebar.title("🍞 Bakery Portal Controls")
+
+curr_user_key = st.session_state.logged_in_user
+curr_user_info = user_profiles.get(curr_user_key, {})
+display_name = curr_user_info.get("employee_name", curr_user_key)
+role_title = curr_user_info.get("role", "Employee")
+
+st.sidebar.markdown(f"""
+<div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1px solid #e5a93c; margin-bottom: 15px;">
+    <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
+    <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
+    <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
+</div>
+""", unsafe_allow_html=True)
+
+if st.sidebar.button("🚪 Logout", key="btn_logout"):
+    st.session_state.authenticated = False
+    st.session_state.logged_in_user = None
+    st.session_state.user_role = None
+    st.rerun()
+
+st.sidebar.info("This application runs locally and optimizes staff rostering and confidential profile management.")
+
+st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
 
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
@@ -333,7 +423,6 @@ def read_excel_robust(uploaded_file):
         st.error(f"Error parsing Excel file structure: {e}")
         return None
 
-# Initialize Session States with Disk Cache
 if 'manual_employees' not in st.session_state:
     default_emp = pd.DataFrame([
         {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
@@ -371,14 +460,119 @@ if 'manual_fixed' not in st.session_state:
     ])
     st.session_state.manual_fixed = load_persisted_df("fixed.csv", default_fixed)
 
-# --- NEW TAB ORDER: Home Page as Tab 1 ---
-tab_home, tab_emp, tab_unavail, tab_req, tab_fixed = st.tabs([
-    "🏠 Home / Roster Generator",
-    "👥 Staff Members", 
-    "🚫 Unavailability", 
-    "📋 Daily Requirements", 
-    "📌 Fixed Shifts"
-])
+# --- ROLE-BASED TAB NAVIGATION ---
+is_manager = (st.session_state.user_role == "Manager")
+
+if is_manager:
+    tab_home, tab_emp, tab_unavail, tab_req, tab_fixed, tab_admin_profiles = st.tabs([
+        "🏠 Home / Roster Generator",
+        "👥 Staff Members", 
+        "🚫 Unavailability", 
+        "📋 Daily Requirements", 
+        "📌 Fixed Shifts",
+        "👤 Employee Profiles (Admin)"
+    ])
+else:
+    # Employee ONLY sees their personal information tab
+    tab_my_info, = st.tabs(["👤 My Personal Information Form"])
+
+# Helper function to render Confidential Profile Form
+def render_confidential_profile_form(user_key, is_admin=False):
+    user_data = user_profiles.get(user_key, {})
+    prof = user_data.get("profile", {})
+    emp_name = user_data.get("employee_name", user_key)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 24px; border-radius: 14px; border: 2px solid #e5a93c; margin-bottom: 20px;">
+        <h2 style="color: #e5a93c !important; margin: 0;">📜 Employee Confidential Information Form</h2>
+        <p style="color: #c8e6e0 !important; margin-top: 4px; margin-bottom: 0;">Employee: <b>{emp_name}</b> &nbsp;|&nbsp; Store: <b>{prof.get('store', "Brumby's Pakenham")}</b></p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    with st.form(key=f"form_profile_{user_key}"):
+        st.markdown("### 1. 👤 Employee Personal Details")
+        c1, c2 = st.columns(2)
+        with c1:
+            full_name = st.text_input("Full Name", value=str(prof.get("full_name", emp_name)))
+            address = st.text_area("Home Address", value=str(prof.get("address", "")), height=100)
+            home_phone = st.text_input("Home Phone Number", value=str(prof.get("home_phone", "")))
+            mobile = st.text_input("Mobile Phone Number", value=str(prof.get("mobile", "")))
+            email = st.text_input("Email Address", value=str(prof.get("email", "")))
+            dob = st.text_input("Date of Birth", value=str(prof.get("dob", "")))
+        with c2:
+            gender_options = ["Female", "Male", "Other", "Prefer not to say"]
+            curr_gender = str(prof.get("gender", "Female"))
+            g_idx = gender_options.index(curr_gender) if curr_gender in gender_options else 0
+            gender = st.selectbox("Gender", gender_options, index=g_idx)
+            
+            tfn = st.text_input("Tax File Number (TFN)", value=str(prof.get("tfn", "")))
+            store = st.text_input("Store Location", value=str(prof.get("store", "Brumby's Pakenham")))
+            
+            class_options = ["Casual", "Part-Time", "Full-Time"]
+            curr_class = str(prof.get("classification", "Casual"))
+            c_idx = class_options.index(curr_class) if curr_class in class_options else 0
+            classification = st.selectbox("Employment Classification", class_options, index=c_idx)
+            
+            commencement_date = st.text_input("Commencement Date", value=str(prof.get("commencement_date", "")))
+            employment_level = st.text_input("Employment Level / Role", value=str(prof.get("employment_level", "")))
+
+        st.markdown("---")
+        st.markdown("### 2. 🏦 Bank Account Details")
+        b1, b2 = st.columns(2)
+        with b1:
+            bank_name = st.text_input("Bank Name", value=str(prof.get("bank_name", "")))
+            bank_branch = st.text_input("Branch Location", value=str(prof.get("bank_branch", "")))
+            account_name = st.text_input("Name on Account", value=str(prof.get("account_name", "")))
+        with b2:
+            bank_bsb = st.text_input("BSB Number (e.g. 062 948)", value=str(prof.get("bank_bsb", "")))
+            bank_account = st.text_input("Account Number", value=str(prof.get("bank_account", "")))
+
+        st.markdown("---")
+        st.markdown("### 3. 📈 Superannuation Details")
+        s1, s2 = st.columns(2)
+        with s1:
+            super_fund = st.text_input("Name of Super Fund", value=str(prof.get("super_fund", "")))
+            super_policy = st.text_input("Policy / Membership Number", value=str(prof.get("super_policy", "")))
+            super_address = st.text_input("Super Fund Address", value=str(prof.get("super_address", "")))
+        with s2:
+            super_contact = st.text_input("Fund Contact Number", value=str(prof.get("super_contact", "")))
+            super_abn = st.text_input("Fund ABN / SPIN / USI", value=str(prof.get("super_abn", "")))
+
+        submit_btn = st.form_submit_button("💾 Save Confidential Profile Information")
+        
+        if submit_btn:
+            user_profiles[user_key]["profile"] = {
+                "full_name": full_name,
+                "address": address,
+                "home_phone": home_phone,
+                "mobile": mobile,
+                "email": email,
+                "dob": dob,
+                "gender": gender,
+                "tfn": tfn,
+                "store": store,
+                "classification": classification,
+                "commencement_date": commencement_date,
+                "employment_level": employment_level,
+                "bank_name": bank_name,
+                "bank_branch": bank_branch,
+                "account_name": account_name,
+                "bank_bsb": bank_bsb,
+                "bank_account": bank_account,
+                "super_fund": super_fund,
+                "super_policy": super_policy,
+                "super_address": super_address,
+                "super_contact": super_contact,
+                "super_abn": super_abn
+            }
+            save_user_profiles(user_profiles)
+            st.success("✅ Profile information updated and saved successfully!")
+
+# IF EMPLOYEE, RENDER THEIR PERSONAL INFO IN MY_INFO TAB
+if not is_manager:
+    with tab_my_info:
+        render_confidential_profile_form(st.session_state.logged_in_user)
+
 
 # Helpers for parsing times
 def parse_time_to_decimal(time_str):
@@ -713,91 +907,95 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         roster_rows.append(row)
     return pd.DataFrame(roster_rows)
 
-# --- TAB 1: HOME PAGE & ROSTER GENERATOR ---
-with tab_home:
-    st.markdown("""
-    <div style="background: rgba(9, 32, 28, 0.7); border: 2px solid #e5a93c; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
-        <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">⚡ Weekly Roster Generator</h2>
-        <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Configure your target week period below and hit the <b>Generate Weekly Roster</b> button to instantly build an award-compliant bakery schedule.</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
+if is_manager:
+    # --- TAB 1: HOME PAGE & ROSTER GENERATOR ---
+    with tab_home:
+        st.markdown("""
+        <div style="background: rgba(9, 32, 28, 0.7); border: 2px solid #e5a93c; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+            <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">⚡ Weekly Roster Generator</h2>
+            <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Configure your target week period below and hit the <b>Generate Weekly Roster</b> button to instantly build an award-compliant bakery schedule.</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Position Hero Generate Button TIGHT right under the Date Picker
-        st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
-        if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
-            with st.spinner("Calculating optimal bakery roster locally..."):
-                try:
-                    emp_data = st.session_state.manual_employees
-                    unavail_data = st.session_state.manual_unavailability
-                    req_data = st.session_state.manual_requirements
-                    fixed_data = st.session_state.manual_fixed
-                    
-                    roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
-                    st.session_state.final_roster_df = roster_out_df
-                    st.success("🎉 Weekly Roster successfully generated!")
-                except Exception as e:
-                    st.error(f"Failed to generate roster: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())))
+            
+            # Position Hero Generate Button TIGHT right under the Date Picker
+            st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
+            if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
+                with st.spinner("Calculating optimal bakery roster locally..."):
+                    try:
+                        emp_data = st.session_state.manual_employees
+                        unavail_data = st.session_state.manual_unavailability
+                        req_data = st.session_state.manual_requirements
+                        fixed_data = st.session_state.manual_fixed
+                        
+                        roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
+                        st.session_state.final_roster_df = roster_out_df
+                        st.success("🎉 Weekly Roster successfully generated!")
+                    except Exception as e:
+                        st.error(f"Failed to generate roster: {e}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    with col2:
-        upload_template = st.file_uploader("📋 Custom Layout Template (.xlsx)", type=["xlsx"], key="home_template_upload")
-
-    # Display generated roster & export controls
-    if "final_roster_df" in st.session_state:
-        final_df = st.session_state.final_roster_df
-        
-        if final_df.empty:
-            st.warning("⚠️ Roster generated is empty. Please check your Staff Members tab to ensure active employees are listed.")
-        else:
+        with col2:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 14px 14px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-                📝 Generated Roster Preview & Manual Override Editor
+            <div style="background: rgba(9, 32, 28, 0.5); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 14px; padding: 15px; height: 100%;">
+                <h4 style="color: #e5a93c !important; margin-top: 0;">📋 Generator Rules Summary</h4>
+                <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.95rem; color: #ffffff !important;">
+                    <li>Respects staff unavailability constraints</li>
+                    <li>Fulfills daily shift requirements</li>
+                    <li>Ensures mandatory award break times</li>
+                    <li>Enforces minimum rest periods between shifts</li>
+                </ul>
             </div>
             """, unsafe_allow_html=True)
-            edited_final_df = st.data_editor(final_df, num_rows="dynamic", key="home_final_roster_editor")
+
+        if 'final_roster_df' in st.session_state and not st.session_state.final_roster_df.empty:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
+                📅 Generated Weekly Roster Schedule (Editable)
+            </div>
+            """, unsafe_allow_html=True)
+            
+            edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
             st.session_state.final_roster_df = edited_final_df
-            
-            # Create Excel download
-            if upload_template is not None:
-                wb = openpyxl.load_workbook(upload_template)
-            else:
-                wb = openpyxl.Workbook()
-                
+
+            # Prepare Excel workbook in memory using openpyxl for exact styling match
+            wb = openpyxl.Workbook()
             ws = wb.active
-            ws.title = f"Roster {start_date.strftime('%d.%m.%Y')}"
-            
-            headers = ["Employee", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-            
-            # Title banner
-            ws.merge_cells('A1:H1')
-            cell_title = ws['A1']
-            cell_title.value = "Brumby's Pakenham Weekly Roster"
-            cell_title.font = Font(name="Calibri", size=16, bold=True, color="1F4E78")
-            cell_title.alignment = Alignment(horizontal="left", vertical="center")
-            
-            # Week period banner
-            end_dt = start_date + timedelta(days=6)
-            period_str = f"Week Period: {start_date.strftime('%d.%m.%Y')} to {end_dt.strftime('%d.%m.%Y')}"
-            ws.merge_cells('A2:H2')
-            cell_period = ws['A2']
-            cell_period.value = period_str
-            cell_period.font = Font(name="Calibri", size=11, italic=True, color="595959")
-            cell_period.alignment = Alignment(horizontal="left", vertical="center")
-            
-            # Header Row
-            for col_num, header in enumerate(headers, 1):
-                cell = ws.cell(row=4, column=col_num)
-                cell.value = header
-                header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-                header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-                
+            ws.title = "Weekly Roster"
+
+            # Header styling
+            ws.merge_cells("A1:H1")
+            title_cell = ws.cell(row=1, column=1)
+            title_cell.value = "BRUMBY'S PAKENHAM - WEEKLY STAFF ROSTER"
+            title_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+            title_cell.fill = title_fill
+            title_cell.font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+            title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.merge_cells("A2:H2")
+            sub_cell = ws.cell(row=2, column=1)
+            end_date = start_date + timedelta(days=6)
+            sub_cell.value = f"Week Period: Monday {start_date.strftime('%d/%m/%Y')} to Sunday {end_date.strftime('%d/%m/%Y')}"
+            sub_cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+            sub_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
+            sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.row_dimensions[3].height = 10
+
+            tbl_hdr_fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
+            tbl_hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+            for col_idx, col_name in enumerate(edited_final_df.columns, 1):
+                c = ws.cell(row=4, column=col_idx)
+                c.value = col_name
+                c.fill = tbl_hdr_fill
+                c.font = tbl_hdr_font
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                    
             thin_border = Border(
                 left=Side(style='thin', color='BFBFBF'),
                 right=Side(style='thin', color='BFBFBF'),
@@ -805,234 +1003,142 @@ with tab_home:
                 bottom=Side(style='thin', color='BFBFBF')
             )
             
-            off_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-            white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-            text_font = Font(name="Calibri", size=11)
-            
-            from openpyxl.cell.cell import MergedCell
-            
-            for row_idx, row_data in enumerate(edited_final_df.itertuples(index=False), 5):
-                for col_idx, value in enumerate(row_data, 1):
-                    cell = ws.cell(row=row_idx, column=col_idx)
-                    
-                    target_cell = cell
-                    if isinstance(cell, MergedCell):
-                        for merged_range in ws.merged_cells.ranges:
-                            if merged_range.min_row <= row_idx <= merged_range.max_row and merged_range.min_col <= col_idx <= merged_range.max_col:
-                                target_cell = ws.cell(row=merged_range.min_row, column=merged_range.min_col)
-                                break
-                    
-                    val_str = str(value).strip().lower()
-                    if "unavailable" in val_str or val_str == "off" or val_str == "nan" or val_str == "":
-                        target_cell.fill = off_fill
-                        target_cell.value = ""
+            # --- TAB 2: STAFF MEMBERS ---
+    with tab_emp:
+        st.subheader("Manage Bakery Employees")
+        emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
+        upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
+        
+        if upload_emp is not None:
+            file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
+            if st.session_state.get("last_emp_file") != file_key:
+                loaded = read_excel_robust(upload_emp)
+                if loaded is not None:
+                    if emp_mode == "Replace current data":
+                        st.session_state.manual_employees = loaded
                     else:
-                        target_cell.fill = white_fill
-                        target_cell.value = value
-                        
-                    target_cell.font = text_font
-                    target_cell.alignment = Alignment(horizontal="center", vertical="center")
-                    target_cell.border = thin_border
+                        combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
+                        st.session_state.manual_employees = combined
+                    st.session_state.last_emp_file = file_key
+                    save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                    
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+            👥 Bakery Staff Members List
+        </div>
+        """, unsafe_allow_html=True)
+        employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
+        st.session_state.manual_employees = employees_df
+        save_persisted_df(employees_df, "employees.csv")
 
-            ws.column_dimensions['A'].width = 30
-            for col_letter in ['B', 'C', 'D', 'E', 'F', 'G', 'H']:
-                ws.column_dimensions[col_letter].width = 25
-                
-            ws.row_dimensions[1].height = 32
-            ws.row_dimensions[2].height = 20
-            ws.row_dimensions[3].height = 12
-            ws.row_dimensions[4].height = 28
-            
-            last_data_row = len(edited_final_df) + 4
-            for r in range(5, last_data_row + 1):
-                ws.row_dimensions[r].height = 22
-                
-            # Award Break Card Note
-            note_start_row = last_data_row + 3
-            ws.row_dimensions[note_start_row].height = 26
-            ws.merge_cells(start_row=note_start_row, start_column=1, end_row=note_start_row, end_column=8)
-            note_hdr_cell = ws.cell(row=note_start_row, column=1)
-            note_hdr_cell.value = "General Retail Industry Award - Required Breaks Reference Card:"
-            note_hdr_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
-            note_hdr_cell.fill = note_hdr_fill
-            note_hdr_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
-            note_hdr_cell.alignment = Alignment(horizontal="left", vertical="center")
-            
-            sub_hdr_row = note_start_row + 1
-            ws.row_dimensions[sub_hdr_row].height = 22
-            
-            ws.merge_cells(start_row=sub_hdr_row, start_column=1, end_row=sub_hdr_row, end_column=3)
-            c1 = ws.cell(row=sub_hdr_row, column=1)
-            c1.value = "Shift Duration"
-            
-            ws.merge_cells(start_row=sub_hdr_row, start_column=4, end_row=sub_hdr_row, end_column=6)
-            c2 = ws.cell(row=sub_hdr_row, column=4)
-            c2.value = "Paid Rest Break(s)"
-            
-            ws.merge_cells(start_row=sub_hdr_row, start_column=7, end_row=sub_hdr_row, end_column=8)
-            c3 = ws.cell(row=sub_hdr_row, column=7)
-            c3.value = "Unpaid Meal Break(s)"
-            
-            sub_hdr_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-            sub_font = Font(name="Calibri", size=10, bold=True)
-            for c in [c1, c2, c3]:
-                c.fill = sub_hdr_fill
-                c.font = sub_font
-                c.alignment = Alignment(horizontal="center", vertical="center")
-                c.border = thin_border
+    # --- TAB 3: UNAVAILABILITY ---
+    with tab_unavail:
+        st.subheader("Log Staff Unavailability")
+        unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
+        upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
+        
+        if upload_unavail is not None:
+            file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
+            if st.session_state.get("last_unavail_file") != file_key:
+                loaded = read_excel_robust(upload_unavail)
+                if loaded is not None:
+                    if unavail_mode == "Replace current data":
+                        st.session_state.manual_unavailability = loaded
+                    else:
+                        combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
+                        st.session_state.manual_unavailability = combined
+                    st.session_state.last_unavail_file = file_key
+                    save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                    
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+            🚫 Staff Weekly Unavailability Constraints
+        </div>
+        """, unsafe_allow_html=True)
+        unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
+        st.session_state.manual_unavailability = unavailability_df
+        save_persisted_df(unavailability_df, "unavailability.csv")
 
-            breaks_data = [
-                ("Less than 4 hours", "None", "None"),
-                ("4 hours up to 5 hours", "1 x 10 minutes", "None"),
-                ("5 hours up to 7 hours", "1 x 10 minutes", "1 x 30 to 60 minutes"),
-                ("7 hours up to 10 hours", "2 x 10 minutes", "1 x 30 to 60 minutes"),
-                ("More than 10 hours", "2 x 10 minutes", "2 x 30 to 60 minutes")
-            ]
-            
-            curr_row = sub_hdr_row + 1
-            for duration_text, paid_breaks, unpaid_breaks in breaks_data:
-                ws.row_dimensions[curr_row].height = 20
-                
-                ws.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=3)
-                cell_dur = ws.cell(row=curr_row, column=1)
-                cell_dur.value = duration_text
-                
-                ws.merge_cells(start_row=curr_row, start_column=4, end_row=curr_row, end_column=6)
-                cell_paid = ws.cell(row=curr_row, column=4)
-                cell_paid.value = paid_breaks
-                
-                ws.merge_cells(start_row=curr_row, start_column=7, end_row=curr_row, end_column=8)
-                cell_unpaid = ws.cell(row=curr_row, column=7)
-                cell_unpaid.value = unpaid_breaks
-                
-                for c in [cell_dur, cell_paid, cell_unpaid]:
-                    c.font = Font(name="Calibri", size=10)
-                    c.alignment = Alignment(horizontal="center", vertical="center")
-                    c.border = thin_border
-                
-                curr_row += 1
-            
-            excel_data = io.BytesIO()
-            wb.save(excel_data)
-            excel_data.seek(0)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.download_button(
-                label="📥 DOWNLOAD ROSTER EXCEL FILE (.XLSX)",
-                data=excel_data,
-                file_name=f"Team Roster {start_date.strftime('%d.%m.%Y')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_download_excel_home"
+    # --- TAB 4: DAILY REQUIREMENTS ---
+    with tab_req:
+        st.subheader("Daily Bakery Shift Requirements")
+        req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
+        upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+        
+        if upload_req is not None:
+            file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
+            if st.session_state.get("last_req_file") != file_key:
+                loaded = read_excel_robust(upload_req)
+                if loaded is not None:
+                    if req_mode == "Replace current data":
+                        st.session_state.manual_requirements = loaded
+                    else:
+                        combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
+                        st.session_state.manual_requirements = combined
+                    st.session_state.last_req_file = file_key
+                    save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                    
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+            📋 Daily Shift Coverage Requirements (Mon-Sun)
+        </div>
+        """, unsafe_allow_html=True)
+        requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
+        st.session_state.manual_requirements = requirements_df
+        save_persisted_df(requirements_df, "requirements.csv")
+
+    # --- TAB 5: FIXED SHIFTS ---
+    with tab_fixed:
+        st.subheader("Fixed Baseline Shifts")
+        fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
+        upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+        
+        if upload_fixed is not None:
+            file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
+            if st.session_state.get("last_fixed_file") != file_key:
+                loaded = read_excel_robust(upload_fixed)
+                if loaded is not None:
+                    if fixed_mode == "Replace current data":
+                        st.session_state.manual_fixed = loaded
+                    else:
+                        combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
+                        st.session_state.manual_fixed = combined
+                    st.session_state.last_fixed_file = file_key
+                    save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                    
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+            📌 Fixed Baseline Staff Shifts
+        </div>
+        """, unsafe_allow_html=True)
+        fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
+        st.session_state.manual_fixed = fixed_df
+        save_persisted_df(fixed_df, "fixed.csv")
+
+    # --- TAB 6: ADMIN EMPLOYEE CONFIDENTIAL PROFILES ---
+    with tab_admin_profiles:
+        st.subheader("👥 Employee Confidential Profiles Management (Admin)")
+        emp_options = {k: v.get("employee_name", k) for k, v in user_profiles.items() if v.get("role") == "Employee"}
+        
+        if not emp_options:
+            st.info("No employee accounts registered.")
+        else:
+            selected_user = st.selectbox(
+                "Select Employee to View or Edit Profile:", 
+                options=list(emp_options.keys()), 
+                format_func=lambda x: f"{emp_options[x]} (Username: {x})"
             )
-
-# --- TAB 2: STAFF MEMBERS ---
-with tab_emp:
-    st.subheader("Manage Bakery Employees")
-    emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
-    upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
-    
-    if upload_emp is not None:
-        file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
-        if st.session_state.get("last_emp_file") != file_key:
-            loaded = read_excel_robust(upload_emp)
-            if loaded is not None:
-                if emp_mode == "Replace current data":
-                    st.session_state.manual_employees = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_employees = combined
-                st.session_state.last_emp_file = file_key
-                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+            
+            if selected_user:
+                render_confidential_profile_form(selected_user, is_admin=True)
                 
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        👥 Bakery Staff Members List
-    </div>
-    """, unsafe_allow_html=True)
-    employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
-    st.session_state.manual_employees = employees_df
-    save_persisted_df(employees_df, "employees.csv")
-
-# --- TAB 3: UNAVAILABILITY ---
-with tab_unavail:
-    st.subheader("Log Staff Unavailability")
-    unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
-    upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
-    
-    if upload_unavail is not None:
-        file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
-        if st.session_state.get("last_unavail_file") != file_key:
-            loaded = read_excel_robust(upload_unavail)
-            if loaded is not None:
-                if unavail_mode == "Replace current data":
-                    st.session_state.manual_unavailability = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_unavailability = combined
-                st.session_state.last_unavail_file = file_key
-                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        🚫 Staff Weekly Unavailability Constraints
-    </div>
-    """, unsafe_allow_html=True)
-    unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability")
-    st.session_state.manual_unavailability = unavailability_df
-    save_persisted_df(unavailability_df, "unavailability.csv")
-
-# --- TAB 4: DAILY REQUIREMENTS ---
-with tab_req:
-    st.subheader("Daily Bakery Shift Requirements")
-    req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
-    upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
-    
-    if upload_req is not None:
-        file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
-        if st.session_state.get("last_req_file") != file_key:
-            loaded = read_excel_robust(upload_req)
-            if loaded is not None:
-                if req_mode == "Replace current data":
-                    st.session_state.manual_requirements = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_requirements = combined
-                st.session_state.last_req_file = file_key
-                save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📋 Daily Shift Coverage Requirements (Mon-Sun)
-    </div>
-    """, unsafe_allow_html=True)
-    requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
-    st.session_state.manual_requirements = requirements_df
-    save_persisted_df(requirements_df, "requirements.csv")
-
-# --- TAB 5: FIXED SHIFTS ---
-with tab_fixed:
-    st.subheader("Fixed Baseline Shifts")
-    fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
-    upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
-    
-    if upload_fixed is not None:
-        file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
-        if st.session_state.get("last_fixed_file") != file_key:
-            loaded = read_excel_robust(upload_fixed)
-            if loaded is not None:
-                if fixed_mode == "Replace current data":
-                    st.session_state.manual_fixed = loaded
-                else:
-                    combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
-                    st.session_state.manual_fixed = combined
-                st.session_state.last_fixed_file = file_key
-                save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
-                
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📌 Fixed Baseline Staff Shifts
-    </div>
-    """, unsafe_allow_html=True)
-    fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
-    st.session_state.manual_fixed = fixed_df
-    save_persisted_df(fixed_df, "fixed.csv")
+                st.markdown("<br>", unsafe_allow_html=True)
+                with st.expander(f"🔑 Reset Password for {emp_options[selected_user]}"):
+                    new_pw = st.text_input(f"New Password", type="password", key=f"reset_pw_{selected_user}")
+                    if st.button("Update Employee Password", key=f"btn_reset_pw_{selected_user}"):
+                        if new_pw.strip():
+                            user_profiles[selected_user]["password"] = new_pw.strip()
+                            save_user_profiles(user_profiles)
+                            st.success(f"✅ Password for {emp_options[selected_user]} updated successfully!")
+                        else:
+                            st.error("Password cannot be empty.")
