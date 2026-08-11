@@ -561,8 +561,11 @@ if is_manager:
         "📌 Fixed Shifts"
     ])
 else:
-    # Employee sees only their personal information form tab
-    tab_my_info, = st.tabs(["📋 My Personal Information Form"])
+    # Employee sees 2 tabs: Personal Information & Availability Calendar
+    tab_my_info, tab_my_avail = st.tabs([
+        "📋 Personal Information Form",
+        "📅 My Availability & Constraints"
+    ])
 
 # Helper function to render Confidential Profile Form
 def render_confidential_profile_form(user_key, is_admin=False):
@@ -663,37 +666,98 @@ def render_employee_availability_manager(user_key):
     
     st.markdown(f"""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 24px; border-radius: 14px; border: 2px solid #e5a93c; margin-bottom: 20px;">
-        <h2 style="color: #e5a93c !important; margin: 0;">📅 My Unavailability Calendar & Shift Constraints</h2>
-        <p style="color: #c8e6e0 !important; margin-top: 4px; margin-bottom: 0;">Logged in Employee: <b>{emp_name}</b>. Add or update your weekly availability constraints below. Entries auto-sync directly to the master bakery roster.</p>
+        <h2 style="color: #e5a93c !important; margin: 0;">📅 My Unavailability & Constraint Manager</h2>
+        <p style="color: #c8e6e0 !important; margin-top: 4px; margin-bottom: 0;">Logged in Employee: <b>{emp_name}</b>. Add or update your availability constraints below (supports batch weekday presets e.g. Mon-Fri for Next 3 Months).</p>
     </div>
     """, unsafe_allow_html=True)
     
-    # 1. Add Constraint Controls
-    with st.form(key=f"form_add_unavail_{user_key}"):
+    # 1. Add Constraint Controls Form
+    with st.form(key=f"form_add_unavail_smart_{user_key}"):
         st.markdown("### ➕ Log New Unavailability Constraint")
-        col1, col2, col3 = st.columns([1, 1.2, 1.5])
-        with col1:
-            sel_day = st.selectbox("Select Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key=f"sel_day_{user_key}")
-        with col2:
-            preset_window = st.selectbox("Constraint / Window", ["All Day", "Before 3:30pm", "After 5:00pm", "Custom Shift Window"], key=f"sel_window_{user_key}")
-        with col3:
-            custom_window = st.text_input("Custom Window Details (if selected)", value="7:30am-12:30pm", key=f"input_custom_win_{user_key}")
+        
+        c_preset, c_single = st.columns([1.5, 1])
+        with c_preset:
+            day_selection_type = st.radio(
+                "Days Selection Pattern", 
+                ["Mon - Fri (All Weekdays)", "Sat - Sun (Weekends)", "Specific Single Day"], 
+                key=f"day_type_{user_key}",
+                horizontal=True
+            )
+        with c_single:
+            single_day = st.selectbox(
+                "If Single Day, Select Day:", 
+                ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], 
+                key=f"single_day_select_{user_key}"
+            )
+
+        col_win, col_dur = st.columns([1, 1])
+        with col_win:
+            preset_window = st.selectbox(
+                "Time Window / Constraint", 
+                ["All Day", "Before 3:30pm", "After 5:00pm", "Custom Shift Window"], 
+                key=f"smart_win_{user_key}"
+            )
+            custom_window = st.text_input("Custom Window Details (if selected)", value="7:30am-12:30pm", key=f"smart_custom_win_{user_key}")
+
+        with col_dur:
+            duration_preset = st.selectbox(
+                "Duration / Validity Period", 
+                ["Ongoing (Every Week)", "Next 3 Months (90 Days)", "Next 1 Month (30 Days)", "Custom Date Range"], 
+                key=f"dur_preset_{user_key}"
+            )
             
-        submit_unavail = st.form_submit_button("📌 Add Unavailability Constraint")
+            from datetime import date
+            c_start, c_end = st.columns(2)
+            with c_start:
+                custom_start = st.date_input("Start Date", date.today(), key=f"start_dt_{user_key}")
+            with c_end:
+                custom_end = st.date_input("End Date", date.today() + timedelta(days=90), key=f"end_dt_{user_key}")
+
+        submit_unavail = st.form_submit_button("📌 Save Unavailability Constraint(s)")
         
         if submit_unavail:
-            target_window = custom_window.strip() if preset_window == "Custom Shift Window" else preset_window
-            if target_window:
-                df_curr = st.session_state.manual_unavailability.copy()
-                emp_col = find_column(df_curr, ["employee", "name", "staff"], "Employee")
-                day_col = find_column(df_curr, ["day", "date", "weekday"], "Day")
-                win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
+            # Determine target days list
+            if day_selection_type == "Mon - Fri (All Weekdays)":
+                target_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+            elif day_selection_type == "Sat - Sun (Weekends)":
+                target_days = ["Saturday", "Sunday"]
+            else:
+                target_days = [single_day]
                 
-                new_entry = {emp_col: emp_name, day_col: sel_day, win_col: target_window}
-                df_updated = pd.concat([df_curr, pd.DataFrame([new_entry])], ignore_index=True)
-                st.session_state.manual_unavailability = df_updated
-                save_persisted_df(df_updated, "unavailability.csv")
-                st.success(f"✅ Added unavailability constraint for {sel_day}: {target_window}")
+            # Determine time window
+            base_window = custom_window.strip() if preset_window == "Custom Shift Window" else preset_window
+            
+            # Determine duration note
+            today_dt = date.today()
+            if duration_preset == "Next 3 Months (90 Days)":
+                end_dt_calc = today_dt + timedelta(days=90)
+                dur_note = f"Until {end_dt_calc.strftime('%d/%m/%Y')}"
+            elif duration_preset == "Next 1 Month (30 Days)":
+                end_dt_calc = today_dt + timedelta(days=30)
+                dur_note = f"Until {end_dt_calc.strftime('%d/%m/%Y')}"
+            elif duration_preset == "Custom Date Range":
+                dur_note = f"From {custom_start.strftime('%d/%m/%Y')} to {custom_end.strftime('%d/%m/%Y')}"
+            else:
+                dur_note = None
+                
+            final_window_str = f"{base_window} ({dur_note})" if dur_note else base_window
+            
+            # Append rows to manual_unavailability
+            df_curr = st.session_state.manual_unavailability.copy()
+            emp_col = find_column(df_curr, ["employee", "name", "staff"], "Employee")
+            day_col = find_column(df_curr, ["day", "date", "weekday"], "Day")
+            win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
+            
+            new_entries = []
+            for d in target_days:
+                new_entries.append({emp_col: emp_name, day_col: d, win_col: final_window_str})
+                
+            df_updated = pd.concat([df_curr, pd.DataFrame(new_entries)], ignore_index=True)
+            st.session_state.manual_unavailability = df_updated
+            save_persisted_df(df_updated, "unavailability.csv")
+            
+            days_label = "Mon-Fri" if day_selection_type == "Mon - Fri (All Weekdays)" else ", ".join(target_days)
+            st.success(f"✅ Logged unavailability for {days_label}: {final_window_str}")
 
     st.markdown("---")
     st.markdown("### 📋 My Active Logged Constraints")
@@ -712,7 +776,7 @@ def render_employee_availability_manager(user_key):
         for idx, row in user_rows.iterrows():
             day_val = row.get(day_col, "")
             win_val = row.get(win_col, "")
-            c1, c2, c3 = st.columns([2, 3, 1])
+            c1, c2, c3 = st.columns([2, 3.5, 1])
             with c1:
                 st.markdown(f"🗓️ **{day_val}**")
             with c2:
@@ -761,10 +825,12 @@ def render_team_unavailability_matrix():
     df_matrix = pd.DataFrame(matrix_rows)
     st.dataframe(df_matrix, use_container_width=True, hide_index=True)
 
-# IF EMPLOYEE, RENDER PERSONAL INFORMATION FORM
+# IF EMPLOYEE, RENDER 2 TABS (PERSONAL INFO & AVAILABILITY CALENDAR)
 if not is_manager:
     with tab_my_info:
         render_confidential_profile_form(st.session_state.logged_in_user)
+    with tab_my_avail:
+        render_employee_availability_manager(st.session_state.logged_in_user)
 
 
 # Helpers for parsing times
