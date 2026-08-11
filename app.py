@@ -388,6 +388,14 @@ def save_persisted_df(df, filename):
     except:
         pass
 
+def find_column(df, candidates, default=""):
+    if df is None or not hasattr(df, "columns"):
+        return default
+    for c in df.columns:
+        if str(c).strip().lower() in candidates:
+            return c
+    return default
+
 # Initialize Session States with Disk Cache
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
@@ -858,12 +866,6 @@ def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
         u_start, u_end, _ = r
         return max(shift_start, u_start) < min(shift_end, u_end)
     return False
-
-def find_column(df, candidates, default=""):
-    for c in df.columns:
-        if str(c).strip().lower() in candidates:
-            return c
-    return default
 
 # Robust Name Matcher
 def find_matching_employee(raw_name, name_map):
