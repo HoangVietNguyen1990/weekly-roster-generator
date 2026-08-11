@@ -824,7 +824,23 @@ def render_team_monthly_calendar_grid():
     cal = calendar.Calendar(firstweekday=6)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
-    unavail_df = st.session_state.manual_unavailability
+    unavail_df = st.session_state.get("manual_unavailability", None)
+    if unavail_df is None or unavail_df.empty:
+        unavail_df = pd.DataFrame([
+            {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
+            {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
+            {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
+            {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
+            {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
+            {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
+            {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
+            {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
+            {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
+            {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
+        ])
+        st.session_state.manual_unavailability = unavail_df
+        save_persisted_df(unavail_df, "unavailability.csv")
+
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user"], "Employee")
     day_col = find_column(unavail_df, ["day", "date", "weekday"], "Day")
     win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability", "reason", "constraint"], "Time Window")
