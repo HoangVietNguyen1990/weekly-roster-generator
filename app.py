@@ -389,11 +389,19 @@ def save_persisted_df(df, filename):
         pass
 
 def find_column(df, candidates, default=""):
-    if df is None or not hasattr(df, "columns"):
+    if df is None or not hasattr(df, "columns") or len(df.columns) == 0:
         return default
+    # 1. Exact match
     for c in df.columns:
-        if str(c).strip().lower() in candidates:
+        if str(c).strip().lower() in [cand.lower() for cand in candidates]:
             return c
+    # 2. Substring match
+    for c in df.columns:
+        c_clean = str(c).strip().lower()
+        for cand in candidates:
+            cand_clean = cand.lower()
+            if cand_clean in c_clean or c_clean in cand_clean:
+                return c
     return default
 
 # Initialize Session States with Disk Cache
@@ -811,11 +819,19 @@ def render_team_monthly_calendar_grid():
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
     unavail_df = st.session_state.manual_unavailability
-    emp_col = find_column(unavail_df, ["employee", "name", "staff"], "Employee")
+    emp_col = find_column(unavail_df, ["employee", "name", "staff", "user"], "Employee")
     day_col = find_column(unavail_df, ["day", "date", "weekday"], "Day")
-    win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability"], "Time Window")
+    win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability", "reason", "constraint"], "Time Window")
 
-    fixed_df = st.session_state.manual_fixed if "manual_fixed" in st.session_state else None
+    # Positional fallback if named column matching is empty
+    if unavail_df is not None and hasattr(unavail_df, "columns") and len(unavail_df.columns) > 0:
+        if not emp_col or emp_col not in unavail_df.columns:
+            emp_col = unavail_df.columns[0]
+        if (not day_col or day_col not in unavail_df.columns) and len(unavail_df.columns) >= 2:
+            day_col = unavail_df.columns[1]
+        if (not win_col or win_col not in unavail_df.columns) and len(unavail_df.columns) >= 3:
+            win_col = unavail_df.columns[2]
+
     weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     
     for week in month_days:
@@ -837,14 +853,16 @@ def render_team_monthly_calendar_grid():
                             u_day = str(urow.get(day_col, "")).strip()
                             u_win = str(urow.get(win_col, "")).strip()
                             
-                            if u_emp and u_day and u_day.lower().startswith(day_name.lower()[:3]):
+                            # Match day name (e.g. 'Monday', 'Mon', '🔴 Monday')
+                            if u_emp and u_day and (day_name.lower()[:3] in u_day.lower()):
                                 display_name = u_emp
-                                if "all day" in u_win.lower():
-                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🔴 {display_name} (All Day)</div>')
+                                win_disp = u_win if u_win else "Unavailable"
+                                if "all day" in win_disp.lower():
+                                    chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🔴 {display_name} (All Day)</div>')
                                 else:
-                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {u_win}">🟨 {display_name} ({u_win})</div>')
+                                    chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🟨 {display_name} ({win_disp})</div>')
                                     
-                    chips_block = "".join(chips_html) if chips_html else '<div style="color: #4a5568; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
+                    chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
                     
                     st.markdown(f"""
                     <div style="min-height: 110px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px;">
