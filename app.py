@@ -533,6 +533,115 @@ def save_user_profiles(profiles):
     except Exception as e:
         st.error(f"Error saving user profiles: {e}")
 
+# --- SMTP EMAIL CONFIGURATION ENGINE ---
+SMTP_CONFIG_FILE = os.path.join(DATA_DIR, "smtp_config.json")
+
+def load_smtp_config():
+    default_config = {
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "sender_email": "",
+        "sender_password": "",
+        "portal_url": "https://weekly-roster-generator.streamlit.app",
+        "sender_name": "Bakery Manager"
+    }
+    if os.path.exists(SMTP_CONFIG_FILE):
+        try:
+            with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                for k, v in default_config.items():
+                    if k not in cfg:
+                        cfg[k] = v
+                return cfg
+        except:
+            pass
+    return default_config
+
+def save_smtp_config(cfg):
+    try:
+        with open(SMTP_CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2)
+    except:
+        pass
+
+def build_welcome_email_content(emp_name, username, temp_password, portal_url="", sender_name=""):
+    cfg = load_smtp_config()
+    if not portal_url:
+        portal_url = cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app")
+    if not sender_name:
+        sender_name = cfg.get("sender_name", "Bakery Manager")
+        
+    subject = "Welcome to Brumby's Pakenham! 🥐 — Your Account Setup & Portal Login"
+    body = f"""Subject: {subject}
+
+Hi {emp_name},
+
+Welcome to the team at Brumby's Pakenham! 🥐
+
+We use an online portal for managing shift rostering, availability, and confidential employee onboarding. Please set up your account by completing these quick steps:
+
+1. Log In to the Portal
+
+Website: {portal_url}
+Username: {username}
+Temporary Password: {temp_password}
+
+2. Complete Your Setup Tasks
+Once logged in, please complete the following tabs:
+
+📋 Personal Information Form: Fill out your contact details, Tax File Number (TFN), bank account details (for payroll), and superannuation fund.
+📅 My Availability & Constraints: Select the days/time windows you are available to work.
+🔑 Change Password: Click Change My Password in the left sidebar to update your temporary password to a secure personal one.
+
+If you run into any issues, please feel free to reach out.
+
+Welcome aboard!
+{sender_name}
+Brumby's Pakenham"""
+    return subject, body
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, portal_url="", sender_name=""):
+    cfg = load_smtp_config()
+    smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
+    smtp_port = int(cfg.get("smtp_port", 587))
+    sender_email = cfg.get("sender_email", "").strip()
+    sender_pass = cfg.get("sender_password", "").strip()
+    
+    if not portal_url:
+        portal_url = cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app")
+    if not sender_name:
+        sender_name = cfg.get("sender_name", "Bakery Manager")
+
+    subject, body = build_welcome_email_content(emp_name, username, temp_password, portal_url, sender_name)
+    
+    if not recipient_email or not recipient_email.strip():
+        return False, "Recipient email is blank."
+        
+    if not sender_email or not sender_pass:
+        return False, "SMTP credentials not yet configured in Email Settings."
+
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = f"{sender_name} <{sender_email}>"
+        msg["To"] = recipient_email.strip()
+        msg["Subject"] = subject
+        
+        email_text_content = body.split("\n\n", 1)[-1] if "\n\n" in body else body
+        msg.attach(MIMEText(email_text_content, "plain", "utf-8"))
+
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.starttls()
+        server.login(sender_email, sender_pass)
+        server.send_message(msg)
+        server.quit()
+        return True, f"Welcome Email sent to {recipient_email}!"
+    except Exception as e:
+        return False, f"SMTP Error: {e}"
+
 def load_persisted_df(filename, default_df):
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
@@ -682,6 +791,32 @@ with st.sidebar.expander("🔑 Change My Password", expanded=False):
                 user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
                 save_user_profiles(user_profiles)
                 st.success("✅ Your password has been updated successfully!")
+
+if role_title == "Manager":
+    with st.sidebar.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
+        smtp_cfg = load_smtp_config()
+        with st.form(key="form_smtp_config"):
+            st.markdown("##### 🌐 Default Portal Web Link")
+            cfg_url = st.text_input("Streamlit Cloud URL", value=smtp_cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app"))
+            cfg_sname = st.text_input("Sender Display Name", value=smtp_cfg.get("sender_name", "Bakery Manager"))
+            
+            st.markdown("##### 📮 SMTP Server Credentials")
+            cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", ""), placeholder="e.g. manager@brumbys.com.au")
+            cfg_spass = st.text_input("Sender App Password", value=smtp_cfg.get("sender_password", ""), type="password")
+            cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
+            cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
+            
+            if st.form_submit_button("💾 Save Email Settings"):
+                new_cfg = {
+                    "portal_url": cfg_url.strip(),
+                    "sender_name": cfg_sname.strip(),
+                    "sender_email": cfg_semail.strip(),
+                    "sender_password": cfg_spass.strip(),
+                    "smtp_server": cfg_host.strip(),
+                    "smtp_port": int(cfg_port)
+                }
+                save_smtp_config(new_cfg)
+                st.success("✅ Email settings saved successfully!")
 
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     st.session_state.authenticated = False
@@ -1826,6 +1961,12 @@ if is_manager:
 
         # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM ---
         with st.expander("➕ Add New Staff Account (Create Login & Roster Record)", expanded=False):
+            send_email_chk = st.checkbox("☑️ Send Welcome Email automatically", value=True, key="chk_send_welcome_email")
+            
+            emp_email_val = ""
+            if send_email_chk:
+                emp_email_val = st.text_input("Employee Email Address", placeholder="e.g. jack.smith@outlook.com", key="input_emp_email").strip()
+
             with st.form(key="form_create_new_employee_account"):
                 st.markdown("#### 👤 New Employee Credentials & Information")
                 c1, c2 = st.columns(2)
@@ -1847,6 +1988,8 @@ if is_manager:
                         st.error("❌ Username cannot be empty.")
                     elif new_user in user_profiles:
                         st.error(f"❌ Username '{new_user}' already exists. Please choose a different username.")
+                    elif send_email_chk and not emp_email_val:
+                        st.error("❌ Please enter the Employee Email Address or uncheck 'Send Welcome Email automatically'.")
                     else:
                         user_profiles[new_user] = {
                             "username": new_user,
@@ -1855,9 +1998,11 @@ if is_manager:
                             "employee_name": new_name,
                             "profile": {
                                 "full_name": new_name,
+                                "email": emp_email_val,
                                 "store": "Brumby's Pakenham",
                                 "classification": new_emp_type,
-                                "employment_level": new_role_level
+                                "employment_level": new_role_level,
+                                "commencement_date": datetime.now().strftime("%Y-%m-%d")
                             }
                         }
                         save_user_profiles(user_profiles)
@@ -1868,7 +2013,20 @@ if is_manager:
                         if "edit_employees" in st.session_state:
                             del st.session_state["edit_employees"]
 
-                        st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
+                        subj, body_text = build_welcome_email_content(new_name, new_user, new_pass)
+                        
+                        email_sent = False
+                        email_msg = ""
+                        if send_email_chk and emp_email_val:
+                            email_sent, email_msg = send_welcome_email_smtp(emp_email_val, new_name, new_user, new_pass)
+
+                        if email_sent:
+                            st.success(f"🎉 Created account for **{new_name}**! {email_msg}")
+                        else:
+                            st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
+                            if send_email_chk and emp_email_val:
+                                st.info(f"ℹ️ {email_msg}")
+
                         st.rerun()
 
         # --- INTEGRATED CONFIDENTIAL EMPLOYEE PROFILE VIEWER ---
