@@ -520,8 +520,8 @@ def load_persisted_df(filename, default_df):
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
-            # Read all columns as string to avoid formatting locks
-            df = pd.read_csv(path, dtype=str)
+            # Read all columns as string without converting empty cells to NaN
+            df = pd.read_csv(path, dtype=str, keep_default_na=False)
             if df is None or df.empty:
                 return default_df
             return df
@@ -1053,10 +1053,12 @@ def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
     return False
 
 def clean_win_display(win_str):
-    if not win_str:
-        return "Unavailable"
+    if not win_str or str(win_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
+        return "All Day"
     cleaned = re.sub(r'\(From.*?\)', '', str(win_str), flags=re.IGNORECASE).strip()
-    return cleaned if cleaned else str(win_str)
+    if not cleaned or cleaned.lower() in ["nan", "none", "nat", "null", ""]:
+        return "All Day"
+    return cleaned
 
 # Helper function to render Visual Monthly Calendar Grid with Color-Coded Event Badges for Manager
 def render_team_monthly_calendar_grid():
@@ -1177,8 +1179,9 @@ def render_team_monthly_calendar_grid():
                         if u_emp and u_day and is_unavail_applicable_to_date(dt_obj, u_day, u_win):
                             matched = find_matching_employee(u_emp, name_map) if name_map else u_emp
                             display_name = matched if matched else u_emp
+                            
                             badge_win = clean_win_display(u_win)
-                            tooltip_win = u_win if u_win else "Unavailable"
+                            tooltip_win = u_win if (u_win and str(u_win).strip().lower() not in ["nan", "none", "nat", "null", ""]) else "All Day"
                             
                             if "all day" in tooltip_win.lower():
                                 chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{display_name}: {tooltip_win}">🔴 {display_name} ({badge_win})</div>')
