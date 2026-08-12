@@ -1714,6 +1714,58 @@ if is_manager:
         st.session_state.manual_employees = employees_df
         save_persisted_df(employees_df, "employees.csv")
 
+        # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM ---
+        with st.expander("➕ Add New Staff Account (Create Login & Roster Record)", expanded=False):
+            with st.form(key="form_create_new_employee_account"):
+                st.markdown("#### 👤 New Employee Credentials & Information")
+                c1, c2 = st.columns(2)
+                with c1:
+                    new_name = st.text_input("Employee Full Name", placeholder="e.g. Jack Smith").strip()
+                    new_user = st.text_input("Username for Login", placeholder="e.g. jack.smith or jack").strip().lower()
+                    new_pass = st.text_input("Initial Password", value="TempPass123!", type="password")
+                with c2:
+                    new_role_level = st.text_input("Role / Position", value="Junior Team Member")
+                    new_emp_type = st.selectbox("Employment Classification", ["Casual", "Part-Time", "Full-Time"], index=0)
+                    new_age = st.number_input("Age", min_value=14, max_value=80, value=18)
+
+                submit_new_emp = st.form_submit_button("🚀 Create Employee Account")
+
+                if submit_new_emp:
+                    if not new_name:
+                        st.error("❌ Employee name cannot be empty.")
+                    elif not new_user:
+                        st.error("❌ Username cannot be empty.")
+                    elif new_user in user_profiles:
+                        st.error(f"❌ Username '{new_user}' already exists. Please choose a different username.")
+                    else:
+                        user_profiles[new_user] = {
+                            "username": new_user,
+                            "password": new_pass if new_pass else "TempPass123!",
+                            "role": "Employee",
+                            "employee_name": new_name,
+                            "profile": {
+                                "full_name": new_name,
+                                "store": "Brumby's Pakenham",
+                                "classification": new_emp_type,
+                                "employment_level": new_role_level
+                            }
+                        }
+                        save_user_profiles(user_profiles)
+
+                        emp_df_curr = st.session_state.manual_employees.copy()
+                        new_row = {
+                            "Name": new_name,
+                            "Role": new_role_level,
+                            "Age": str(new_age),
+                            "Employment Type": new_emp_type,
+                            "Start Date": datetime.now().strftime("%Y-%m-%d")
+                        }
+                        st.session_state.manual_employees = pd.concat([emp_df_curr, pd.DataFrame([new_row])], ignore_index=True)
+                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
+
+                        st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
+                        st.rerun()
+
         # --- INTEGRATED CONFIDENTIAL EMPLOYEE PROFILE VIEWER ---
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
