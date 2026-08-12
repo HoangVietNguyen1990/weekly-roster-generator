@@ -763,7 +763,7 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
         {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
         {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
     ])
-    st.session_state.manual_unavailability = load_persisted_df("unavailability.csv", default_unavail)
+    st.session_state.manual_unavailability = standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail))
     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
 if 'manual_requirements' not in st.session_state:
@@ -1064,6 +1064,49 @@ def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
         return True
         
     return False
+
+def standardize_unavailability_df(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    
+    df = df.copy()
+    
+    emp_col = find_column(df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
+    day_col = find_column(df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
+    win_col = find_column(df, ["time window", "window", "time", "unavailability", "reason", "constraint", "time constraint", "notes", "details"], "Time Window")
+
+    weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    for idx, row in df.iterrows():
+        # 1. Clean Employee Name
+        emp_val = str(row.get(emp_col, "")).strip()
+        if emp_val and emp_val.lower() not in ["nan", "none", "nat", "null", ""]:
+            if emp_val.islower():
+                emp_val = emp_val.title()
+            df.at[idx, emp_col] = emp_val
+            
+        # 2. Clean & Standardize Day / Date Column
+        day_val = str(row.get(day_col, "")).strip()
+        if day_val and day_val.lower() not in ["nan", "none", "nat", "null", ""]:
+            dt = parse_date_robust(day_val)
+            if dt:
+                w_name = weekday_names[dt.weekday()]
+                date_formatted = dt.strftime('%d/%m/%Y')
+                if w_name.lower() not in day_val.lower():
+                    df.at[idx, day_col] = f"{w_name} ({date_formatted})"
+                else:
+                    df.at[idx, day_col] = day_val
+            else:
+                matched_w = [w for w in weekday_names if w.lower() == day_val.lower()]
+                if matched_w:
+                    df.at[idx, day_col] = matched_w[0]
+                    
+        # 3. Clean Time Window Column
+        win_val = str(row.get(win_col, "")).strip()
+        if not win_val or win_val.lower() in ["nan", "none", "nat", "null", ""]:
+            df.at[idx, win_col] = "All Day"
+            
+    return df
 
 def clean_win_display(win_str):
     if not win_str or str(win_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
@@ -1733,11 +1776,12 @@ if is_manager:
             if st.session_state.get("last_unavail_file") != file_key:
                 loaded = read_excel_robust(upload_unavail)
                 if loaded is not None:
+                    loaded = standardize_unavailability_df(loaded)
                     if unavail_mode == "Replace current data":
                         st.session_state.manual_unavailability = loaded
                     else:
                         combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_unavailability = combined
+                        st.session_state.manual_unavailability = standardize_unavailability_df(combined)
                     st.session_state.last_unavail_file = file_key
                     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
                     st.rerun()
@@ -1751,10 +1795,11 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
         if st.session_state.manual_unavailability is not None and not st.session_state.manual_unavailability.empty:
+            st.session_state.manual_unavailability = standardize_unavailability_df(st.session_state.manual_unavailability)
             unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability_v4")
             if unavailability_df is not None and not unavailability_df.empty:
-                st.session_state.manual_unavailability = unavailability_df
-                save_persisted_df(unavailability_df, "unavailability.csv")
+                st.session_state.manual_unavailability = standardize_unavailability_df(unavailability_df)
+                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
