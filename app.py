@@ -806,19 +806,38 @@ def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
     if "weekday" in u_day_lower and dt_obj.weekday() in [0, 1, 2, 3, 4]:
         return True
         
+def calculate_age_from_dob(dob_str):
+    if not dob_str or str(dob_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
+        return None
+    try:
+        dt = pd.to_datetime(dob_str, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            today = datetime.now()
+            age = today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
+            return age, dt.strftime('%d/%m/%Y')
+    except:
+        pass
+    return None
+
 def cleanup_duplicate_employee_columns(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return df
     
     df = df.copy()
     
+    # 1. Drop 'Age' column completely as requested
+    age_cols = [c for c in df.columns if str(c).strip().lower() in ["age", "years"]]
+    if age_cols:
+        df.drop(columns=age_cols, errors='ignore', inplace=True)
+
+    # 2. Canonical mapping concepts to user's exact requested column names:
+    # NAME, DOB, Commencing Date, status, position
     concept_mappings = [
-        ("Name", ["name", "employee", "staff", "staff name", "employee name"]),
-        ("Role", ["role", "position", "employment level", "title", "job"]),
-        ("Employment Type", ["employment type", "status", "type", "classification", "employmenttype"]),
-        ("Start Date", ["start date", "commence date", "commencement date", "started", "start"]),
-        ("Age", ["age", "years"]),
-        ("DOB", ["dob", "date of birth", "birth date"])
+        ("NAME", ["name", "employee", "staff", "staff name", "employee name"]),
+        ("DOB", ["dob", "date of birth", "birth date"]),
+        ("Commencing Date", ["commencing date", "commence date", "commencement date", "start date", "started", "start"]),
+        ("status", ["status", "employment type", "type", "classification", "employmenttype"]),
+        ("position", ["position", "role", "employment level", "title", "job"])
     ]
     
     cols_to_drop = []
@@ -846,6 +865,25 @@ def cleanup_duplicate_employee_columns(df):
     cols_to_drop = list(set(cols_to_drop))
     df = df.drop(columns=[c for c in cols_to_drop if c in df.columns], errors='ignore')
     df = df.loc[:, ~df.columns.duplicated()]
+
+    # Clean DOB timestamp strings (strip 00:00:00 timestamp)
+    dob_c = find_column(df, ["dob", "date of birth", "birth date"])
+    if dob_c and dob_c in df.columns:
+        for idx in df.index:
+            dob_val = str(df.at[idx, dob_c]).strip()
+            if dob_val and dob_val.lower() not in ["none", "nan", "nat", "null", ""]:
+                try:
+                    dt = pd.to_datetime(dob_val, dayfirst=True, errors='coerce')
+                    if pd.notna(dt):
+                        df.at[idx, dob_c] = dt.strftime('%d/%m/%Y')
+                except:
+                    pass
+
+    # Ensure column order matches user preference: NAME, DOB, Commencing Date, status, position
+    desired_order = ["NAME", "DOB", "Commencing Date", "status", "position"]
+    ordered_cols = [c for c in desired_order if c in df.columns] + [c for c in df.columns if c not in desired_order]
+    df = df[ordered_cols]
+
     return df
 
 def standardize_unavailability_df(df):
