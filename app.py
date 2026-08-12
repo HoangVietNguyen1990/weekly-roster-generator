@@ -738,6 +738,127 @@ def read_excel_robust(uploaded_file):
         st.error(f"Error parsing Excel file structure: {e}")
         return None
 
+import re
+
+def parse_date_robust(date_str):
+    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", ""]:
+        return None
+    date_str = str(date_str).strip()
+    try:
+        dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt.date()
+    except:
+        pass
+    return None
+
+def extract_date_range(text):
+    if not text or str(text).strip().lower() in ["nan", "none", "nat", ""]:
+        return None, None
+    text = str(text)
+    dates_found = []
+    date_matches = re.findall(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\b', text)
+    for m in date_matches:
+        d = parse_date_robust(m)
+        if d:
+            dates_found.append(d)
+    
+    if len(dates_found) >= 2:
+        return min(dates_found), max(dates_found)
+    elif len(dates_found) == 1:
+        if any(kw in text.lower() for kw in ['from', 'after', 'since', 'starting']):
+            return dates_found[0], None
+        elif any(kw in text.lower() for kw in ['until', 'to', 'before', 'ending']):
+            return None, dates_found[0]
+        return dates_found[0], dates_found[0]
+    return None, None
+
+def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
+    u_day_clean = str(u_day).strip()
+    u_win_clean = str(u_win).strip()
+    
+    # 1. Date range bounds
+    start_d, end_d = extract_date_range(f"{u_day_clean} {u_win_clean}")
+    if start_d and dt_obj < start_d:
+        return False
+    if end_d and dt_obj > end_d:
+        return False
+        
+    # 2. Explicit date check
+    explicit_date = parse_date_robust(u_day_clean)
+    if explicit_date:
+        return dt_obj == explicit_date
+        
+    # 3. Day-of-week matching
+    weekday_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    dt_day_name = weekday_names[dt_obj.weekday()]
+    dt_day_short = dt_day_name[:3]
+    
+    u_day_lower = u_day_clean.lower()
+    
+    if dt_day_name in u_day_lower or dt_day_short in u_day_lower:
+        return True
+        
+    if any(kw in u_day_lower for kw in ["all week", "everyday", "any day"]):
+        return True
+    if "weekend" in u_day_lower and dt_obj.weekday() in [5, 6]:
+        return True
+    if "weekday" in u_day_lower and dt_obj.weekday() in [0, 1, 2, 3, 4]:
+        return True
+        
+    return False
+
+def standardize_unavailability_df(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    
+    df = df.copy()
+    
+    emp_col = find_column(df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
+    day_col = find_column(df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
+    win_col = find_column(df, ["time window", "window", "time", "unavailability", "reason", "constraint", "time constraint", "notes", "details"], "Time Window")
+
+    weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    for idx, row in df.iterrows():
+        # 1. Clean Employee Name
+        emp_val = str(row.get(emp_col, "")).strip()
+        if emp_val and emp_val.lower() not in ["nan", "none", "nat", "null", ""]:
+            if emp_val.islower():
+                emp_val = emp_val.title()
+            df.at[idx, emp_col] = emp_val
+            
+        # 2. Clean & Standardize Day / Date Column
+        day_val = str(row.get(day_col, "")).strip()
+        if day_val and day_val.lower() not in ["nan", "none", "nat", "null", ""]:
+            dt = parse_date_robust(day_val)
+            if dt:
+                w_name = weekday_names[dt.weekday()]
+                date_formatted = dt.strftime('%d/%m/%Y')
+                if w_name.lower() not in day_val.lower():
+                    df.at[idx, day_col] = f"{w_name} ({date_formatted})"
+                else:
+                    df.at[idx, day_col] = day_val
+            else:
+                matched_w = [w for w in weekday_names if w.lower() == day_val.lower()]
+                if matched_w:
+                    df.at[idx, day_col] = matched_w[0]
+                    
+        # 3. Clean Time Window Column
+        win_val = str(row.get(win_col, "")).strip()
+        if not win_val or win_val.lower() in ["nan", "none", "nat", "null", ""]:
+            df.at[idx, win_col] = "All Day"
+            
+    return df
+
+def clean_win_display(win_str):
+    if not win_str or str(win_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
+        return "All Day"
+    cleaned = re.sub(r'\(From.*?\)', '', str(win_str), flags=re.IGNORECASE).strip()
+    if not cleaned or cleaned.lower() in ["nan", "none", "nat", "null", ""]:
+        return "All Day"
+    return cleaned
+
 if 'manual_employees' not in st.session_state:
     default_emp = pd.DataFrame([
         {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
@@ -994,127 +1115,6 @@ def render_employee_availability_manager(user_key):
                     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
                     st.success("Constraint deleted.")
                     st.rerun()
-
-import re
-
-def parse_date_robust(date_str):
-    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", ""]:
-        return None
-    date_str = str(date_str).strip()
-    try:
-        dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
-        if pd.notna(dt):
-            return dt.date()
-    except:
-        pass
-    return None
-
-def extract_date_range(text):
-    if not text or str(text).strip().lower() in ["nan", "none", "nat", ""]:
-        return None, None
-    text = str(text)
-    dates_found = []
-    date_matches = re.findall(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\b', text)
-    for m in date_matches:
-        d = parse_date_robust(m)
-        if d:
-            dates_found.append(d)
-    
-    if len(dates_found) >= 2:
-        return min(dates_found), max(dates_found)
-    elif len(dates_found) == 1:
-        if any(kw in text.lower() for kw in ['from', 'after', 'since', 'starting']):
-            return dates_found[0], None
-        elif any(kw in text.lower() for kw in ['until', 'to', 'before', 'ending']):
-            return None, dates_found[0]
-        return dates_found[0], dates_found[0]
-    return None, None
-
-def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
-    u_day_clean = str(u_day).strip()
-    u_win_clean = str(u_win).strip()
-    
-    # 1. Date range bounds
-    start_d, end_d = extract_date_range(f"{u_day_clean} {u_win_clean}")
-    if start_d and dt_obj < start_d:
-        return False
-    if end_d and dt_obj > end_d:
-        return False
-        
-    # 2. Explicit date check
-    explicit_date = parse_date_robust(u_day_clean)
-    if explicit_date:
-        return dt_obj == explicit_date
-        
-    # 3. Day-of-week matching
-    weekday_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    dt_day_name = weekday_names[dt_obj.weekday()]
-    dt_day_short = dt_day_name[:3]
-    
-    u_day_lower = u_day_clean.lower()
-    
-    if dt_day_name in u_day_lower or dt_day_short in u_day_lower:
-        return True
-        
-    if any(kw in u_day_lower for kw in ["all week", "everyday", "any day"]):
-        return True
-    if "weekend" in u_day_lower and dt_obj.weekday() in [5, 6]:
-        return True
-    if "weekday" in u_day_lower and dt_obj.weekday() in [0, 1, 2, 3, 4]:
-        return True
-        
-    return False
-
-def standardize_unavailability_df(df):
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        return df
-    
-    df = df.copy()
-    
-    emp_col = find_column(df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
-    day_col = find_column(df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
-    win_col = find_column(df, ["time window", "window", "time", "unavailability", "reason", "constraint", "time constraint", "notes", "details"], "Time Window")
-
-    weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-    for idx, row in df.iterrows():
-        # 1. Clean Employee Name
-        emp_val = str(row.get(emp_col, "")).strip()
-        if emp_val and emp_val.lower() not in ["nan", "none", "nat", "null", ""]:
-            if emp_val.islower():
-                emp_val = emp_val.title()
-            df.at[idx, emp_col] = emp_val
-            
-        # 2. Clean & Standardize Day / Date Column
-        day_val = str(row.get(day_col, "")).strip()
-        if day_val and day_val.lower() not in ["nan", "none", "nat", "null", ""]:
-            dt = parse_date_robust(day_val)
-            if dt:
-                w_name = weekday_names[dt.weekday()]
-                date_formatted = dt.strftime('%d/%m/%Y')
-                if w_name.lower() not in day_val.lower():
-                    df.at[idx, day_col] = f"{w_name} ({date_formatted})"
-                else:
-                    df.at[idx, day_col] = day_val
-            else:
-                matched_w = [w for w in weekday_names if w.lower() == day_val.lower()]
-                if matched_w:
-                    df.at[idx, day_col] = matched_w[0]
-                    
-        # 3. Clean Time Window Column
-        win_val = str(row.get(win_col, "")).strip()
-        if not win_val or win_val.lower() in ["nan", "none", "nat", "null", ""]:
-            df.at[idx, win_col] = "All Day"
-            
-    return df
-
-def clean_win_display(win_str):
-    if not win_str or str(win_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
-        return "All Day"
-    cleaned = re.sub(r'\(From.*?\)', '', str(win_str), flags=re.IGNORECASE).strip()
-    if not cleaned or cleaned.lower() in ["nan", "none", "nat", "null", ""]:
-        return "All Day"
-    return cleaned
 
 # Helper function to render Visual Monthly Calendar Grid with Color-Coded Event Badges for Manager
 def render_team_monthly_calendar_grid():
