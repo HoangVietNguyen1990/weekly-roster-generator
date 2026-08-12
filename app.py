@@ -873,6 +873,44 @@ def cleanup_duplicate_employee_columns(df):
     res_df = pd.DataFrame(new_rows, columns=["NAME", "DOB", "Commencing Date", "status", "position"])
     return res_df
 
+def sync_user_profiles_to_employees(emp_df):
+    if emp_df is None:
+        emp_df = pd.DataFrame(columns=["NAME", "DOB", "Commencing Date", "status", "position"])
+    
+    emp_df = cleanup_duplicate_employee_columns(emp_df)
+    
+    profiles = load_user_profiles()
+    existing_names = [str(n).strip().lower() for n in emp_df["NAME"].tolist() if pd.notna(n)]
+    
+    new_rows = []
+    for u_key, u_data in profiles.items():
+        if u_data.get("role") == "Employee":
+            emp_name = u_data.get("employee_name", u_key).strip()
+            if emp_name and emp_name.lower() not in existing_names:
+                prof = u_data.get("profile", {})
+                comm_date = prof.get("commencement_date", datetime.now().strftime("%d/%m/%Y"))
+                try:
+                    dt = pd.to_datetime(comm_date, dayfirst=True, errors='coerce')
+                    if pd.notna(dt):
+                        comm_date = dt.strftime('%d/%m/%Y')
+                except:
+                    pass
+                new_rows.append({
+                    "NAME": emp_name,
+                    "DOB": prof.get("dob", ""),
+                    "Commencing Date": comm_date,
+                    "status": str(prof.get("classification", "casual")).lower(),
+                    "position": str(prof.get("employment_level", "Service Staff"))
+                })
+                existing_names.append(emp_name.lower())
+                
+    if new_rows:
+        combined = pd.concat([emp_df, pd.DataFrame(new_rows)], ignore_index=True)
+        emp_df = cleanup_duplicate_employee_columns(combined)
+        save_persisted_df(emp_df, "employees.csv")
+        
+    return emp_df
+
 def standardize_unavailability_df(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return df
@@ -934,7 +972,7 @@ if 'manual_employees' not in st.session_state:
         {"Name": "Aroha", "Role": "Senior Team Member", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
         {"Name": "Robert", "Role": "Senior Team Member", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
     ])
-    st.session_state.manual_employees = cleanup_duplicate_employee_columns(load_persisted_df("employees.csv", default_emp))
+    st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
 if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
     default_unavail = pd.DataFrame([
@@ -1767,8 +1805,11 @@ if is_manager:
                     else:
                         combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
                         st.session_state.manual_employees = cleanup_duplicate_employee_columns(combined)
+                    st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
                     st.session_state.last_emp_file = file_key
                     save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                    if "edit_employees" in st.session_state:
+                        del st.session_state["edit_employees"]
                     st.rerun()
                     
         st.markdown("""
@@ -1777,7 +1818,7 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
         if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
-            st.session_state.manual_employees = cleanup_duplicate_employee_columns(st.session_state.manual_employees)
+            st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
         employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
         if employees_df is not None and not employees_df.empty:
             st.session_state.manual_employees = cleanup_duplicate_employee_columns(employees_df)
@@ -1821,28 +1862,11 @@ if is_manager:
                         }
                         save_user_profiles(user_profiles)
 
-                        emp_df_curr = st.session_state.manual_employees.copy()
-                        emp_df_curr = cleanup_duplicate_employee_columns(emp_df_curr)
-
-                        name_c = find_column(emp_df_curr, ["name", "employee", "staff"], "Name")
-                        role_c = find_column(emp_df_curr, ["role", "position", "employment level", "title"], "Role")
-                        age_c = find_column(emp_df_curr, ["age", "years"], "Age")
-                        type_c = find_column(emp_df_curr, ["employment type", "status", "type", "classification"], "Employment Type")
-                        start_c = find_column(emp_df_curr, ["start date", "commence date", "commencement date", "start"], "Start Date")
-
-                        new_row = {}
-                        for col in emp_df_curr.columns:
-                            new_row[col] = ""
-
-                        new_row[name_c if name_c else "Name"] = new_name
-                        new_row[role_c if role_c else "Role"] = new_role_level
-                        new_row[age_c if age_c else "Age"] = str(new_age)
-                        new_row[type_c if type_c else "Employment Type"] = new_emp_type
-                        new_row[start_c if start_c else "Start Date"] = datetime.now().strftime("%Y-%m-%d")
-
-                        combined_emp = pd.concat([emp_df_curr, pd.DataFrame([new_row])], ignore_index=True)
-                        st.session_state.manual_employees = cleanup_duplicate_employee_columns(combined_emp)
+                        st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
                         save_persisted_df(st.session_state.manual_employees, "employees.csv")
+
+                        if "edit_employees" in st.session_state:
+                            del st.session_state["edit_employees"]
 
                         st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
                         st.rerun()
