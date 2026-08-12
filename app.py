@@ -825,66 +825,53 @@ def cleanup_duplicate_employee_columns(df):
     
     df = df.copy()
     
-    # 1. Drop 'Age' column completely as requested
-    age_cols = [c for c in df.columns if str(c).strip().lower() in ["age", "years"]]
-    if age_cols:
-        df.drop(columns=age_cols, errors='ignore', inplace=True)
-
-    # 2. Canonical mapping concepts to user's exact requested column names:
-    # NAME, DOB, Commencing Date, status, position
-    concept_mappings = [
-        ("NAME", ["name", "employee", "staff", "staff name", "employee name"]),
-        ("DOB", ["dob", "date of birth", "birth date"]),
-        ("Commencing Date", ["commencing date", "commence date", "commencement date", "start date", "started", "start"]),
-        ("status", ["status", "employment type", "type", "classification", "employmenttype"]),
-        ("position", ["position", "role", "employment level", "title", "job"])
-    ]
+    concept_mappings = {
+        "NAME": ["name", "employee", "staff", "staff name", "employee name"],
+        "DOB": ["dob", "date of birth", "birth date"],
+        "Commencing Date": ["commencing date", "commence date", "commencement date", "start date", "started", "start"],
+        "status": ["status", "employment type", "type", "classification", "employmenttype"],
+        "position": ["position", "role", "employment level", "title", "job"]
+    }
     
-    cols_to_drop = []
-    
-    for canonical_name, candidates in concept_mappings:
-        matching_cols = []
+    matched_cols = {}
+    for canonical, candidates in concept_mappings.items():
+        matched_cols[canonical] = []
         for col in df.columns:
-            col_str = str(col).strip().lower()
-            if col_str in [cand.lower() for cand in candidates]:
-                matching_cols.append(col)
+            if str(col).strip().lower() in [cand.lower() for cand in candidates]:
+                matched_cols[canonical].append(col)
                 
-        if len(matching_cols) > 1:
-            primary_col = matching_cols[0]
-            for sec_col in matching_cols[1:]:
-                for idx in df.index:
-                    prim_val = str(df.at[idx, primary_col]).strip() if pd.notna(df.at[idx, primary_col]) else ""
-                    sec_val = str(df.at[idx, sec_col]).strip() if pd.notna(df.at[idx, sec_col]) else ""
-                    if (not prim_val or prim_val.lower() in ["none", "nan", "nat", ""]) and sec_val and sec_val.lower() not in ["none", "nan", "nat", ""]:
-                        df.at[idx, primary_col] = sec_val
-                cols_to_drop.append(sec_col)
-            df.rename(columns={primary_col: canonical_name}, inplace=True)
-        elif len(matching_cols) == 1:
-            df.rename(columns={matching_cols[0]: canonical_name}, inplace=True)
+    new_rows = []
+    for idx in df.index:
+        row_dict = {}
+        for canonical, source_cols in matched_cols.items():
+            val = ""
+            for sc in source_cols:
+                v = str(df.at[idx, sc]).strip() if pd.notna(df.at[idx, sc]) else ""
+                if v and v.lower() not in ["none", "nan", "nat", "null", ""]:
+                    val = v
+                    break
+            row_dict[canonical] = val
             
-    cols_to_drop = list(set(cols_to_drop))
-    df = df.drop(columns=[c for c in cols_to_drop if c in df.columns], errors='ignore')
-    df = df.loc[:, ~df.columns.duplicated()]
+        if row_dict["DOB"]:
+            try:
+                dt = pd.to_datetime(row_dict["DOB"], dayfirst=True, errors='coerce')
+                if pd.notna(dt):
+                    row_dict["DOB"] = dt.strftime('%d/%m/%Y')
+            except:
+                pass
+                
+        if row_dict["Commencing Date"]:
+            try:
+                dt = pd.to_datetime(row_dict["Commencing Date"], dayfirst=True, errors='coerce')
+                if pd.notna(dt):
+                    row_dict["Commencing Date"] = dt.strftime('%d/%m/%Y')
+            except:
+                pass
 
-    # Clean DOB timestamp strings (strip 00:00:00 timestamp)
-    dob_c = find_column(df, ["dob", "date of birth", "birth date"])
-    if dob_c and dob_c in df.columns:
-        for idx in df.index:
-            dob_val = str(df.at[idx, dob_c]).strip()
-            if dob_val and dob_val.lower() not in ["none", "nan", "nat", "null", ""]:
-                try:
-                    dt = pd.to_datetime(dob_val, dayfirst=True, errors='coerce')
-                    if pd.notna(dt):
-                        df.at[idx, dob_c] = dt.strftime('%d/%m/%Y')
-                except:
-                    pass
+        new_rows.append(row_dict)
 
-    # Ensure column order matches user preference: NAME, DOB, Commencing Date, status, position
-    desired_order = ["NAME", "DOB", "Commencing Date", "status", "position"]
-    ordered_cols = [c for c in desired_order if c in df.columns] + [c for c in df.columns if c not in desired_order]
-    df = df[ordered_cols]
-
-    return df
+    res_df = pd.DataFrame(new_rows, columns=["NAME", "DOB", "Commencing Date", "status", "position"])
+    return res_df
 
 def standardize_unavailability_df(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
