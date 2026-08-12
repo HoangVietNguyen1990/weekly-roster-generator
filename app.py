@@ -370,11 +370,28 @@ st.markdown("""
     .stTextArea textarea {
         background-color: #0c2b25 !important;
         color: #ffffff !important;
-        border: 1px solid #e5a93c !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border: 1.5px solid #e5a93c !important;
         font-weight: 700 !important;
         font-size: 1rem !important;
         opacity: 1 !important;
         border-radius: 8px !important;
+    }
+
+    /* ULTRA HIGH-CONTRAST PLACEHOLDER TEXT FOR ALL INPUT FIELDS */
+    input::placeholder,
+    textarea::placeholder,
+    div[data-baseweb="input"] input::placeholder,
+    div[data-baseweb="base-input"] input::placeholder,
+    div[data-baseweb="textarea"] textarea::placeholder,
+    .stTextInput input::placeholder,
+    .stNumberInput input::placeholder,
+    .stDateInput input::placeholder,
+    .stTextArea textarea::placeholder {
+        color: #f7d594 !important;
+        -webkit-text-fill-color: #f7d594 !important;
+        opacity: 0.95 !important;
+        font-weight: 600 !important;
     }
 
     /* DROPDOWN OPTIONS & MENU LIST CONTRAST */
