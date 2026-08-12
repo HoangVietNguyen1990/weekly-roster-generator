@@ -982,6 +982,82 @@ def render_employee_availability_manager(user_key):
                     st.success("Constraint deleted.")
                     st.rerun()
 
+import re
+
+def parse_date_robust(date_str):
+    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", ""]:
+        return None
+    date_str = str(date_str).strip()
+    try:
+        dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt.date()
+    except:
+        pass
+    return None
+
+def extract_date_range(text):
+    if not text or str(text).strip().lower() in ["nan", "none", "nat", ""]:
+        return None, None
+    text = str(text)
+    dates_found = []
+    date_matches = re.findall(r'\b\d{1,4}[-/\.]\d{1,2}[-/\.]\d{2,4}\b', text)
+    for m in date_matches:
+        d = parse_date_robust(m)
+        if d:
+            dates_found.append(d)
+    
+    if len(dates_found) >= 2:
+        return min(dates_found), max(dates_found)
+    elif len(dates_found) == 1:
+        if any(kw in text.lower() for kw in ['from', 'after', 'since', 'starting']):
+            return dates_found[0], None
+        elif any(kw in text.lower() for kw in ['until', 'to', 'before', 'ending']):
+            return None, dates_found[0]
+        return dates_found[0], dates_found[0]
+    return None, None
+
+def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
+    u_day_clean = str(u_day).strip()
+    u_win_clean = str(u_win).strip()
+    
+    # 1. Date range bounds
+    start_d, end_d = extract_date_range(f"{u_day_clean} {u_win_clean}")
+    if start_d and dt_obj < start_d:
+        return False
+    if end_d and dt_obj > end_d:
+        return False
+        
+    # 2. Explicit date check
+    explicit_date = parse_date_robust(u_day_clean)
+    if explicit_date:
+        return dt_obj == explicit_date
+        
+    # 3. Day-of-week matching
+    weekday_names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    dt_day_name = weekday_names[dt_obj.weekday()]
+    dt_day_short = dt_day_name[:3]
+    
+    u_day_lower = u_day_clean.lower()
+    
+    if dt_day_name in u_day_lower or dt_day_short in u_day_lower:
+        return True
+        
+    if any(kw in u_day_lower for kw in ["all week", "everyday", "any day"]):
+        return True
+    if "weekend" in u_day_lower and dt_obj.weekday() in [5, 6]:
+        return True
+    if "weekday" in u_day_lower and dt_obj.weekday() in [0, 1, 2, 3, 4]:
+        return True
+        
+    return False
+
+def clean_win_display(win_str):
+    if not win_str:
+        return "Unavailable"
+    cleaned = re.sub(r'\(From.*?\)', '', str(win_str), flags=re.IGNORECASE).strip()
+    return cleaned if cleaned else str(win_str)
+
 # Helper function to render Visual Monthly Calendar Grid with Color-Coded Event Badges for Manager
 def render_team_monthly_calendar_grid():
     import calendar
@@ -1039,9 +1115,9 @@ def render_team_monthly_calendar_grid():
         st.session_state.manual_unavailability = unavail_df
         save_persisted_df(unavail_df, "unavailability.csv")
 
-    emp_col = find_column(unavail_df, ["employee", "name", "staff", "user"], "Employee")
-    day_col = find_column(unavail_df, ["day", "date", "weekday"], "Day")
-    win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability", "reason", "constraint"], "Time Window")
+    emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
+    day_col = find_column(unavail_df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
+    win_col = find_column(unavail_df, ["time window", "window", "time", "unavailability", "reason", "constraint", "time constraint", "notes", "details"], "Time Window")
 
     # Positional fallback if named column matching is empty
     if unavail_df is not None and hasattr(unavail_df, "columns") and len(unavail_df.columns) > 0:
@@ -1063,9 +1139,6 @@ def render_team_monthly_calendar_grid():
                 clean_rows.append({emp_col: e, day_col: d, win_col: w})
                 
     if not clean_rows:
-        unavail_df = default_unavail.copy()
-        st.session_state.manual_unavailability = unavail_df
-        save_persisted_df(unavail_df, "unavailability.csv")
         clean_rows = default_unavail.to_dict('records')
         emp_col = "Employee"
         day_col = "Day"
@@ -1073,8 +1146,17 @@ def render_team_monthly_calendar_grid():
         
     clean_unavail_df = pd.DataFrame(clean_rows)
 
-    weekday_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    
+    # Build name_map for matching employee names
+    emp_df = st.session_state.get("manual_employees", None)
+    name_map = {}
+    if emp_df is not None and hasattr(emp_df, "columns") and len(emp_df.columns) > 0:
+        name_c = find_column(emp_df, ["name", "employee", "staff"])
+        if name_c and name_c in emp_df.columns:
+            for n in emp_df[name_c].dropna():
+                n_str = str(n).strip()
+                if n_str and n_str.lower() not in ["nan", "none", ""]:
+                    name_map[n_str.lower()] = n_str
+
     for week in month_days:
         week_cols = st.columns(7)
         for i, day_num in enumerate(week):
@@ -1083,7 +1165,6 @@ def render_team_monthly_calendar_grid():
                     st.markdown('<div style="min-height: 105px; background: rgba(255,255,255,0.02); border-radius: 8px; margin-top: 4px;"></div>', unsafe_allow_html=True)
                 else:
                     dt_obj = date(sel_year, sel_month, day_num)
-                    day_name = weekday_names[dt_obj.weekday()]
                     
                     chips_html = []
                     
@@ -1093,14 +1174,16 @@ def render_team_monthly_calendar_grid():
                         u_day = str(urow.get(day_col, "")).strip()
                         u_win = str(urow.get(win_col, "")).strip()
                         
-                        # Match day name (e.g. 'Monday', 'Mon', '🔴 Monday')
-                        if u_emp and u_day and (day_name.lower()[:3] in u_day.lower()):
-                            display_name = u_emp
-                            win_disp = u_win if u_win else "Unavailable"
-                            if "all day" in win_disp.lower():
-                                chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🔴 {display_name} (All Day)</div>')
+                        if u_emp and u_day and is_unavail_applicable_to_date(dt_obj, u_day, u_win):
+                            matched = find_matching_employee(u_emp, name_map) if name_map else u_emp
+                            display_name = matched if matched else u_emp
+                            badge_win = clean_win_display(u_win)
+                            tooltip_win = u_win if u_win else "Unavailable"
+                            
+                            if "all day" in tooltip_win.lower():
+                                chips_html.append(f'<div style="background-color: #e53e3e; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{display_name}: {tooltip_win}">🔴 {display_name} ({badge_win})</div>')
                             else:
-                                chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{u_emp}: {win_disp}">🟨 {display_name} ({win_disp})</div>')
+                                chips_html.append(f'<div style="background-color: #dd6b20; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{display_name}: {tooltip_win}">🟨 {display_name} ({badge_win})</div>')
                                     
                     chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
                     
@@ -1289,20 +1372,21 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                                 elizabeth_weekday_shifts += 1
 
     # 2. Check unavailability
-    unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff"])
-    unavail_day_col = find_column(unavailability, ["day", "date", "weekday"])
-    unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason", "time constraint", "constraint"])
+    unavail_name_col = find_column(unavailability, ["employee", "name", "employee name", "staff name", "staff", "user", "person"])
+    unavail_day_col = find_column(unavailability, ["day", "date", "weekday", "when", "day of week", "unavailable date"])
+    unavail_window_col = find_column(unavailability, ["time window", "window", "time", "unavailability", "reason", "constraint", "time constraint", "notes", "details"])
 
     unavail_map = {}
     if unavail_name_col and unavail_day_col and unavail_window_col:
         for _, un_row in unavailability.iterrows():
-            raw_unavail_name = str(un_row.get(unavail_name_col, "")).strip().lower()
-            unavail_day = str(un_row.get(unavail_day_col, "")).strip().lower()
+            raw_unavail_name = str(un_row.get(unavail_name_col, "")).strip()
+            unavail_day = str(un_row.get(unavail_day_col, "")).strip()
             window = str(un_row.get(unavail_window_col, "All Day")).strip()
             matched_name = find_matching_employee(raw_unavail_name, name_map)
             if matched_name and unavail_day:
-                for day in days_of_week:
-                    if unavail_day == day.lower() or unavail_day == day.lower()[:3]:
+                for idx, day in enumerate(days_of_week):
+                    day_date = start_dt + timedelta(days=idx)
+                    if is_unavail_applicable_to_date(day_date, unavail_day, window):
                         key = (matched_name.lower(), day.lower())
                         if key not in unavail_map:
                             unavail_map[key] = []
@@ -1560,6 +1644,7 @@ if is_manager:
                         st.session_state.manual_employees = combined
                     st.session_state.last_emp_file = file_key
                     save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                    st.rerun()
                     
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
@@ -1624,10 +1709,6 @@ if is_manager:
                 st.success("Reset data!")
                 st.rerun()
         
-        # Bakery Team Monthly Calendar & Unavailability Grid
-        render_team_monthly_calendar_grid()
-        
-        st.markdown("<br>", unsafe_allow_html=True)
         unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
         upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
         
@@ -1643,7 +1724,11 @@ if is_manager:
                         st.session_state.manual_unavailability = combined
                     st.session_state.last_unavail_file = file_key
                     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                    st.rerun()
                     
+        # Bakery Team Monthly Calendar & Unavailability Grid
+        render_team_monthly_calendar_grid()
+        
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
             🚫 Staff Weekly Unavailability Constraints
@@ -1673,6 +1758,7 @@ if is_manager:
                         st.session_state.manual_requirements = combined
                     st.session_state.last_req_file = file_key
                     save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                    st.rerun()
                     
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
@@ -1701,6 +1787,7 @@ if is_manager:
                         st.session_state.manual_fixed = combined
                     st.session_state.last_fixed_file = file_key
                     save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                    st.rerun()
                     
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
