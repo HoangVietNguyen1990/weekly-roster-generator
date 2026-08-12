@@ -1891,15 +1891,47 @@ if is_manager:
             if selected_user_key:
                 render_confidential_profile_form(selected_user_key, is_admin=True)
                 
-                with st.expander(f"🔑 Reset Password for {emp_options[selected_user_key]}"):
-                    new_pw = st.text_input("New Password", type="password", key=f"tab_reset_pw_{selected_user_key}")
-                    if st.button("Update Employee Password", key=f"tab_btn_reset_pw_{selected_user_key}"):
-                        if new_pw.strip():
-                            user_profiles[selected_user_key]["password"] = new_pw.strip()
-                            save_user_profiles(user_profiles)
-                            st.success(f"✅ Password for {emp_options[selected_user_key]} updated successfully!")
-                        else:
-                            st.error("Password cannot be empty.")
+                c_pw, c_del = st.columns(2)
+                with c_pw:
+                    with st.expander(f"🔑 Reset Password for {emp_options[selected_user_key]}"):
+                        new_pw = st.text_input("New Password", type="password", key=f"tab_reset_pw_{selected_user_key}")
+                        if st.button("Update Employee Password", key=f"tab_btn_reset_pw_{selected_user_key}"):
+                            if new_pw.strip():
+                                user_profiles[selected_user_key]["password"] = new_pw.strip()
+                                save_user_profiles(user_profiles)
+                                st.success(f"✅ Password for {emp_options[selected_user_key]} updated successfully!")
+                            else:
+                                st.error("Password cannot be empty.")
+
+                with c_del:
+                    with st.expander(f"🗑️ Delete Account for {emp_options[selected_user_key]}"):
+                        st.warning(f"⚠️ Deleting this account will permanently remove **{emp_options[selected_user_key]}**'s login credentials, confidential profile, and roster records.")
+                        confirm_del = st.checkbox(f"I understand, delete account for {emp_options[selected_user_key]}", key=f"chk_del_{selected_user_key}")
+                        if st.button(f"🚨 Permanently Delete {emp_options[selected_user_key]}", key=f"btn_del_emp_{selected_user_key}"):
+                            if confirm_del:
+                                target_name = emp_options[selected_user_key]
+                                # 1. Remove from user_profiles.json
+                                if selected_user_key in user_profiles:
+                                    del user_profiles[selected_user_key]
+                                    save_user_profiles(user_profiles)
+                                
+                                # 2. Remove from manual_employees table
+                                if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                                    emp_df = st.session_state.manual_employees.copy()
+                                    name_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
+                                    if name_col in emp_df.columns:
+                                        emp_df = emp_df[emp_df[name_col].astype(str).str.strip().str.lower() != target_name.strip().lower()].reset_index(drop=True)
+                                        st.session_state.manual_employees = emp_df
+                                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                                
+                                # 3. Clear widget cache
+                                if "edit_employees" in st.session_state:
+                                    del st.session_state["edit_employees"]
+                                    
+                                st.success(f"✅ Account for **{target_name}** has been permanently deleted.")
+                                st.rerun()
+                            else:
+                                st.error("Please check the confirmation box first.")
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
