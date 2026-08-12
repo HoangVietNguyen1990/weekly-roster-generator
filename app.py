@@ -873,10 +873,6 @@ def render_confidential_profile_form(user_key, is_admin=False):
             save_user_profiles(user_profiles)
             st.success("✅ Profile information updated and saved successfully!")
 
-    # Integrated Change Password Expander
-    st.markdown("<br>", unsafe_allow_html=True)
-    render_change_password_form(user_key, is_admin=is_admin)
-
 # Helper function for Employee Availability Management & Auto-Sync
 def render_employee_availability_manager(user_key):
     user_data = user_profiles.get(user_key, {})
