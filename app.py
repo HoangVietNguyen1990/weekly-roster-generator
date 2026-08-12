@@ -806,7 +806,47 @@ def is_unavail_applicable_to_date(dt_obj, u_day, u_win):
     if "weekday" in u_day_lower and dt_obj.weekday() in [0, 1, 2, 3, 4]:
         return True
         
-    return False
+def cleanup_duplicate_employee_columns(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    
+    df = df.copy()
+    
+    concept_mappings = [
+        ("Name", ["name", "employee", "staff", "staff name", "employee name"]),
+        ("Role", ["role", "position", "employment level", "title", "job"]),
+        ("Employment Type", ["employment type", "status", "type", "classification", "employmenttype"]),
+        ("Start Date", ["start date", "commence date", "commencement date", "started", "start"]),
+        ("Age", ["age", "years"]),
+        ("DOB", ["dob", "date of birth", "birth date"])
+    ]
+    
+    cols_to_drop = []
+    
+    for canonical_name, candidates in concept_mappings:
+        matching_cols = []
+        for col in df.columns:
+            col_str = str(col).strip().lower()
+            if col_str in [cand.lower() for cand in candidates]:
+                matching_cols.append(col)
+                
+        if len(matching_cols) > 1:
+            primary_col = matching_cols[0]
+            for sec_col in matching_cols[1:]:
+                for idx in df.index:
+                    prim_val = str(df.at[idx, primary_col]).strip() if pd.notna(df.at[idx, primary_col]) else ""
+                    sec_val = str(df.at[idx, sec_col]).strip() if pd.notna(df.at[idx, sec_col]) else ""
+                    if (not prim_val or prim_val.lower() in ["none", "nan", "nat", ""]) and sec_val and sec_val.lower() not in ["none", "nan", "nat", ""]:
+                        df.at[idx, primary_col] = sec_val
+                cols_to_drop.append(sec_col)
+            df.rename(columns={primary_col: canonical_name}, inplace=True)
+        elif len(matching_cols) == 1:
+            df.rename(columns={matching_cols[0]: canonical_name}, inplace=True)
+            
+    cols_to_drop = list(set(cols_to_drop))
+    df = df.drop(columns=[c for c in cols_to_drop if c in df.columns], errors='ignore')
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
 
 def standardize_unavailability_df(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
@@ -869,7 +909,7 @@ if 'manual_employees' not in st.session_state:
         {"Name": "Aroha", "Role": "Senior Team Member", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
         {"Name": "Robert", "Role": "Senior Team Member", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
     ])
-    st.session_state.manual_employees = load_persisted_df("employees.csv", default_emp)
+    st.session_state.manual_employees = cleanup_duplicate_employee_columns(load_persisted_df("employees.csv", default_emp))
 
 if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
     default_unavail = pd.DataFrame([
@@ -1696,11 +1736,12 @@ if is_manager:
             if st.session_state.get("last_emp_file") != file_key:
                 loaded = read_excel_robust(upload_emp)
                 if loaded is not None:
+                    loaded = cleanup_duplicate_employee_columns(loaded)
                     if emp_mode == "Replace current data":
                         st.session_state.manual_employees = loaded
                     else:
                         combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_employees = combined
+                        st.session_state.manual_employees = cleanup_duplicate_employee_columns(combined)
                     st.session_state.last_emp_file = file_key
                     save_persisted_df(st.session_state.manual_employees, "employees.csv")
                     st.rerun()
@@ -1710,9 +1751,12 @@ if is_manager:
             👥 Bakery Staff Members List (Editable Table)
         </div>
         """, unsafe_allow_html=True)
+        if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+            st.session_state.manual_employees = cleanup_duplicate_employee_columns(st.session_state.manual_employees)
         employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
-        st.session_state.manual_employees = employees_df
-        save_persisted_df(employees_df, "employees.csv")
+        if employees_df is not None and not employees_df.empty:
+            st.session_state.manual_employees = cleanup_duplicate_employee_columns(employees_df)
+            save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
         # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM ---
         with st.expander("➕ Add New Staff Account (Create Login & Roster Record)", expanded=False):
@@ -1753,14 +1797,26 @@ if is_manager:
                         save_user_profiles(user_profiles)
 
                         emp_df_curr = st.session_state.manual_employees.copy()
-                        new_row = {
-                            "Name": new_name,
-                            "Role": new_role_level,
-                            "Age": str(new_age),
-                            "Employment Type": new_emp_type,
-                            "Start Date": datetime.now().strftime("%Y-%m-%d")
-                        }
-                        st.session_state.manual_employees = pd.concat([emp_df_curr, pd.DataFrame([new_row])], ignore_index=True)
+                        emp_df_curr = cleanup_duplicate_employee_columns(emp_df_curr)
+
+                        name_c = find_column(emp_df_curr, ["name", "employee", "staff"], "Name")
+                        role_c = find_column(emp_df_curr, ["role", "position", "employment level", "title"], "Role")
+                        age_c = find_column(emp_df_curr, ["age", "years"], "Age")
+                        type_c = find_column(emp_df_curr, ["employment type", "status", "type", "classification"], "Employment Type")
+                        start_c = find_column(emp_df_curr, ["start date", "commence date", "commencement date", "start"], "Start Date")
+
+                        new_row = {}
+                        for col in emp_df_curr.columns:
+                            new_row[col] = ""
+
+                        new_row[name_c if name_c else "Name"] = new_name
+                        new_row[role_c if role_c else "Role"] = new_role_level
+                        new_row[age_c if age_c else "Age"] = str(new_age)
+                        new_row[type_c if type_c else "Employment Type"] = new_emp_type
+                        new_row[start_c if start_c else "Start Date"] = datetime.now().strftime("%Y-%m-%d")
+
+                        combined_emp = pd.concat([emp_df_curr, pd.DataFrame([new_row])], ignore_index=True)
+                        st.session_state.manual_employees = cleanup_duplicate_employee_columns(combined_emp)
                         save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
                         st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
