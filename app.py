@@ -39,6 +39,17 @@ st.markdown("""
         opacity: 1 !important;
     }
     
+    /* Code tag override for dark emerald/gold theme */
+    code, .stMarkdown code {
+        background-color: rgba(9, 38, 33, 0.9) !important;
+        color: #f7d594 !important;
+        border: 1px solid rgba(229, 169, 60, 0.4) !important;
+        border-radius: 6px !important;
+        padding: 2px 8px !important;
+        font-family: inherit !important;
+        font-weight: 700 !important;
+    }
+    
     /* Header Banner Styling - Ultra Standout Title */
     .header-style {
         background: linear-gradient(135deg, #ffffff 0%, #f7d594 40%, #e5a93c 100%);
@@ -2614,7 +2625,16 @@ if is_manager:
             
             archived_df = load_finalized_roster(selected_info["csv_filename"])
             if archived_df is not None and not archived_df.empty:
-                st.markdown(f"### 📅 Published Roster Schedule for: `{selected_label}` (Editable)")
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 14px 22px; border-radius: 12px 12px 0 0; border: 2px solid #e5a93c; border-bottom: none; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span style="font-size: 1.3rem;">📅</span>
+                        <span style="color: #ffffff !important; font-size: 1.15rem; font-weight: 800; letter-spacing: 0.3px;">Published Roster Schedule for:</span>
+                        <span style="color: #f7d594 !important; font-size: 1.1rem; font-weight: 700;">{selected_label}</span>
+                    </div>
+                    <span style="background: rgba(229, 169, 60, 0.2); color: #f7d594 !important; font-size: 0.78rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; border: 1px solid #e5a93c; letter-spacing: 0.3px;">✏️ Live & Editable</span>
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Live-editable dataframe for displayed roster
                 edited_archived_df = st.data_editor(archived_df, num_rows="dynamic", key=f"edit_home_roster_{selected_info['date_str']}")
