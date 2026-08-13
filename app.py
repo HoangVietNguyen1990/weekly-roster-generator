@@ -2553,33 +2553,41 @@ if is_manager:
             wages_summary = calculate_roster_wages(edited_final_df)
             
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.2rem; border: 2px solid #e5a93c; border-bottom: none;">
+            <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 2px solid #e5a93c; border-bottom: none;">
                 💰 Real-Time Wage, Tax & Super Summary
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("""
-            <div style="background: rgba(9, 32, 28, 0.6); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 20px; margin-bottom: 20px;">
-            """, unsafe_allow_html=True)
-            
-            w_c1, w_c2, w_c3, w_c4 = st.columns(4)
-            with w_c1:
-                st.metric("💵 Total Gross Payroll", f"${wages_summary['total_gross']:,.2f}")
-            with w_c2:
-                st.metric("🏛️ Est. PAYG Tax", f"${wages_summary['total_tax']:,.2f}")
-            with w_c3:
-                st.metric("👛 Total Net Take-Home", f"${wages_summary['total_net']:,.2f}")
-            with w_c4:
-                st.metric("🏦 Super (11.5% SG)", f"${wages_summary['total_super']:,.2f}")
-
-            st.markdown(f"⏱️ **Total Paid Hours:** {wages_summary['total_hours']} hrs &nbsp;|&nbsp; 📊 **Average Hourly Rate:** ${wages_summary['avg_hourly_rate']:.2f} / hr")
-            st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+            summary_cards_html = f"""
+            <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 18px;">
+                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                        <div style="color: #e5a93c; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">💵 Total Gross Payroll</div>
+                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_gross']:,.2f}</div>
+                    </div>
+                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏛️ Est. PAYG Tax</div>
+                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_tax']:,.2f}</div>
+                    </div>
+                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                        <div style="color: #76eec6; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">👛 Total Net Take-Home</div>
+                        <div style="color: #76eec6; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_net']:,.2f}</div>
+                    </div>
+                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (11.5% SG)</div>
+                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_super']:,.2f}</div>
+                    </div>
+                </div>
+                <div style="background: rgba(229, 169, 60, 0.12); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 8px; padding: 10px 16px; text-align: center; color: #ffffff; font-size: 1.05rem;">
+                    ⏱️ <b>Total Paid Hours:</b> <span style="color:#e5a93c; font-weight:800;">{wages_summary['total_hours']} hrs</span> &nbsp;&nbsp;|&nbsp;&nbsp; 📊 <b>Average Hourly Rate:</b> <span style="color:#e5a93c; font-weight:800;">${wages_summary['avg_hourly_rate']:.2f} / hr</span>
+                </div>
+            </div>
+            """
+            st.markdown(summary_cards_html, unsafe_allow_html=True)
             
             st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
             if not wages_summary["breakdown_df"].empty:
                 st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
-            
-            st.markdown("</div>", unsafe_allow_html=True)
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
