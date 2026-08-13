@@ -1096,6 +1096,38 @@ def calculate_roster_wages(edited_df):
         "breakdown_df": breakdown_df
     }
 
+def build_payroll_historical_trend():
+    past_rosters = list_finalized_rosters()
+    if not past_rosters:
+        return pd.DataFrame()
+    
+    records = []
+    for r in past_rosters:
+        df = load_finalized_roster(r["csv_filename"])
+        if df is not None and not df.empty:
+            w_sum = calculate_roster_wages(df)
+            try:
+                dt = datetime.strptime(r["date_str"], "%Y-%m-%d").date()
+                week_label = dt.strftime("%d/%m/%Y")
+            except:
+                dt = datetime.min.date()
+                week_label = r["date_str"]
+                
+            records.append({
+                "date": dt,
+                "Roster Week": week_label,
+                "Gross Payroll ($)": w_sum["total_gross"],
+                "Est. PAYG Tax ($)": w_sum["total_tax"],
+                "Net Take-Home ($)": w_sum["total_net"],
+                "Super 12.5% ($)": w_sum["total_super"]
+            })
+            
+    if not records:
+        return pd.DataFrame()
+        
+    trend_df = pd.DataFrame(records).sort_values("date").drop(columns=["date"]).reset_index(drop=True)
+    return trend_df
+
 def find_column(df, candidates, default=""):
     if df is None or not hasattr(df, "columns") or len(df.columns) == 0:
         return default
@@ -2609,53 +2641,43 @@ if is_manager:
                     use_container_width=True
                 )
 
-        # --- SECTION: ARCHIVED & PAST FINALIZE ROSTERS ---
+        # --- SECTION: FINALIZED ROSTER COMMAND CENTER & HISTORICAL TRENDS ---
         st.markdown("<br><hr>", unsafe_allow_html=True)
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.2rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
-            📜 Archived & Past Finalized Rosters (Select to View On-Site, Upload & Download)
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
+            📜 Finalized Rosters Command Center (View, Live-Edit, Persist & Analyze)
         </div>
         """, unsafe_allow_html=True)
 
         past_rosters = list_finalized_rosters()
         if past_rosters:
             roster_options = {r["label"]: r for r in past_rosters}
-            selected_label = st.selectbox("Select a Finalized Roster Week to Display:", list(roster_options.keys()), key="select_past_roster")
+            selected_label = st.selectbox("Select Finalized Roster Week to Display & Edit:", list(roster_options.keys()), key="select_past_roster")
             selected_info = roster_options[selected_label]
             
             archived_df = load_finalized_roster(selected_info["csv_filename"])
             if archived_df is not None and not archived_df.empty:
-                st.markdown(f"**Viewing Schedule for: `{selected_label}`**")
+                st.markdown(f"### 📅 Finalized Schedule for: `{selected_label}` (Editable)")
                 
-                # Display on-site full width
-                st.dataframe(archived_df, use_container_width=True)
+                # Live-editable dataframe for displayed roster
+                edited_archived_df = st.data_editor(archived_df, num_rows="dynamic", key=f"edit_home_roster_{selected_info['date_str']}")
                 
-                # Financial summary below archived table
-                archived_wages = calculate_roster_wages(archived_df)
-                st.markdown(f"""
-                <div style="background: rgba(9, 32, 28, 0.7); border: 1px solid #e5a93c; padding: 16px; border-radius: 12px; margin-top: 10px; margin-bottom: 15px;">
-                    <div style="color: #e5a93c; font-weight: 800; font-size: 1.05rem; margin-bottom: 8px;">💰 Archived Payroll & Super Summary</div>
-                    <div style="color: #ffffff; font-size: 0.95rem; line-height: 1.6;">
-                        💵 <b>Gross Payroll:</b> ${archived_wages['total_gross']:,.2f} &nbsp;|&nbsp;
-                        🏛️ <b>Est. PAYG Tax:</b> ${archived_wages['total_tax']:,.2f} &nbsp;|&nbsp;
-                        👛 <b>Net Take-Home:</b> ${archived_wages['total_net']:,.2f} &nbsp;|&nbsp;
-                        🏦 <b>Super (12.5% SG):</b> ${archived_wages['total_super']:,.2f} &nbsp;|&nbsp;
-                        ⏱️ <b>Paid Hours:</b> {archived_wages['total_hours']} hrs
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Download & Delete action buttons for selected past roster
                 try:
                     dt = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
                 except:
                     dt = datetime.now().date()
                     
-                archived_excel_bytes = build_roster_excel_bytes(archived_df, dt)
-                past_filename = f"Team_Roster_{dt.strftime('%d.%m.%Y')}.xlsx"
+                # Action Buttons Row (Save Edits, Download, Delete)
+                col_act1, col_act2, col_act3 = st.columns([1.2, 1.2, 1])
+                with col_act1:
+                    if st.button("💾 SAVE CHANGES TO ROSTER", key=f"btn_save_home_{selected_info['date_str']}", use_container_width=True):
+                        save_finalized_roster(edited_archived_df, dt)
+                        st.success(f"🎉 Changes to roster for week {selected_info['date_str']} successfully saved!")
+                        st.rerun()
                 
-                col_dl, col_del = st.columns([2, 1])
-                with col_dl:
+                with col_act2:
+                    archived_excel_bytes = build_roster_excel_bytes(edited_archived_df, dt)
+                    past_filename = f"Team_Roster_{dt.strftime('%d.%m.%Y')}.xlsx"
                     st.download_button(
                         label=f"📥 Download {selected_info['date_str']} Roster (.XLSX)",
                         data=archived_excel_bytes,
@@ -2664,8 +2686,9 @@ if is_manager:
                         key=f"btn_dl_past_{selected_info['date_str']}",
                         use_container_width=True
                     )
-                with col_del:
-                    if st.button(f"🗑️ Delete This Finalized Roster", key=f"btn_del_past_{selected_info['date_str']}", use_container_width=True):
+                    
+                with col_act3:
+                    if st.button(f"🗑️ Delete Roster", key=f"btn_del_past_{selected_info['date_str']}", use_container_width=True):
                         if delete_finalized_roster(selected_info["date_str"]):
                             st.success(f"🗑️ Finalized Roster for {selected_info['date_str']} permanently deleted!")
                             st.rerun()
@@ -2678,16 +2701,70 @@ if is_manager:
                     if st.session_state.get("last_past_upload_key") != past_up_key:
                         df_p_up = read_excel_robust(up_past_file)
                         if df_p_up is not None and not df_p_up.empty:
-                            try:
-                                dt_up = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
-                            except:
-                                dt_up = datetime.now().date()
-                            save_finalized_roster(df_p_up, dt_up)
+                            save_finalized_roster(df_p_up, dt)
                             st.session_state.last_past_upload_key = past_up_key
                             st.success(f"🎉 Finalized roster for week {selected_info['date_str']} updated via file upload!")
                             st.rerun()
+
+                # Real-Time Wage, Tax & Super Breakdown for Displayed Roster
+                st.markdown("<br>", unsafe_allow_html=True)
+                wages_summary = calculate_roster_wages(edited_archived_df)
+                
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 2px solid #e5a93c; border-bottom: none;">
+                    💰 Real-Time Wage, Tax & Super Summary
+                </div>
+                """, unsafe_allow_html=True)
+                
+                summary_cards_html = f"""
+                <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 18px;">
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #e5a93c; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">💵 Total Gross Payroll</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_gross']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏛️ Est. PAYG Tax</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_tax']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #76eec6; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">👛 Total Net Take-Home</div>
+                            <div style="color: #76eec6; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_net']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (12.5% SG)</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_super']:,.2f}</div>
+                        </div>
+                    </div>
+                    <div style="background: rgba(229, 169, 60, 0.12); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 8px; padding: 10px 16px; text-align: center; color: #ffffff; font-size: 1.05rem;">
+                        ⏱️ <b>Total Paid Hours:</b> <span style="color:#e5a93c; font-weight:800;">{wages_summary['total_hours']} hrs</span> &nbsp;&nbsp;|&nbsp;&nbsp; 📊 <b>Average Hourly Rate:</b> <span style="color:#e5a93c; font-weight:800;">${wages_summary['avg_hourly_rate']:.2f} / hr</span>
+                    </div>
+                </div>
+                """
+                st.markdown(summary_cards_html, unsafe_allow_html=True)
+                
+                st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
+                if not wages_summary["breakdown_df"].empty:
+                    st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
         else:
-            st.info("No finalized rosters stored yet. Generate or upload a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to save it online.")
+            st.info("ℹ️ No finalized rosters stored yet. Generate or upload a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to display it here.")
+
+        # --- SECTION: HISTORICAL PROGRESS LINE GRAPH ---
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
+            📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        trend_df = build_payroll_historical_trend()
+        if not trend_df.empty and len(trend_df) >= 1:
+            st.markdown("Historical trend analysis of **Gross Payroll**, **Est. PAYG Tax**, **Net Take-Home**, and **Super (12.5% SG)** across all finalized weekly rosters:")
+            chart_df = trend_df.set_index("Roster Week")
+            st.line_chart(chart_df, use_container_width=True)
+            st.dataframe(trend_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("ℹ️ Finalize at least one weekly roster to view the historical progress line graph!")
             
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
