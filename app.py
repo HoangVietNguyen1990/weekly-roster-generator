@@ -2115,11 +2115,14 @@ if is_manager:
             ws2.column_dimensions["C"].width = 28
             ws2.column_dimensions["D"].width = 32
 
-            # Auto-adjust column widths for Sheet 1
-            for col in ws.columns:
-                max_len = max(len(str(cell.value or '')) for cell in col)
-                col_letter = openpyxl.utils.get_column_letter(col[0].column)
-                ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
+            # Auto-adjust column widths for Sheet 1 (based only on roster table cells, ignoring merged title & note cells)
+            for col_idx in range(1, len(edited_final_df.columns) + 1):
+                col_letter = openpyxl.utils.get_column_letter(col_idx)
+                max_len = max(len(str(ws.cell(row=r, column=col_idx).value or '')) for r in range(4, last_roster_row + 1))
+                if col_idx == 1:
+                    ws.column_dimensions[col_letter].width = max(max_len + 5, 20)
+                else:
+                    ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
 
             excel_buffer = io.BytesIO()
             wb.save(excel_buffer)
