@@ -932,6 +932,26 @@ def load_finalized_roster(csv_filename):
             return None
     return None
 
+def delete_finalized_roster(date_str):
+    if not os.path.exists(FINALIZED_DIR):
+        return False
+    deleted = False
+    date_label = date_str
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+        date_label = dt.strftime("%d.%m.%Y")
+    except:
+        pass
+        
+    for f in os.listdir(FINALIZED_DIR):
+        if date_str in f or date_label in f:
+            try:
+                os.remove(os.path.join(FINALIZED_DIR, f))
+                deleted = True
+            except:
+                pass
+    return deleted
+
 def find_column(df, candidates, default=""):
     if df is None or not hasattr(df, "columns") or len(df.columns) == 0:
         return default
@@ -2227,7 +2247,7 @@ if is_manager:
                 # Display on-site
                 st.dataframe(archived_df, use_container_width=True)
                 
-                # Download button for selected past roster
+                # Download & Delete action buttons for selected past roster
                 try:
                     dt = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
                 except:
@@ -2236,14 +2256,21 @@ if is_manager:
                 archived_excel_bytes = build_roster_excel_bytes(archived_df, dt)
                 past_filename = f"Team_Roster_{dt.strftime('%d.%m.%Y')}.xlsx"
                 
-                st.download_button(
-                    label=f"📥 Download {selected_info['date_str']} Roster (.XLSX)",
-                    data=archived_excel_bytes,
-                    file_name=past_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key=f"btn_dl_past_{selected_info['date_str']}",
-                    use_container_width=True
-                )
+                col_dl, col_del = st.columns([2, 1])
+                with col_dl:
+                    st.download_button(
+                        label=f"📥 Download {selected_info['date_str']} Roster (.XLSX)",
+                        data=archived_excel_bytes,
+                        file_name=past_filename,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key=f"btn_dl_past_{selected_info['date_str']}",
+                        use_container_width=True
+                    )
+                with col_del:
+                    if st.button(f"🗑️ Delete This Finalized Roster", key=f"btn_del_past_{selected_info['date_str']}", use_container_width=True):
+                        if delete_finalized_roster(selected_info["date_str"]):
+                            st.success(f"🗑️ Finalized Roster for {selected_info['date_str']} permanently deleted!")
+                            st.rerun()
         else:
             st.info("No finalized rosters stored yet. Generate a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to save it online.")
             
