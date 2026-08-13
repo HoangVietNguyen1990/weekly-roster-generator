@@ -952,6 +952,150 @@ def delete_finalized_roster(date_str):
                 pass
     return deleted
 
+def calculate_roster_wages(edited_df):
+    if edited_df is None or edited_df.empty:
+        return {
+            "total_gross": 0.0,
+            "total_tax": 0.0,
+            "total_net": 0.0,
+            "total_super": 0.0,
+            "total_hours": 0.0,
+            "avg_hourly_rate": 0.0,
+            "breakdown_df": pd.DataFrame()
+        }
+
+    emp_meta = {}
+    if "manual_employees" in st.session_state and isinstance(st.session_state.manual_employees, pd.DataFrame):
+        e_df = st.session_state.manual_employees
+        n_col = find_column(e_df, ["name", "employee", "staff"], "Name")
+        a_col = find_column(e_df, ["age"], "Age")
+        s_col = find_column(e_df, ["employment type", "status", "classification", "type"], "Employment Type")
+        
+        for _, r in e_df.iterrows():
+            name = str(r.get(n_col, "")).strip()
+            if name:
+                age_val = r.get(a_col, 21)
+                try:
+                    age = int(float(age_val))
+                except:
+                    age = 21
+                status = str(r.get(s_col, "Casual")).strip().lower()
+                emp_meta[name.lower()] = {"name": name, "age": age, "status": status}
+
+    for u_key, u_data in user_profiles.items():
+        emp_name = u_data.get("employee_name", u_key)
+        prof = u_data.get("profile", {})
+        status = str(prof.get("classification", "Casual")).strip().lower()
+        if emp_name.lower() not in emp_meta:
+            emp_meta[emp_name.lower()] = {"name": emp_name, "age": 21, "status": status}
+
+    emp_col = find_column(edited_df, ["employee", "name", "staff"], "Employee")
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    emp_summary = []
+
+    for _, row in edited_df.iterrows():
+        emp_raw_name = str(row.get(emp_col, "")).strip()
+        if not emp_raw_name or emp_raw_name.lower() in ["none", "nan", "total", "summary"]:
+            continue
+
+        meta = emp_meta.get(emp_raw_name.lower(), {"name": emp_raw_name, "age": 21, "status": "casual"})
+        age = meta["age"]
+        status_clean = meta["status"]
+        is_casual = "casual" in status_clean
+
+        base_adult_rate = 26.10
+        if "manager" in emp_raw_name.lower() or "owner" in status_clean:
+            base_adult_rate = 30.00
+        elif "senior" in status_clean:
+            base_adult_rate = 26.80
+
+        if age < 16:
+            j_scale = 0.45
+        elif age == 16:
+            j_scale = 0.50
+        elif age == 17:
+            j_scale = 0.60
+        elif age == 18:
+            j_scale = 0.70
+        elif age == 19:
+            j_scale = 0.80
+        elif age == 20:
+            j_scale = 0.90
+        else:
+            j_scale = 1.00
+
+        base_hourly = base_adult_rate * j_scale
+
+        total_emp_hours = 0.0
+        total_emp_gross = 0.0
+
+        for day in days_of_week:
+            if day in row:
+                shift_val = str(row[day]).strip()
+                parsed = parse_shift_range(shift_val)
+                if parsed:
+                    start_t, end_t, duration = parsed
+                    paid_hrs = duration - 0.5 if duration >= 5.0 else duration
+                    total_emp_hours += paid_hrs
+
+                    if day in ["Saturday"]:
+                        multiplier = 1.50 if is_casual else 1.25
+                    elif day in ["Sunday"]:
+                        multiplier = 1.75 if is_casual else 1.50
+                    else:
+                        if end_t > 18.0:
+                            multiplier = 1.50 if is_casual else 1.25
+                        else:
+                            multiplier = 1.25 if is_casual else 1.00
+
+                    total_emp_gross += paid_hrs * base_hourly * multiplier
+
+        g = total_emp_gross
+        if g <= 359:
+            tax = 0.0
+        elif g <= 865:
+            tax = (g - 359) * 0.19
+        elif g <= 2500:
+            tax = 96.14 + (g - 865) * 0.325
+        else:
+            tax = 627.51 + (g - 2500) * 0.37
+
+        net_pay = max(0.0, g - tax)
+        super_sg = g * 0.115
+
+        status_label = "Casual" if is_casual else ("Part-Time" if "part" in status_clean else "Full-Time")
+        if age < 21:
+            status_label += f" ({age}yo)"
+
+        emp_summary.append({
+            "Staff Member": emp_raw_name,
+            "Status": status_label,
+            "Paid Hours": round(total_emp_hours, 1),
+            "Gross Pay": round(total_emp_gross, 2),
+            "Est. Tax": round(tax, 2),
+            "Net Pay": round(net_pay, 2),
+            "Super (11.5%)": round(super_sg, 2)
+        })
+
+    breakdown_df = pd.DataFrame(emp_summary)
+    tot_gross = sum(x["Gross Pay"] for x in emp_summary)
+    tot_tax = sum(x["Est. Tax"] for x in emp_summary)
+    tot_net = sum(x["Net Pay"] for x in emp_summary)
+    tot_super = sum(x["Super (11.5%)"] for x in emp_summary)
+    tot_hrs = sum(x["Paid Hours"] for x in emp_summary)
+    avg_rate = (tot_gross / tot_hrs) if tot_hrs > 0 else 0.0
+
+    return {
+        "total_gross": round(tot_gross, 2),
+        "total_tax": round(tot_tax, 2),
+        "total_net": round(tot_net, 2),
+        "total_super": round(tot_super, 2),
+        "total_hours": round(tot_hrs, 1),
+        "avg_hourly_rate": round(avg_rate, 2),
+        "breakdown_df": breakdown_df
+    }
+
 def find_column(df, candidates, default=""):
     if df is None or not hasattr(df, "columns") or len(df.columns) == 0:
         return default
@@ -2394,13 +2538,48 @@ if is_manager:
 
         if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
-                📅 Generated Weekly Roster Schedule (Editable)
-            </div>
-            """, unsafe_allow_html=True)
             
-            edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
+            # Side-by-side layout: Roster Editor (Left 58%) | Real-time Wage & Super Summary (Right 42%)
+            col_rost, col_wages = st.columns([1.4, 1])
+            
+            with col_rost:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
+                    📅 Generated Weekly Roster Schedule (Editable)
+                </div>
+                """, unsafe_allow_html=True)
+                
+                edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
+
+            with col_wages:
+                wages_summary = calculate_roster_wages(edited_final_df)
+                
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 2px solid #e5a93c; border-bottom: none;">
+                    💰 Real-Time Wage, Tax & Super Summary
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("""
+                <div style="background: rgba(9, 32, 28, 0.6); border: 1px solid rgba(229, 169, 60, 0.4); border-top: none; border-radius: 0 0 12px 12px; padding: 15px;">
+                """, unsafe_allow_html=True)
+                
+                w_c1, w_c2 = st.columns(2)
+                with w_c1:
+                    st.metric("💵 Total Gross Payroll", f"${wages_summary['total_gross']:,.2f}")
+                    st.metric("🏛️ Est. PAYG Tax", f"${wages_summary['total_tax']:,.2f}")
+                with w_c2:
+                    st.metric("👛 Total Net Take-Home", f"${wages_summary['total_net']:,.2f}")
+                    st.metric("🏦 Super (11.5% SG)", f"${wages_summary['total_super']:,.2f}")
+
+                st.markdown(f"⏱️ **Paid Hours:** {wages_summary['total_hours']} hrs &nbsp;|&nbsp; 📊 **Avg Rate:** ${wages_summary['avg_hourly_rate']:.2f}/hr")
+                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+                
+                st.markdown("##### 👥 Staff Earnings & Super Breakdown")
+                if not wages_summary["breakdown_df"].empty:
+                    st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
+                
+                st.markdown("</div>", unsafe_allow_html=True)
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
@@ -2438,10 +2617,26 @@ if is_manager:
             
             archived_df = load_finalized_roster(selected_info["csv_filename"])
             if archived_df is not None and not archived_df.empty:
-                st.markdown(f"**Viewing Schedule for: `{selected_label}`**")
+                st.markdown(f"**Viewing Schedule & Payroll for: `{selected_label}`**")
                 
-                # Display on-site
-                st.dataframe(archived_df, use_container_width=True)
+                # Display on-site side by side with archived financial summary
+                col_a1, col_a2 = st.columns([1.4, 1])
+                with col_a1:
+                    st.dataframe(archived_df, use_container_width=True)
+                with col_a2:
+                    archived_wages = calculate_roster_wages(archived_df)
+                    st.markdown(f"""
+                    <div style="background: rgba(9, 32, 28, 0.7); border: 1px solid #e5a93c; padding: 14px; border-radius: 12px;">
+                        <div style="color: #e5a93c; font-weight: 800; font-size: 1.05rem; margin-bottom: 8px;">💰 Archived Payroll & Super Summary</div>
+                        <div style="color: #ffffff; font-size: 0.9rem; line-height: 1.6;">
+                            💵 <b>Gross Payroll:</b> ${archived_wages['total_gross']:,.2f}<br>
+                            🏛️ <b>Est. PAYG Tax:</b> ${archived_wages['total_tax']:,.2f}<br>
+                            👛 <b>Net Take-Home:</b> ${archived_wages['total_net']:,.2f}<br>
+                            🏦 <b>Super (11.5% SG):</b> ${archived_wages['total_super']:,.2f}<br>
+                            ⏱️ <b>Paid Hours:</b> {archived_wages['total_hours']} hrs
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                 
                 # Download & Delete action buttons for selected past roster
                 try:
