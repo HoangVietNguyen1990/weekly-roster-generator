@@ -549,14 +549,14 @@ def load_user_profiles():
     return profiles
 
 def get_active_user_profiles():
-    if st.session_state.get("is_demo", False) or st.session_state.get("logged_in_user", "").startswith("demo."):
+    if st.session_state.get("is_demo", False) or (st.session_state.get("logged_in_user") or "").startswith("demo."):
         if "demo_user_profiles" not in st.session_state:
             st.session_state.demo_user_profiles = copy.deepcopy(load_user_profiles())
         return st.session_state.demo_user_profiles
     return load_user_profiles()
 
 def save_user_profiles(profiles):
-    if st.session_state.get("is_demo", False) or st.session_state.get("logged_in_user", "").startswith("demo."):
+    if st.session_state.get("is_demo", False) or (st.session_state.get("logged_in_user") or "").startswith("demo."):
         st.session_state.demo_user_profiles = copy.deepcopy(profiles)
         st.toast("🧪 Sandbox Mode: Account profile updates held in memory only.", icon="🧪")
         return
