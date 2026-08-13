@@ -1600,13 +1600,21 @@ def sync_user_profiles_to_employees(emp_df):
     
     emp_df = cleanup_duplicate_employee_columns(emp_df)
     
+    # Exclude demo accounts from employee dataframe
+    if "NAME" in emp_df.columns:
+        emp_df = emp_df[~emp_df["NAME"].astype(str).str.lower().str.contains("demo")].reset_index(drop=True)
+    
     profiles = get_active_user_profiles()
     existing_names = [str(n).strip().lower() for n in emp_df["NAME"].tolist() if pd.notna(n)]
     
     new_rows = []
     for u_key, u_data in profiles.items():
+        if u_key.startswith("demo.") or "demo" in u_key.lower():
+            continue
         if u_data.get("role") == "Employee":
             emp_name = u_data.get("employee_name", u_key).strip()
+            if "demo" in emp_name.lower():
+                continue
             if emp_name and emp_name.lower() not in existing_names:
                 prof = u_data.get("profile", {})
                 comm_date = prof.get("commencement_date", datetime.now().strftime("%d/%m/%Y"))
@@ -2367,7 +2375,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     active_employees = []
     for _, row in employees.iterrows():
         raw_name = str(row.get(name_col, "")).strip() if name_col else ""
-        if not raw_name or raw_name.lower() in ["nan", ""]:
+        if not raw_name or raw_name.lower() in ["nan", ""] or "demo" in raw_name.lower():
             continue
             
         is_active = True
