@@ -531,13 +531,31 @@ def load_user_profiles():
             profiles = {}
             
     if not profiles or "admin" not in profiles:
-        profiles = DEFAULT_PROFILES.copy()
-        save_user_profiles(profiles)
-        
+        profiles = copy.deepcopy(DEFAULT_PROFILES)
+        if not st.session_state.get("is_demo", False):
+            try:
+                with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
+                    json.dump(profiles, f, indent=2)
+            except:
+                pass
+                
+    # Always ensure default demo accounts exist
+    for d_key, d_val in DEFAULT_PROFILES.items():
+        if d_key not in profiles:
+            profiles[d_key] = copy.deepcopy(d_val)
+            
     return profiles
 
+def get_active_user_profiles():
+    if st.session_state.get("is_demo", False) or st.session_state.get("logged_in_user", "").startswith("demo."):
+        if "demo_user_profiles" not in st.session_state:
+            st.session_state.demo_user_profiles = copy.deepcopy(load_user_profiles())
+        return st.session_state.demo_user_profiles
+    return load_user_profiles()
+
 def save_user_profiles(profiles):
-    if st.session_state.get("is_demo", False):
+    if st.session_state.get("is_demo", False) or st.session_state.get("logged_in_user", "").startswith("demo."):
+        st.session_state.demo_user_profiles = copy.deepcopy(profiles)
         st.toast("🧪 Sandbox Mode: Account profile updates held in memory only.", icon="🧪")
         return
     try:
@@ -1173,7 +1191,7 @@ if 'user_role' not in st.session_state:
 if 'is_demo' not in st.session_state:
     st.session_state.is_demo = False
 
-user_profiles = load_user_profiles()
+user_profiles = get_active_user_profiles()
 
 # LOGIN PAGE IF NOT AUTHENTICATED
 if not st.session_state.authenticated:
@@ -1367,11 +1385,14 @@ if role_title == "Manager":
                 else:
                     st.error(msg)
 
-if st.sidebar.button("🚪 Logout", key="btn_logout"):
+def logout_user():
+    for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
+        st.session_state.pop(k, None)
     st.session_state.authenticated = False
-    st.session_state.logged_in_user = None
-    st.session_state.user_role = None
     st.rerun()
+
+if st.sidebar.button("🚪 Logout", key="btn_logout"):
+    logout_user()
 
 st.sidebar.info("This application runs locally and optimizes staff rostering and confidential profile management.")
 
@@ -1390,10 +1411,7 @@ with col_head1:
 with col_head2:
     st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
     if st.button("🚪 Logout", key="btn_logout_header", use_container_width=True):
-        st.session_state.authenticated = False
-        st.session_state.logged_in_user = None
-        st.session_state.user_role = None
-        st.rerun()
+        logout_user()
 
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
@@ -1571,7 +1589,7 @@ def sync_user_profiles_to_employees(emp_df):
     
     emp_df = cleanup_duplicate_employee_columns(emp_df)
     
-    profiles = load_user_profiles()
+    profiles = get_active_user_profiles()
     existing_names = [str(n).strip().lower() for n in emp_df["NAME"].tolist() if pd.notna(n)]
     
     new_rows = []
