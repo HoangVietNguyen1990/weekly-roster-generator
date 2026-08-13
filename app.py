@@ -1062,7 +1062,7 @@ def calculate_roster_wages(edited_df):
             tax = 627.51 + (g - 2500) * 0.37
 
         net_pay = max(0.0, g - tax)
-        super_sg = g * 0.115
+        super_sg = g * 0.125
 
         status_label = "Casual" if is_casual else ("Part-Time" if "part" in status_clean else "Full-Time")
         if age < 21:
@@ -1075,14 +1075,14 @@ def calculate_roster_wages(edited_df):
             "Gross Pay": round(total_emp_gross, 2),
             "Est. Tax": round(tax, 2),
             "Net Pay": round(net_pay, 2),
-            "Super (11.5%)": round(super_sg, 2)
+            "Super (12.5%)": round(super_sg, 2)
         })
 
     breakdown_df = pd.DataFrame(emp_summary)
     tot_gross = sum(x["Gross Pay"] for x in emp_summary)
     tot_tax = sum(x["Est. Tax"] for x in emp_summary)
     tot_net = sum(x["Net Pay"] for x in emp_summary)
-    tot_super = sum(x["Super (11.5%)"] for x in emp_summary)
+    tot_super = sum(x["Super (12.5%)"] for x in emp_summary)
     tot_hrs = sum(x["Paid Hours"] for x in emp_summary)
     avg_rate = (tot_gross / tot_hrs) if tot_hrs > 0 else 0.0
 
@@ -2574,7 +2574,7 @@ if is_manager:
                         <div style="color: #76eec6; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_net']:,.2f}</div>
                     </div>
                     <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
-                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (11.5% SG)</div>
+                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (12.5% SG)</div>
                         <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary['total_super']:,.2f}</div>
                     </div>
                 </div>
@@ -2639,7 +2639,7 @@ if is_manager:
                         💵 <b>Gross Payroll:</b> ${archived_wages['total_gross']:,.2f} &nbsp;|&nbsp;
                         🏛️ <b>Est. PAYG Tax:</b> ${archived_wages['total_tax']:,.2f} &nbsp;|&nbsp;
                         👛 <b>Net Take-Home:</b> ${archived_wages['total_net']:,.2f} &nbsp;|&nbsp;
-                        🏦 <b>Super (11.5% SG):</b> ${archived_wages['total_super']:,.2f} &nbsp;|&nbsp;
+                        🏦 <b>Super (12.5% SG):</b> ${archived_wages['total_super']:,.2f} &nbsp;|&nbsp;
                         ⏱️ <b>Paid Hours:</b> {archived_wages['total_hours']} hrs
                     </div>
                 </div>
