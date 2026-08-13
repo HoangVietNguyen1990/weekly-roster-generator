@@ -1994,6 +1994,46 @@ if is_manager:
                 top=Side(style='thin', color='BFBFBF'),
                 bottom=Side(style='thin', color='BFBFBF')
             )
+
+            # Write roster data rows
+            row_start = 5
+            for r_idx, row_data in enumerate(edited_final_df.itertuples(index=False), start=row_start):
+                for c_idx, val in enumerate(row_data, start=1):
+                    c = ws.cell(row=r_idx, column=c_idx)
+                    val_str = "" if pd.isna(val) else str(val).strip()
+                    c.value = val_str
+                    c.alignment = Alignment(horizontal="center", vertical="center")
+                    c.border = thin_border
+                    if val_str.lower() in ["unavailable", " unavailable"]:
+                        c.fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+                        c.font = Font(name="Calibri", size=10, italic=True, color="C00000")
+                    elif val_str:
+                        if c_idx == 1:
+                            c.font = Font(name="Calibri", size=11, bold=True)
+                            c.alignment = Alignment(horizontal="left", vertical="center")
+                        else:
+                            c.font = Font(name="Calibri", size=10)
+
+            # Auto-adjust column widths
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or '')) for cell in col)
+                col_letter = openpyxl.utils.get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+
+            excel_buffer = io.BytesIO()
+            wb.save(excel_buffer)
+            excel_data = excel_buffer.getvalue()
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
+            st.download_button(
+                label="📥 EXPORT ROSTER TO EXCEL (.XLSX)",
+                data=excel_data,
+                file_name=file_name_out,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_export_excel",
+                use_container_width=True
+            )
             
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
