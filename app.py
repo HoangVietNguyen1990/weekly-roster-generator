@@ -1465,11 +1465,191 @@ if is_manager:
         "📌 Fixed Shifts"
     ])
 else:
-    # Employee sees 2 tabs: Personal Information & Availability Calendar
-    tab_my_info, tab_my_avail = st.tabs([
+    # Employee sees 3 tabs: Current Roster (1st), Personal Information (2nd), Availability (3rd)
+    tab_my_current_roster, tab_my_info, tab_my_avail = st.tabs([
+        "📅 Current Roster",
         "📋 Personal Information Form",
         "📅 My Availability & Constraints"
     ])
+
+def render_employee_current_roster_tab(user_key):
+    user_info = user_profiles.get(user_key, {})
+    emp_name = user_info.get("employee_name", user_key)
+    
+    today = datetime.now().date()
+    
+    past_rosters = list_finalized_rosters()
+    matched_roster = None
+    matched_start_date = None
+    
+    # Compare current date against roster week periods (Monday to Sunday)
+    for r in past_rosters:
+        try:
+            s_dt = datetime.strptime(r["date_str"], "%Y-%m-%d").date()
+            e_dt = s_dt + timedelta(days=6)
+            if s_dt <= today <= e_dt:
+                matched_roster = r
+                matched_start_date = s_dt
+                break
+        except:
+            pass
+            
+    # Fallback to most recent finalized roster if no exact match for current week
+    if not matched_roster and past_rosters:
+        matched_roster = past_rosters[0]
+        try:
+            matched_start_date = datetime.strptime(matched_roster["date_str"], "%Y-%m-%d").date()
+        except:
+            matched_start_date = today
+            
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 20px; border-radius: 16px; border: 2px solid #e5a93c; box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin-bottom: 20px;">
+        <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.6rem; font-weight: 800;">📅 Bakery Weekly Staff Roster</h2>
+        <p style="color: #ffffff !important; font-size: 0.95rem; margin-bottom: 0;">Welcome! View your scheduled shifts and General Retail Industry Award 2020 break entitlements below.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if matched_roster:
+        roster_df = load_finalized_roster(matched_roster["csv_filename"])
+        if roster_df is not None and not roster_df.empty:
+            end_date = matched_start_date + timedelta(days=6)
+            
+            # Header week badge
+            st.markdown(f"""
+            <div style="background: rgba(9, 32, 28, 0.6); padding: 10px 16px; border-radius: 10px; border-left: 4px solid #e5a93c; margin-bottom: 15px;">
+                <span style="color: #e5a93c; font-weight: 800; font-size: 1.05rem;">🗓️ Week Period:</span>
+                <span style="color: #ffffff; font-weight: 700; font-size: 1.05rem; margin-left: 8px;">Monday {matched_start_date.strftime('%d/%m/%Y')} — Sunday {end_date.strftime('%d/%m/%Y')}</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Personalized Employee Shift Callout Summary
+            emp_c = find_column(roster_df, ["employee", "name", "staff"], "Employee")
+            if emp_c in roster_df.columns:
+                matched_rows = roster_df[roster_df[emp_c].astype(str).str.strip().str.lower() == emp_name.strip().lower()]
+                if not matched_rows.empty:
+                    emp_row = matched_rows.iloc[0]
+                    shifts_list = []
+                    days_arr = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    for d in days_arr:
+                        if d in emp_row:
+                            val = str(emp_row[d]).strip()
+                            if val and val.lower() not in ["off", "unavailable", " unavailable", "none", "nan"]:
+                                shifts_list.append(f"<b>{d}:</b> {val}")
+                    
+                    if shifts_list:
+                        shifts_str = " &nbsp;|&nbsp; ".join(shifts_list)
+                        st.markdown(f"""
+                        <div style="background: rgba(229, 169, 60, 0.15); border: 1px solid #e5a93c; padding: 12px 18px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="color: #f7d594; font-weight: 800; font-size: 1.05rem;">👋 Hello {emp_name}, your shifts for this week:</div>
+                            <div style="color: #ffffff; font-size: 0.95rem; margin-top: 6px;">{shifts_str}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="background: rgba(229, 169, 60, 0.1); border: 1px solid rgba(229, 169, 60, 0.4); padding: 12px 18px; border-radius: 12px; margin-bottom: 20px;">
+                            <div style="color: #f7d594; font-weight: 700; font-size: 0.95rem;">👋 Hello {emp_name}, you have no shifts scheduled for this week.</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+            # Full Schedule Display
+            st.markdown("### 📋 Full Team Schedule")
+            st.dataframe(roster_df, use_container_width=True)
+            
+            # Download XLSX Button
+            excel_bytes = build_roster_excel_bytes(roster_df, matched_start_date)
+            dl_filename = f"Team_Roster_{matched_start_date.strftime('%d.%m.%Y')}.xlsx"
+            st.download_button(
+                label=f"📥 Download Roster for {matched_start_date.strftime('%d/%m/%Y')} (.XLSX)",
+                data=excel_bytes,
+                file_name=dl_filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_emp_dl_current_roster",
+                use_container_width=True
+            )
+
+            # Option to select other past weeks
+            if len(past_rosters) > 1:
+                st.markdown("<br><hr>", unsafe_allow_html=True)
+                st.markdown("**🔍 Select Other Roster Weeks to View:**")
+                roster_opts = {r["label"]: r for r in past_rosters}
+                sel_label = st.selectbox("View another week's schedule:", list(roster_opts.keys()), key="emp_select_other_roster")
+                if sel_label != matched_roster["label"]:
+                    sel_r = roster_opts[sel_label]
+                    other_df = load_finalized_roster(sel_r["csv_filename"])
+                    if other_df is not None:
+                        st.markdown(f"**Viewing Schedule for: `{sel_label}`**")
+                        st.dataframe(other_df, use_container_width=True)
+    else:
+        st.info("ℹ️ No finalized rosters have been published yet by management. Please check back soon!")
+
+    # --- GENERAL RETAIL INDUSTRY AWARD 2020 BREAK RULES SECTION ---
+    st.markdown("<br><hr>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 14px 20px; border-radius: 12px; border: 1px solid rgba(229, 169, 60, 0.4); margin-top: 15px; margin-bottom: 15px;">
+        <h3 style="color: #e5a93c !important; margin: 0; font-size: 1.25rem; font-weight: 800;">☕ General Retail Industry Award 2020 — Shift Break Entitlements</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col_b1, col_b2 = st.columns([1.5, 1])
+    with col_b1:
+        break_table_html = """
+        <table style="width:100%; border-collapse: collapse; margin-top: 5px; font-size: 0.9rem; color: #ffffff;">
+            <thead>
+                <tr style="background-color: #1F4E78; text-align: center; font-weight: bold; color: #ffffff;">
+                    <th style="padding: 8px; border: 1px solid #336699;">Shift Duration</th>
+                    <th style="padding: 8px; border: 1px solid #336699;">Paid Rest Break (10m)</th>
+                    <th style="padding: 8px; border: 1px solid #336699;">Unpaid Meal Break (30m)</th>
+                    <th style="padding: 8px; border: 1px solid #336699;">Total Entitlement</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="background-color: rgba(255,255,255,0.05); text-align: center;">
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">Less than 4 hours</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">No break</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">No break</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">No breaks required</td>
+                </tr>
+                <tr style="background-color: rgba(255,255,255,0.02); text-align: center;">
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">4 hrs up to 5 hrs</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">1 x 10 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">No break</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">10 min Paid</td>
+                </tr>
+                <tr style="background-color: rgba(255,255,255,0.05); text-align: center;">
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">5 hrs up to 7 hrs</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">1 x 10 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">1 x 30 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">10m Paid + 30m Unpaid</td>
+                </tr>
+                <tr style="background-color: rgba(255,255,255,0.02); text-align: center;">
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">7 hrs up to 10 hrs</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">2 x 10 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">1 x 30 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">20m Paid + 30m Unpaid</td>
+                </tr>
+                <tr style="background-color: rgba(255,255,255,0.05); text-align: center;">
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">10 hours or more</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">2 x 10 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">2 x 30 min</td>
+                    <td style="padding: 8px; border: 1px solid #2a5a50;">20m Paid + 60m Unpaid</td>
+                </tr>
+            </tbody>
+        </table>
+        """
+        st.markdown(break_table_html, unsafe_allow_html=True)
+        
+    with col_b2:
+        st.markdown("""
+        <div style="background: rgba(9, 32, 28, 0.6); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 12px; padding: 15px; height: 100%;">
+            <h4 style="color: #e5a93c !important; margin-top: 0;">📌 Key Shift Break Rules</h4>
+            <ul style="margin-bottom: 0; padding-left: 18px; font-size: 0.88rem; color: #ffffff !important;">
+                <li><b>Paid vs Unpaid:</b> Rest breaks (10 min) are paid by employer. Meal breaks (30 min) are unpaid.</li>
+                <li><b>Start & End Buffer:</b> No break may be taken during the first or last hour of work.</li>
+                <li><b>5-Hour Limit:</b> An unpaid meal break must be taken no later than after 5 hours of continuous work.</li>
+                <li><b>No Combining:</b> Rest breaks and meal breaks cannot be combined together.</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
 # Helper function to render Confidential Profile Form
 def render_confidential_profile_form(user_key, is_admin=False):
@@ -1805,8 +1985,10 @@ def render_team_monthly_calendar_grid():
                     </div>
                     """, unsafe_allow_html=True)
 
-# IF EMPLOYEE, RENDER 2 TABS (PERSONAL INFO & AVAILABILITY CALENDAR)
+# IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
 if not is_manager:
+    with tab_my_current_roster:
+        render_employee_current_roster_tab(st.session_state.logged_in_user)
     with tab_my_info:
         render_confidential_profile_form(st.session_state.logged_in_user)
     with tab_my_avail:
