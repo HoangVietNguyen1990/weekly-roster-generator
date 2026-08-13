@@ -2539,47 +2539,47 @@ if is_manager:
         if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
             st.markdown("<br>", unsafe_allow_html=True)
             
-            # Side-by-side layout: Roster Editor (Left 58%) | Real-time Wage & Super Summary (Right 42%)
-            col_rost, col_wages = st.columns([1.4, 1])
+            # 1. Full-Width Roster Editor Table
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
+                📅 Generated Weekly Roster Schedule (Editable)
+            </div>
+            """, unsafe_allow_html=True)
             
-            with col_rost:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
-                    📅 Generated Weekly Roster Schedule (Editable)
-                </div>
-                """, unsafe_allow_html=True)
-                
-                edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
+            edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
 
-            with col_wages:
-                wages_summary = calculate_roster_wages(edited_final_df)
-                
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 2px solid #e5a93c; border-bottom: none;">
-                    💰 Real-Time Wage, Tax & Super Summary
-                </div>
-                """, unsafe_allow_html=True)
-                
-                st.markdown("""
-                <div style="background: rgba(9, 32, 28, 0.6); border: 1px solid rgba(229, 169, 60, 0.4); border-top: none; border-radius: 0 0 12px 12px; padding: 15px;">
-                """, unsafe_allow_html=True)
-                
-                w_c1, w_c2 = st.columns(2)
-                with w_c1:
-                    st.metric("💵 Total Gross Payroll", f"${wages_summary['total_gross']:,.2f}")
-                    st.metric("🏛️ Est. PAYG Tax", f"${wages_summary['total_tax']:,.2f}")
-                with w_c2:
-                    st.metric("👛 Total Net Take-Home", f"${wages_summary['total_net']:,.2f}")
-                    st.metric("🏦 Super (11.5% SG)", f"${wages_summary['total_super']:,.2f}")
+            # 2. Full-Width Real-Time Wage, Tax & Super Breakdown (Placed UNDER the Roster Table)
+            st.markdown("<br>", unsafe_allow_html=True)
+            wages_summary = calculate_roster_wages(edited_final_df)
+            
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.2rem; border: 2px solid #e5a93c; border-bottom: none;">
+                💰 Real-Time Wage, Tax & Super Summary
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("""
+            <div style="background: rgba(9, 32, 28, 0.6); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 20px; margin-bottom: 20px;">
+            """, unsafe_allow_html=True)
+            
+            w_c1, w_c2, w_c3, w_c4 = st.columns(4)
+            with w_c1:
+                st.metric("💵 Total Gross Payroll", f"${wages_summary['total_gross']:,.2f}")
+            with w_c2:
+                st.metric("🏛️ Est. PAYG Tax", f"${wages_summary['total_tax']:,.2f}")
+            with w_c3:
+                st.metric("👛 Total Net Take-Home", f"${wages_summary['total_net']:,.2f}")
+            with w_c4:
+                st.metric("🏦 Super (11.5% SG)", f"${wages_summary['total_super']:,.2f}")
 
-                st.markdown(f"⏱️ **Paid Hours:** {wages_summary['total_hours']} hrs &nbsp;|&nbsp; 📊 **Avg Rate:** ${wages_summary['avg_hourly_rate']:.2f}/hr")
-                st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                
-                st.markdown("##### 👥 Staff Earnings & Super Breakdown")
-                if not wages_summary["breakdown_df"].empty:
-                    st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
-                
-                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(f"⏱️ **Total Paid Hours:** {wages_summary['total_hours']} hrs &nbsp;|&nbsp; 📊 **Average Hourly Rate:** ${wages_summary['avg_hourly_rate']:.2f} / hr")
+            st.markdown("<hr style='margin: 15px 0;'>", unsafe_allow_html=True)
+            
+            st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
+            if not wages_summary["breakdown_df"].empty:
+                st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
+            
+            st.markdown("</div>", unsafe_allow_html=True)
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
@@ -2617,26 +2617,25 @@ if is_manager:
             
             archived_df = load_finalized_roster(selected_info["csv_filename"])
             if archived_df is not None and not archived_df.empty:
-                st.markdown(f"**Viewing Schedule & Payroll for: `{selected_label}`**")
+                st.markdown(f"**Viewing Schedule for: `{selected_label}`**")
                 
-                # Display on-site side by side with archived financial summary
-                col_a1, col_a2 = st.columns([1.4, 1])
-                with col_a1:
-                    st.dataframe(archived_df, use_container_width=True)
-                with col_a2:
-                    archived_wages = calculate_roster_wages(archived_df)
-                    st.markdown(f"""
-                    <div style="background: rgba(9, 32, 28, 0.7); border: 1px solid #e5a93c; padding: 14px; border-radius: 12px;">
-                        <div style="color: #e5a93c; font-weight: 800; font-size: 1.05rem; margin-bottom: 8px;">💰 Archived Payroll & Super Summary</div>
-                        <div style="color: #ffffff; font-size: 0.9rem; line-height: 1.6;">
-                            💵 <b>Gross Payroll:</b> ${archived_wages['total_gross']:,.2f}<br>
-                            🏛️ <b>Est. PAYG Tax:</b> ${archived_wages['total_tax']:,.2f}<br>
-                            👛 <b>Net Take-Home:</b> ${archived_wages['total_net']:,.2f}<br>
-                            🏦 <b>Super (11.5% SG):</b> ${archived_wages['total_super']:,.2f}<br>
-                            ⏱️ <b>Paid Hours:</b> {archived_wages['total_hours']} hrs
-                        </div>
+                # Display on-site full width
+                st.dataframe(archived_df, use_container_width=True)
+                
+                # Financial summary below archived table
+                archived_wages = calculate_roster_wages(archived_df)
+                st.markdown(f"""
+                <div style="background: rgba(9, 32, 28, 0.7); border: 1px solid #e5a93c; padding: 16px; border-radius: 12px; margin-top: 10px; margin-bottom: 15px;">
+                    <div style="color: #e5a93c; font-weight: 800; font-size: 1.05rem; margin-bottom: 8px;">💰 Archived Payroll & Super Summary</div>
+                    <div style="color: #ffffff; font-size: 0.95rem; line-height: 1.6;">
+                        💵 <b>Gross Payroll:</b> ${archived_wages['total_gross']:,.2f} &nbsp;|&nbsp;
+                        🏛️ <b>Est. PAYG Tax:</b> ${archived_wages['total_tax']:,.2f} &nbsp;|&nbsp;
+                        👛 <b>Net Take-Home:</b> ${archived_wages['total_net']:,.2f} &nbsp;|&nbsp;
+                        🏦 <b>Super (11.5% SG):</b> ${archived_wages['total_super']:,.2f} &nbsp;|&nbsp;
+                        ⏱️ <b>Paid Hours:</b> {archived_wages['total_hours']} hrs
                     </div>
-                    """, unsafe_allow_html=True)
+                </div>
+                """, unsafe_allow_html=True)
                 
                 # Download & Delete action buttons for selected past roster
                 try:
