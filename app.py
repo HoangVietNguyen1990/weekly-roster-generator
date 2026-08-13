@@ -2153,7 +2153,11 @@ if is_manager:
                         fixed_data = st.session_state.manual_fixed
                         
                         roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
-                        st.session_state.final_roster_df = roster_out_df
+                        df_clean = roster_out_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+                        emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
+                        if emp_c in df_clean.columns:
+                            df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        st.session_state.final_roster_df = df_clean
                         st.success("🎉 Weekly Roster successfully generated!")
                     except Exception as e:
                         st.error(f"Failed to generate roster: {e}")
@@ -2173,12 +2177,6 @@ if is_manager:
             """, unsafe_allow_html=True)
 
         if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
-            df_clean = st.session_state.final_roster_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
-            emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
-            if emp_c in df_clean.columns:
-                df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
-            st.session_state.final_roster_df = df_clean
-
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
             <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
@@ -2187,7 +2185,6 @@ if is_manager:
             """, unsafe_allow_html=True)
             
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
-            st.session_state.final_roster_df = edited_final_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
