@@ -639,8 +639,43 @@ def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, 
         server.send_message(msg)
         server.quit()
         return True, f"Welcome Email sent to {recipient_email}!"
+    except smtplib.SMTPAuthenticationError:
+        return False, "Gmail authentication failed (Error 535). Gmail requires a 16-character 'Google App Password' instead of your normal account password."
     except Exception as e:
         return False, f"SMTP Error: {e}"
+
+def send_test_email_smtp(recipient_email):
+    cfg = load_smtp_config()
+    smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
+    smtp_port = int(cfg.get("smtp_port", 587))
+    sender_email = cfg.get("sender_email", "").strip()
+    sender_pass = cfg.get("sender_password", "").strip()
+    sender_name = cfg.get("sender_name", "Bakery Manager")
+    
+    if not recipient_email or not recipient_email.strip():
+        return False, "Sender / recipient email address is blank."
+    if not sender_email or not sender_pass:
+        return False, "Please enter both Sender Email Address and App Password."
+        
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = f"{sender_name} <{sender_email}>"
+        msg["To"] = recipient_email.strip()
+        msg["Subject"] = "🧪 Test Email — Brumby's Bakery Portal"
+        
+        test_body = f"Hello!\n\nThis is a test email sent from Brumby's Bakery Portal to verify your SMTP configuration.\n\nSender: {sender_email}\nSMTP Host: {smtp_server}:{smtp_port}\n\nIf you received this message, your welcome email setup is working perfectly! 🎉"
+        msg.attach(MIMEText(test_body, "plain", "utf-8"))
+
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.starttls()
+        server.login(sender_email, sender_pass)
+        server.send_message(msg)
+        server.quit()
+        return True, f"✅ Test email delivered to {recipient_email}!"
+    except smtplib.SMTPAuthenticationError:
+        return False, "❌ Gmail Authentication Failed (Error 535). Gmail requires a 16-character 'Google App Password' generated in your Google Account Security settings."
+    except Exception as e:
+        return False, f"❌ Connection Error: {e}"
 
 def load_persisted_df(filename, default_df):
     path = os.path.join(DATA_DIR, filename)
@@ -806,7 +841,13 @@ if role_title == "Manager":
             cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
             cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
             
-            if st.form_submit_button("💾 Save Email Settings"):
+            c_save, c_test = st.columns([1.2, 1])
+            with c_save:
+                btn_save_smtp = st.form_submit_button("💾 Save Settings")
+            with c_test:
+                btn_test_smtp = st.form_submit_button("🧪 Test Email")
+
+            if btn_save_smtp:
                 new_cfg = {
                     "portal_url": cfg_url.strip(),
                     "sender_name": cfg_sname.strip(),
@@ -817,6 +858,22 @@ if role_title == "Manager":
                 }
                 save_smtp_config(new_cfg)
                 st.success("✅ Email settings saved successfully!")
+
+            if btn_test_smtp:
+                new_cfg = {
+                    "portal_url": cfg_url.strip(),
+                    "sender_name": cfg_sname.strip(),
+                    "sender_email": cfg_semail.strip(),
+                    "sender_password": cfg_spass.strip(),
+                    "smtp_server": cfg_host.strip(),
+                    "smtp_port": int(cfg_port)
+                }
+                save_smtp_config(new_cfg)
+                ok, msg = send_test_email_smtp(cfg_semail.strip())
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
 
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     st.session_state.authenticated = False
@@ -1134,10 +1191,12 @@ if 'manual_requirements' not in st.session_state:
 
 if 'manual_fixed' not in st.session_state:
     default_fixed = pd.DataFrame([
-        {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "off", "Friday": "off", "Saturday": "off", "Sunday": "off"},
-        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
+        {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "", "Wednesday": "", "Thursday": "", "Friday": "", "Saturday": "", "Sunday": ""},
+        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "", "Friday": "", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
     ])
     st.session_state.manual_fixed = load_persisted_df("fixed.csv", default_fixed)
+if st.session_state.manual_fixed is not None:
+    st.session_state.manual_fixed = st.session_state.manual_fixed.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "")
 
 # --- ROLE-BASED TAB NAVIGATION ---
 is_manager = (st.session_state.user_role == "Manager")
@@ -1644,7 +1703,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     
     # Initialize Roster
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    roster_output = {emp["Name"]: {day: "off" for day in days_of_week} for emp in active_employees}
+    roster_output = {emp["Name"]: {day: "" for day in days_of_week} for emp in active_employees}
     weekly_shifts_count = {emp["Name"]: 0 for emp in active_employees}
     elizabeth_weekday_shifts = 0
 
@@ -1661,8 +1720,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 for day in days_of_week:
                     day_col = find_column(fixed, [day.lower(), day.lower()[:3]])
                     if day_col:
-                        val = str(fix_row.get(day_col, "off")).strip()
-                        if val.lower() not in ["off", "nan", ""]:
+                        val = str(fix_row.get(day_col, "")).strip()
+                        if val.lower() not in ["off", "nan", "none", ""]:
                             roster_output[name][day] = val
                             weekly_shifts_count[name] += 1
                             if name == "Elizabeth" and day not in ["Saturday", "Sunday"]:
@@ -1697,7 +1756,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 if "all day" in window.lower() or "anytime" in window.lower():
                     for day in days_of_week:
                         if day.lower() == day_lower:
-                            if roster_output[name][day] == "off":
+                            if roster_output[name][day] in ["", "off"]:
                                 roster_output[name][day] = " unavailable"
 
     # 3. Schedule required shifts day by day
@@ -1746,7 +1805,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         fixed_shifts_today = []
         for name in roster_output:
             val = roster_output[name][day]
-            if val != "off" and val != " unavailable":
+            if val not in ["", "off", " unavailable", "none", "nan"]:
                 fixed_shifts_today.append(val)
                 
         remaining_shifts_to_fill = []
@@ -1775,7 +1834,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 norm_name = emp["NormalizedName"]
                 age = emp["Age"]
                 
-                if roster_output[name][day] != "off" and roster_output[name][day] != " unavailable":
+                if roster_output[name][day] not in ["", "off"]:
                     continue
                 
                 if weekly_shifts_count[name] >= 5:
@@ -1823,9 +1882,16 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     roster_rows = []
     for name, sched in roster_output.items():
         row = {"Employee": name}
-        row.update(sched)
+        for day in days_of_week:
+            val = str(sched.get(day, "")).strip()
+            if val.lower() in ["off", "none", "nan"]:
+                row[day] = ""
+            else:
+                row[day] = val
         roster_rows.append(row)
-    return pd.DataFrame(roster_rows)
+    res_df = pd.DataFrame(roster_rows)
+    res_df = res_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+    return res_df
 
 if is_manager:
     # --- TAB 1: HOME PAGE & ROSTER GENERATOR ---
@@ -1871,7 +1937,13 @@ if is_manager:
             </div>
             """, unsafe_allow_html=True)
 
-        if 'final_roster_df' in st.session_state and not st.session_state.final_roster_df.empty:
+        if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
+            df_clean = st.session_state.final_roster_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+            emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
+            if emp_c in df_clean.columns:
+                df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+            st.session_state.final_roster_df = df_clean
+
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
             <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
@@ -1880,7 +1952,7 @@ if is_manager:
             """, unsafe_allow_html=True)
             
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
-            st.session_state.final_roster_df = edited_final_df
+            st.session_state.final_roster_df = edited_final_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
 
             # Prepare Excel workbook in memory using openpyxl for exact styling match
             wb = openpyxl.Workbook()
@@ -1926,6 +1998,11 @@ if is_manager:
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
         st.subheader("Manage Bakery Employees")
+        if "email_notice_success" in st.session_state:
+            st.success(st.session_state.pop("email_notice_success"))
+        if "email_notice_warning" in st.session_state:
+            st.warning(st.session_state.pop("email_notice_warning"))
+
         emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
         upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
         
@@ -2021,11 +2098,12 @@ if is_manager:
                             email_sent, email_msg = send_welcome_email_smtp(emp_email_val, new_name, new_user, new_pass)
 
                         if email_sent:
-                            st.success(f"🎉 Created account for **{new_name}**! {email_msg}")
+                            st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! {email_msg}"
                         else:
-                            st.success(f"🎉 Created account for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`")
                             if send_email_chk and emp_email_val:
-                                st.info(f"ℹ️ {email_msg}")
+                                st.session_state["email_notice_warning"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`\n\n⚠️ Email Status: {email_msg}"
+                            else:
+                                st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`"
 
                         st.rerun()
 
