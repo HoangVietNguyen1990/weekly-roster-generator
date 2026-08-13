@@ -2181,7 +2181,21 @@ if is_manager:
                         st.success("🎉 Weekly Roster successfully generated!")
                     except Exception as e:
                         st.error(f"Failed to generate roster: {e}")
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Option to Upload External Roster File for Selected Week
+            st.markdown("<br>", unsafe_allow_html=True)
+            upload_roster_file = st.file_uploader("📤 OR Upload Existing Roster File (.xlsx / .csv)", type=["xlsx", "csv"], key="upload_roster_selected_week")
+            if upload_roster_file is not None:
+                file_key = f"roster_up_{upload_roster_file.name}_{upload_roster_file.size}_{start_date}"
+                if st.session_state.get("last_uploaded_roster_key") != file_key:
+                    df_up = read_excel_robust(upload_roster_file)
+                    if df_up is not None and not df_up.empty:
+                        df_clean = df_up.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+                        emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
+                        if emp_c in df_clean.columns:
+                            df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        st.session_state.final_roster_df = df_clean
+                        st.session_state.last_uploaded_roster_key = file_key
+                        st.success(f"📁 Roster loaded for week starting {start_date.strftime('%d/%m/%Y')}!")
 
         with col2:
             st.markdown("""
@@ -2230,7 +2244,7 @@ if is_manager:
         st.markdown("<br><hr>", unsafe_allow_html=True)
         st.markdown("""
         <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.2rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
-            📜 Archived & Past Finalized Rosters (Select to View On-Site & Download)
+            📜 Archived & Past Finalized Rosters (Select to View On-Site, Upload & Download)
         </div>
         """, unsafe_allow_html=True)
 
@@ -2271,8 +2285,25 @@ if is_manager:
                         if delete_finalized_roster(selected_info["date_str"]):
                             st.success(f"🗑️ Finalized Roster for {selected_info['date_str']} permanently deleted!")
                             st.rerun()
+
+                # Upload/Replace file for selected past roster week
+                st.markdown("<br>", unsafe_allow_html=True)
+                up_past_file = st.file_uploader(f"📤 Replace Roster File for Week {selected_info['date_str']} (.xlsx / .csv)", type=["xlsx", "csv"], key=f"up_past_{selected_info['date_str']}")
+                if up_past_file is not None:
+                    past_up_key = f"past_up_{up_past_file.name}_{up_past_file.size}_{selected_info['date_str']}"
+                    if st.session_state.get("last_past_upload_key") != past_up_key:
+                        df_p_up = read_excel_robust(up_past_file)
+                        if df_p_up is not None and not df_p_up.empty:
+                            try:
+                                dt_up = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
+                            except:
+                                dt_up = datetime.now().date()
+                            save_finalized_roster(df_p_up, dt_up)
+                            st.session_state.last_past_upload_key = past_up_key
+                            st.success(f"🎉 Finalized roster for week {selected_info['date_str']} updated via file upload!")
+                            st.rerun()
         else:
-            st.info("No finalized rosters stored yet. Generate a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to save it online.")
+            st.info("No finalized rosters stored yet. Generate or upload a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to save it online.")
             
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
