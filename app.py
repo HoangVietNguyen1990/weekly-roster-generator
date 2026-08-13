@@ -437,6 +437,8 @@ import json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
+FINALIZED_DIR = os.path.join(DATA_DIR, "finalized_rosters")
+os.makedirs(FINALIZED_DIR, exist_ok=True)
 
 USER_PROFILES_FILE = os.path.join(DATA_DIR, "user_profiles.json")
 
@@ -696,6 +698,239 @@ def save_persisted_df(df, filename):
         df.astype(str).to_csv(path, index=False)
     except:
         pass
+
+def build_roster_excel_bytes(edited_final_df, start_date):
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except:
+            start_date = datetime.now().date()
+            
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Weekly Roster"
+
+    # Header styling
+    ws.merge_cells("A1:H1")
+    title_cell = ws.cell(row=1, column=1)
+    title_cell.value = "BRUMBY'S PAKENHAM - WEEKLY STAFF ROSTER"
+    title_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    title_cell.fill = title_fill
+    title_cell.font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.merge_cells("A2:H2")
+    sub_cell = ws.cell(row=2, column=1)
+    end_date = start_date + timedelta(days=6)
+    sub_cell.value = f"Week Period: Monday {start_date.strftime('%d/%m/%Y')} to Sunday {end_date.strftime('%d/%m/%Y')}"
+    sub_cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    sub_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
+    sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.row_dimensions[3].height = 10
+
+    tbl_hdr_fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
+    tbl_hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+    for col_idx, col_name in enumerate(edited_final_df.columns, 1):
+        c = ws.cell(row=4, column=col_idx)
+        c.value = col_name
+        c.fill = tbl_hdr_fill
+        c.font = tbl_hdr_font
+        c.alignment = Alignment(horizontal="center", vertical="center")
+            
+    thin_border = Border(
+        left=Side(style='thin', color='BFBFBF'),
+        right=Side(style='thin', color='BFBFBF'),
+        top=Side(style='thin', color='BFBFBF'),
+        bottom=Side(style='thin', color='BFBFBF')
+    )
+
+    # Write roster data rows
+    row_start = 5
+    for r_idx, row_data in enumerate(edited_final_df.itertuples(index=False), start=row_start):
+        for c_idx, val in enumerate(row_data, start=1):
+            c = ws.cell(row=r_idx, column=c_idx)
+            val_str = "" if pd.isna(val) else str(val).strip()
+            
+            # Don't show "unavailable" or "off" in exported Excel file - leave cells clean & blank
+            if val_str.lower() in ["unavailable", " unavailable", "off", "none", "nan"]:
+                val_str = ""
+            
+            c.value = val_str
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+            
+            if val_str:
+                if c_idx == 1:
+                    c.font = Font(name="Calibri", size=11, bold=True)
+                    c.alignment = Alignment(horizontal="left", vertical="center")
+                else:
+                    c.font = Font(name="Calibri", size=10)
+
+    last_roster_row = row_start + len(edited_final_df) - 1
+
+    # --- EMPLOYEE SHIFT BREAK ENTITLEMENTS GUIDE ---
+    guide_row_1 = last_roster_row + 3
+    
+    ws.merge_cells(start_row=guide_row_1, start_column=1, end_row=guide_row_1, end_column=8)
+    g_title = ws.cell(row=guide_row_1, column=1)
+    g_title.value = "☕ EMPLOYEE SHIFT BREAK ENTITLEMENTS GUIDE (General Retail Industry Award 2020)"
+    g_title.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    g_title.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    g_title.alignment = Alignment(horizontal="center", vertical="center")
+
+    hdr_row = guide_row_1 + 1
+    headers_break = [
+        (1, 2, "Shift Duration"),
+        (3, 4, "Paid Rest Break (10 min)"),
+        (5, 6, "Unpaid Meal Break (30 min)"),
+        (7, 8, "Total Break Entitlement")
+    ]
+    for start_col, end_col, text in headers_break:
+        ws.merge_cells(start_row=hdr_row, start_column=start_col, end_row=hdr_row, end_column=end_col)
+        hc = ws.cell(row=hdr_row, column=start_col)
+        hc.value = text
+        hc.fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
+        hc.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        hc.alignment = Alignment(horizontal="center", vertical="center")
+        for col in range(start_col, end_col + 1):
+            ws.cell(row=hdr_row, column=col).border = thin_border
+
+    break_data = [
+        ("Less than 4 hours", "No break", "No break", "No breaks required"),
+        ("4 hours up to 5 hours", "1 x 10-minute rest break", "No meal break", "10 min Paid break"),
+        ("5 hours up to 7 hours", "1 x 10-minute rest break", "1 x 30-minute meal break", "10m Paid + 30m Unpaid meal"),
+        ("7 hours up to 10 hours", "2 x 10-minute rest breaks", "1 x 30-minute meal break", "20m Paid + 30m Unpaid meal"),
+        ("10 hours or more", "2 x 10-minute rest breaks", "2 x 30-minute meal breaks", "20m Paid + 60m Unpaid meals"),
+    ]
+
+    curr_b_row = hdr_row + 1
+    for d1, d2, d3, d4 in break_data:
+        row_cols = [(1, 2, d1), (3, 4, d2), (5, 6, d3), (7, 8, d4)]
+        for start_col, end_col, text in row_cols:
+            ws.merge_cells(start_row=curr_b_row, start_column=start_col, end_row=curr_b_row, end_column=end_col)
+            cell = ws.cell(row=curr_b_row, column=start_col)
+            cell.value = text
+            cell.font = Font(name="Calibri", size=9.5)
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            for col in range(start_col, end_col + 1):
+                ws.cell(row=curr_b_row, column=col).border = thin_border
+        curr_b_row += 1
+
+    note_row = curr_b_row + 1
+    ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row+2, end_column=8)
+    n_cell = ws.cell(row=note_row, column=1)
+    n_cell.value = (
+        "📌 Key Break Rules for Bakery Staff:\n"
+        "• Rest breaks (10 mins) are paid. Meal breaks (30 mins) are unpaid.\n"
+        "• Breaks cannot be taken in the first or last hour of work.\n"
+        "• An unpaid meal break must be taken no later than after 5 hours of continuous work."
+    )
+    n_cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    n_cell.font = Font(name="Calibri", size=9, italic=True, color="333333")
+    n_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    for r in range(note_row, note_row + 3):
+        for c in range(1, 9):
+            ws.cell(row=r, column=c).border = thin_border
+
+    # Dedicated 2nd Sheet Tab: Break Entitlements Guide
+    ws2 = wb.create_sheet(title="Break Entitlements Guide")
+    ws2.merge_cells("A1:D1")
+    t2 = ws2.cell(row=1, column=1)
+    t2.value = "BRUMBY'S PAKENHAM - EMPLOYEE BREAK ENTITLEMENTS GUIDE"
+    t2.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+    t2.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+    t2.alignment = Alignment(horizontal="center", vertical="center")
+
+    headers_s2 = ["Shift Duration", "Paid Rest Break (10 min)", "Unpaid Meal Break (30 min)", "Total Break Entitlement"]
+    for col_idx, h_text in enumerate(headers_s2, 1):
+        c2 = ws2.cell(row=3, column=col_idx)
+        c2.value = h_text
+        c2.fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
+        c2.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        c2.alignment = Alignment(horizontal="center", vertical="center")
+        c2.border = thin_border
+
+    for r_idx, (d1, d2, d3, d4) in enumerate(break_data, start=4):
+        vals = [d1, d2, d3, d4]
+        for c_idx, val in enumerate(vals, start=1):
+            c = ws2.cell(row=r_idx, column=c_idx)
+            c.value = val
+            c.font = Font(name="Calibri", size=10)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+
+    ws2.column_dimensions["A"].width = 25
+    ws2.column_dimensions["B"].width = 28
+    ws2.column_dimensions["C"].width = 28
+    ws2.column_dimensions["D"].width = 32
+
+    # Auto-adjust column widths for Sheet 1 (based only on roster table cells, ignoring merged title & note cells)
+    for col_idx in range(1, len(edited_final_df.columns) + 1):
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        max_len = max(len(str(ws.cell(row=r, column=col_idx).value or '')) for r in range(4, last_roster_row + 1))
+        if col_idx == 1:
+            ws.column_dimensions[col_letter].width = max(max_len + 5, 20)
+        else:
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
+
+    excel_buffer = io.BytesIO()
+    wb.save(excel_buffer)
+    return excel_buffer.getvalue()
+
+def save_finalized_roster(df, start_date):
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        except:
+            start_date = datetime.now().date()
+            
+    date_str = start_date.strftime("%Y-%m-%d")
+    date_label = start_date.strftime("%d.%m.%Y")
+    
+    csv_filename = f"Roster_{date_str}.csv"
+    xlsx_filename = f"Team_Roster_{date_label}.xlsx"
+    
+    csv_path = os.path.join(FINALIZED_DIR, csv_filename)
+    xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
+    
+    # Save CSV for fast on-site reading
+    df.astype(str).to_csv(csv_path, index=False)
+    
+    # Save formatted XLSX for downloading
+    excel_bytes = build_roster_excel_bytes(df, start_date)
+    with open(xlsx_path, "wb") as f:
+        f.write(excel_bytes)
+        
+    return date_str, xlsx_filename, excel_bytes
+
+def list_finalized_rosters():
+    if not os.path.exists(FINALIZED_DIR):
+        return []
+    files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+    files.sort(reverse=True)
+    results = []
+    for f in files:
+        raw_date = f.replace("Roster_", "").replace(".csv", "")
+        try:
+            dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
+            end_dt = dt + timedelta(days=6)
+            label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+        except:
+            label = f"Roster {raw_date}"
+        results.append({"csv_filename": f, "date_str": raw_date, "label": label})
+    return results
+
+def load_finalized_roster(csv_filename):
+    csv_path = os.path.join(FINALIZED_DIR, csv_filename)
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+            return df
+        except:
+            return None
+    return None
 
 def find_column(df, candidates, default=""):
     if df is None or not hasattr(df, "columns") or len(df.columns) == 0:
@@ -1954,190 +2189,66 @@ if is_manager:
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
             st.session_state.final_roster_df = edited_final_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
 
-            # Prepare Excel workbook in memory using openpyxl for exact styling match
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.title = "Weekly Roster"
-
-            # Header styling
-            ws.merge_cells("A1:H1")
-            title_cell = ws.cell(row=1, column=1)
-            title_cell.value = "BRUMBY'S PAKENHAM - WEEKLY STAFF ROSTER"
-            title_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            title_cell.fill = title_fill
-            title_cell.font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
-            title_cell.alignment = Alignment(horizontal="center", vertical="center")
-
-            ws.merge_cells("A2:H2")
-            sub_cell = ws.cell(row=2, column=1)
-            end_date = start_date + timedelta(days=6)
-            sub_cell.value = f"Week Period: Monday {start_date.strftime('%d/%m/%Y')} to Sunday {end_date.strftime('%d/%m/%Y')}"
-            sub_cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-            sub_cell.font = Font(name="Calibri", size=11, bold=True, color="1F4E78")
-            sub_cell.alignment = Alignment(horizontal="center", vertical="center")
-
-            ws.row_dimensions[3].height = 10
-
-            tbl_hdr_fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
-            tbl_hdr_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-
-            for col_idx, col_name in enumerate(edited_final_df.columns, 1):
-                c = ws.cell(row=4, column=col_idx)
-                c.value = col_name
-                c.fill = tbl_hdr_fill
-                c.font = tbl_hdr_font
-                c.alignment = Alignment(horizontal="center", vertical="center")
-                    
-            thin_border = Border(
-                left=Side(style='thin', color='BFBFBF'),
-                right=Side(style='thin', color='BFBFBF'),
-                top=Side(style='thin', color='BFBFBF'),
-                bottom=Side(style='thin', color='BFBFBF')
-            )
-
-            # Write roster data rows
-            row_start = 5
-            for r_idx, row_data in enumerate(edited_final_df.itertuples(index=False), start=row_start):
-                for c_idx, val in enumerate(row_data, start=1):
-                    c = ws.cell(row=r_idx, column=c_idx)
-                    val_str = "" if pd.isna(val) else str(val).strip()
-                    
-                    # Don't show "unavailable" or "off" in exported Excel file - leave cells clean & blank
-                    if val_str.lower() in ["unavailable", " unavailable", "off", "none", "nan"]:
-                        val_str = ""
-                    
-                    c.value = val_str
-                    c.alignment = Alignment(horizontal="center", vertical="center")
-                    c.border = thin_border
-                    
-                    if val_str:
-                        if c_idx == 1:
-                            c.font = Font(name="Calibri", size=11, bold=True)
-                            c.alignment = Alignment(horizontal="left", vertical="center")
-                        else:
-                            c.font = Font(name="Calibri", size=10)
-
-            last_roster_row = row_start + len(edited_final_df) - 1
-
-            # --- EMPLOYEE SHIFT BREAK ENTITLEMENTS GUIDE ---
-            guide_row_1 = last_roster_row + 3
-            
-            ws.merge_cells(start_row=guide_row_1, start_column=1, end_row=guide_row_1, end_column=8)
-            g_title = ws.cell(row=guide_row_1, column=1)
-            g_title.value = "☕ EMPLOYEE SHIFT BREAK ENTITLEMENTS GUIDE (General Retail Industry Award 2020)"
-            g_title.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            g_title.font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-            g_title.alignment = Alignment(horizontal="center", vertical="center")
-
-            hdr_row = guide_row_1 + 1
-            headers_break = [
-                (1, 2, "Shift Duration"),
-                (3, 4, "Paid Rest Break (10 min)"),
-                (5, 6, "Unpaid Meal Break (30 min)"),
-                (7, 8, "Total Break Entitlement")
-            ]
-            for start_col, end_col, text in headers_break:
-                ws.merge_cells(start_row=hdr_row, start_column=start_col, end_row=hdr_row, end_column=end_col)
-                hc = ws.cell(row=hdr_row, column=start_col)
-                hc.value = text
-                hc.fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
-                hc.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-                hc.alignment = Alignment(horizontal="center", vertical="center")
-                for col in range(start_col, end_col + 1):
-                    ws.cell(row=hdr_row, column=col).border = thin_border
-
-            break_data = [
-                ("Less than 4 hours", "No break", "No break", "No breaks required"),
-                ("4 hours up to 5 hours", "1 x 10-minute rest break", "No meal break", "10 min Paid break"),
-                ("5 hours up to 7 hours", "1 x 10-minute rest break", "1 x 30-minute meal break", "10m Paid + 30m Unpaid meal"),
-                ("7 hours up to 10 hours", "2 x 10-minute rest breaks", "1 x 30-minute meal break", "20m Paid + 30m Unpaid meal"),
-                ("10 hours or more", "2 x 10-minute rest breaks", "2 x 30-minute meal breaks", "20m Paid + 60m Unpaid meals"),
-            ]
-
-            curr_b_row = hdr_row + 1
-            for d1, d2, d3, d4 in break_data:
-                row_cols = [(1, 2, d1), (3, 4, d2), (5, 6, d3), (7, 8, d4)]
-                for start_col, end_col, text in row_cols:
-                    ws.merge_cells(start_row=curr_b_row, start_column=start_col, end_row=curr_b_row, end_column=end_col)
-                    cell = ws.cell(row=curr_b_row, column=start_col)
-                    cell.value = text
-                    cell.font = Font(name="Calibri", size=9.5)
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                    for col in range(start_col, end_col + 1):
-                        ws.cell(row=curr_b_row, column=col).border = thin_border
-                curr_b_row += 1
-
-            note_row = curr_b_row + 1
-            ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row+2, end_column=8)
-            n_cell = ws.cell(row=note_row, column=1)
-            n_cell.value = (
-                "📌 Key Break Rules for Bakery Staff:\n"
-                "• Rest breaks (10 mins) are paid. Meal breaks (30 mins) are unpaid.\n"
-                "• Breaks cannot be taken in the first or last hour of work.\n"
-                "• An unpaid meal break must be taken no later than after 5 hours of continuous work."
-            )
-            n_cell.fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
-            n_cell.font = Font(name="Calibri", size=9, italic=True, color="333333")
-            n_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-            for r in range(note_row, note_row + 3):
-                for c in range(1, 9):
-                    ws.cell(row=r, column=c).border = thin_border
-
-            # Dedicated 2nd Sheet Tab: Break Entitlements Guide
-            ws2 = wb.create_sheet(title="Break Entitlements Guide")
-            ws2.merge_cells("A1:D1")
-            t2 = ws2.cell(row=1, column=1)
-            t2.value = "BRUMBY'S PAKENHAM - EMPLOYEE BREAK ENTITLEMENTS GUIDE"
-            t2.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-            t2.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
-            t2.alignment = Alignment(horizontal="center", vertical="center")
-
-            headers_s2 = ["Shift Duration", "Paid Rest Break (10 min)", "Unpaid Meal Break (30 min)", "Total Break Entitlement"]
-            for col_idx, h_text in enumerate(headers_s2, 1):
-                c2 = ws2.cell(row=3, column=col_idx)
-                c2.value = h_text
-                c2.fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
-                c2.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-                c2.alignment = Alignment(horizontal="center", vertical="center")
-                c2.border = thin_border
-
-            for r_idx, (d1, d2, d3, d4) in enumerate(break_data, start=4):
-                vals = [d1, d2, d3, d4]
-                for c_idx, val in enumerate(vals, start=1):
-                    c = ws2.cell(row=r_idx, column=c_idx)
-                    c.value = val
-                    c.font = Font(name="Calibri", size=10)
-                    c.alignment = Alignment(horizontal="center", vertical="center")
-                    c.border = thin_border
-
-            ws2.column_dimensions["A"].width = 25
-            ws2.column_dimensions["B"].width = 28
-            ws2.column_dimensions["C"].width = 28
-            ws2.column_dimensions["D"].width = 32
-
-            # Auto-adjust column widths for Sheet 1 (based only on roster table cells, ignoring merged title & note cells)
-            for col_idx in range(1, len(edited_final_df.columns) + 1):
-                col_letter = openpyxl.utils.get_column_letter(col_idx)
-                max_len = max(len(str(ws.cell(row=r, column=col_idx).value or '')) for r in range(4, last_roster_row + 1))
-                if col_idx == 1:
-                    ws.column_dimensions[col_letter].width = max(max_len + 5, 20)
-                else:
-                    ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
-
-            excel_buffer = io.BytesIO()
-            wb.save(excel_buffer)
-            excel_data = excel_buffer.getvalue()
-
+            # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
-            file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
-            st.download_button(
-                label="📥 EXPORT ROSTER TO EXCEL (.XLSX)",
-                data=excel_data,
-                file_name=file_name_out,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_export_excel",
-                use_container_width=True
-            )
+            col_fin1, col_fin2 = st.columns([1.2, 1])
+            with col_fin1:
+                if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True):
+                    date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
+                    st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and saved online!")
+            
+            with col_fin2:
+                excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
+                file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
+                st.download_button(
+                    label="📥 DOWNLOAD CURRENT ROSTER (.XLSX)",
+                    data=excel_bytes,
+                    file_name=file_name_out,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_export_excel",
+                    use_container_width=True
+                )
+
+        # --- SECTION: ARCHIVED & PAST FINALIZE ROSTERS ---
+        st.markdown("<br><hr>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.2rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
+            📜 Archived & Past Finalized Rosters (Select to View On-Site & Download)
+        </div>
+        """, unsafe_allow_html=True)
+
+        past_rosters = list_finalized_rosters()
+        if past_rosters:
+            roster_options = {r["label"]: r for r in past_rosters}
+            selected_label = st.selectbox("Select a Finalized Roster Week to Display:", list(roster_options.keys()), key="select_past_roster")
+            selected_info = roster_options[selected_label]
+            
+            archived_df = load_finalized_roster(selected_info["csv_filename"])
+            if archived_df is not None and not archived_df.empty:
+                st.markdown(f"**Viewing Schedule for: `{selected_label}`**")
+                
+                # Display on-site
+                st.dataframe(archived_df, use_container_width=True)
+                
+                # Download button for selected past roster
+                try:
+                    dt = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
+                except:
+                    dt = datetime.now().date()
+                    
+                archived_excel_bytes = build_roster_excel_bytes(archived_df, dt)
+                past_filename = f"Team_Roster_{dt.strftime('%d.%m.%Y')}.xlsx"
+                
+                st.download_button(
+                    label=f"📥 Download {selected_info['date_str']} Roster (.XLSX)",
+                    data=archived_excel_bytes,
+                    file_name=past_filename,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"btn_dl_past_{selected_info['date_str']}",
+                    use_container_width=True
+                )
+        else:
+            st.info("No finalized rosters stored yet. Generate a roster above and click '🔒 FINALIZE WEEKLY ROSTER' to save it online.")
             
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
