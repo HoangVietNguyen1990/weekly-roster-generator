@@ -510,6 +510,14 @@ DEFAULT_PROFILES = {
   "robert": {
     "username": "robert", "password": "TempPass123!", "role": "Employee", "employee_name": "Robert",
     "profile": { "full_name": "Robert", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-10-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+  },
+  "demo.employee": {
+    "username": "demo.employee", "password": "DemoPass123!", "role": "Employee", "employee_name": "Demo Employee (Test Account)",
+    "profile": { "full_name": "Demo Employee", "address": "123 Test Street", "home_phone": "0390000000", "mobile": "0400000000", "email": "demo.employee@example.com", "dob": "2005-05-15", "gender": "Female", "tfn": "123456789", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-01-01", "employment_level": "Junior Team Member", "super_fund": "AustralianSuper", "super_policy": "AS123456", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "ANZ Bank", "bank_branch": "Pakenham", "bank_bsb": "013000", "bank_account": "12345678", "account_name": "Demo Employee" }
+  },
+  "demo.manager": {
+    "username": "demo.manager", "password": "DemoPass123!", "role": "Manager", "employee_name": "Demo Manager (Test Account)",
+    "profile": { "full_name": "Demo Manager", "address": "456 Test Ave", "home_phone": "0391111111", "mobile": "0411111111", "email": "demo.manager@example.com", "dob": "1990-08-20", "gender": "Male", "tfn": "987654321", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-01-01", "employment_level": "Bakery Manager", "super_fund": "Hostplus", "super_policy": "HP987654", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "Commonwealth Bank", "bank_branch": "Pakenham", "bank_bsb": "063000", "bank_account": "87654321", "account_name": "Demo Manager" }
   }
 }
 
@@ -529,6 +537,9 @@ def load_user_profiles():
     return profiles
 
 def save_user_profiles(profiles):
+    if st.session_state.get("is_demo", False):
+        st.toast("🧪 Sandbox Mode: Account profile updates held in memory only.", icon="🧪")
+        return
     try:
         with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
             json.dump(profiles, f, indent=2)
@@ -693,6 +704,9 @@ def load_persisted_df(filename, default_df):
     return default_df
 
 def save_persisted_df(df, filename):
+    if st.session_state.get("is_demo", False):
+        st.toast("🧪 Sandbox Mode: Database updates held in memory only.", icon="🧪")
+        return
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
@@ -892,14 +906,16 @@ def save_finalized_roster(df, start_date):
     csv_filename = f"Roster_{date_str}.csv"
     xlsx_filename = f"Team_Roster_{date_label}.xlsx"
     
+    excel_bytes = build_roster_excel_bytes(df, start_date)
+    
+    if st.session_state.get("is_demo", False):
+        st.toast("🧪 Sandbox Mode: Finalized roster saved in session memory only.", icon="🧪")
+        return date_str, xlsx_filename, excel_bytes
+        
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
     
-    # Save CSV for fast on-site reading
     df.astype(str).to_csv(csv_path, index=False)
-    
-    # Save formatted XLSX for downloading
-    excel_bytes = build_roster_excel_bytes(df, start_date)
     with open(xlsx_path, "wb") as f:
         f.write(excel_bytes)
         
@@ -933,6 +949,9 @@ def load_finalized_roster(csv_filename):
     return None
 
 def delete_finalized_roster(date_str):
+    if st.session_state.get("is_demo", False):
+        st.toast("🧪 Sandbox Mode: Deletion previewed, disk files preserved.", icon="🧪")
+        return True
     if not os.path.exists(FINALIZED_DIR):
         return False
     deleted = False
@@ -1151,12 +1170,22 @@ if 'logged_in_user' not in st.session_state:
     st.session_state.logged_in_user = None
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
+if 'is_demo' not in st.session_state:
+    st.session_state.is_demo = False
 
 user_profiles = load_user_profiles()
 
 # LOGIN PAGE IF NOT AUTHENTICATED
 if not st.session_state.authenticated:
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.markdown("""
+    <style>
+        .stApp {
+            background-color: #051412 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.8, 1])
     with col2:
         st.markdown("""
         <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 35px 30px; border-radius: 20px; border: 2px solid #e5a93c; box-shadow: 0 12px 36px rgba(0,0,0,0.6); margin-top: 40px;">
@@ -1177,6 +1206,7 @@ if not st.session_state.authenticated:
                     st.session_state.authenticated = True
                     st.session_state.logged_in_user = login_user_clean
                     st.session_state.user_role = account.get("role", "Employee")
+                    st.session_state.is_demo = account.get("is_demo", False) or "demo." in login_user_clean
                     st.success(f"Welcome back, {account.get('employee_name', login_user_clean)}!")
                     st.rerun()
                 else:
@@ -1184,12 +1214,43 @@ if not st.session_state.authenticated:
             else:
                 st.error("🔒 Invalid username or password. Please check your credentials.")
                 
+        # Quick One-Click Demo Mode Login Buttons
+        st.markdown("<br><hr style='border-color: rgba(229, 169, 60, 0.3);'>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 12px;">
+            <span style="color: #e5a93c; font-weight: 800; font-size: 0.95rem;">🧪 ONE-CLICK DEMO / QUICK TEST MODE</span><br>
+            <span style="color: #c8e6e0; font-size: 0.85rem;">Test all portal features safely without database side-effects:</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col_demo1, col_demo2 = st.columns(2)
+        with col_demo1:
+            if st.button("👤 Demo Employee Mode", use_container_width=True, key="btn_demo_emp"):
+                st.session_state.authenticated = True
+                st.session_state.logged_in_user = "demo.employee"
+                st.session_state.user_role = "Employee"
+                st.session_state.is_demo = True
+                st.success("🧪 Logging in as Demo Employee (Sandbox Mode)...")
+                st.rerun()
+                
+        with col_demo2:
+            if st.button("👑 Demo Manager Mode", use_container_width=True, key="btn_demo_mgr"):
+                st.session_state.authenticated = True
+                st.session_state.logged_in_user = "demo.manager"
+                st.session_state.user_role = "Manager"
+                st.session_state.is_demo = True
+                st.success("🧪 Logging in as Demo Manager (Sandbox Mode)...")
+                st.rerun()
+
         st.markdown("""
         </div>
         """, unsafe_allow_html=True)
     st.stop()
 
 # --- SIDEBAR CONFIGURATION (AUTHENTICATED) ---
+if st.session_state.is_demo:
+    st.sidebar.warning("⚠️ **SANDBOX TEST MODE**\nChanges made here will not be permanently saved.")
+
 st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
 st.sidebar.title("🍞 Bakery Portal Controls")
 
@@ -1313,6 +1374,14 @@ if st.sidebar.button("🚪 Logout", key="btn_logout"):
     st.rerun()
 
 st.sidebar.info("This application runs locally and optimizes staff rostering and confidential profile management.")
+
+if st.session_state.get("is_demo", False):
+    st.markdown("""
+    <div style="background: rgba(229, 169, 60, 0.2); border: 2px solid #e5a93c; padding: 12px 18px; border-radius: 14px; margin-bottom: 20px;">
+        <span style="color: #f7d594; font-weight: 800; font-size: 1.05rem;">🧪 DEMO & SANDBOX TEST MODE ACTIVE</span>
+        <span style="color: #ffffff; margin-left: 10px; font-size: 0.95rem;">You are using a test demo account. All features, forms, calculations, and tables are fully interactive, but permanent updates to database files are safely disabled.</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 col_head1, col_head2 = st.columns([3.5, 1])
 with col_head1:
