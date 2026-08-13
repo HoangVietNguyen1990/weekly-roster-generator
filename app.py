@@ -2292,7 +2292,7 @@ def parse_time_to_decimal(time_str):
         return 0.0
 
 def parse_shift_range(shift_str):
-    if not shift_str or str(shift_str).strip().lower() in ["off", "unavailable", "nan", ""]:
+    if not shift_str or "unavailable" in str(shift_str).strip().lower() or str(shift_str).strip().lower() in ["off", "nan", ""]:
         return None
     try:
         parts = str(shift_str).split("-")
@@ -2593,16 +2593,21 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
     roster_rows = []
     for name, sched in roster_output.items():
+        norm_name = name.lower()
         row = {"Employee": name}
         for day in days_of_week:
             val = str(sched.get(day, "")).strip()
-            if val.lower() in ["off", "none", "nan"]:
-                row[day] = ""
+            key = (norm_name, day.lower())
+            if not val or val.lower() in ["off", "none", "nan", "unavailable", ""] or val.lower().startswith("unavailable"):
+                if key in unavail_map and unavail_map[key]:
+                    clean_win = clean_win_display(unavail_map[key][0])
+                    row[day] = f"Unavailable ({clean_win})"
+                else:
+                    row[day] = ""
             else:
                 row[day] = val
         roster_rows.append(row)
     res_df = pd.DataFrame(roster_rows)
-    res_df = res_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
     return res_df
 
 if is_manager:
