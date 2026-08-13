@@ -1407,8 +1407,6 @@ def logout_user():
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     logout_user()
 
-st.sidebar.info("This application runs locally and optimizes staff rostering and confidential profile management.")
-
 if st.session_state.get("is_demo", False):
     st.markdown("""
     <div style="background: rgba(229, 169, 60, 0.2); border: 2px solid #e5a93c; padding: 12px 18px; border-radius: 14px; margin-bottom: 20px;">
