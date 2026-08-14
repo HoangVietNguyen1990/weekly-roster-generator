@@ -2915,11 +2915,6 @@ if is_manager:
                         del st.session_state["edit_employees"]
                     st.rerun()
                     
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-            👥 Bakery Staff Members List (Editable Table)
-        </div>
-        """, unsafe_allow_html=True)
         if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
             st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
         
@@ -2947,24 +2942,25 @@ if is_manager:
                     except:
                         pass
 
-        # TABLE HEADER WITH INTEGRATED TINY TRASH ICON
-        c_hdr_left, c_hdr_right = st.columns([12, 1])
+        # SINGLE TABLE HEADER WITH CONDITIONAL DELETE BUTTON ON RIGHT
+        c_hdr_left, c_hdr_right = st.columns([9, 2])
         with c_hdr_left:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 48px; display: flex; align-items: center;">
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 50px; display: flex; align-items: center;">
                 👥 Bakery Staff Members List (Editable Table)
             </div>
             """, unsafe_allow_html=True)
         with c_hdr_right:
             if selected_names_pre:
+                btn_label = f"🗑️ Delete ({len(selected_names_pre)})"
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 48px; display: flex; align-items: center; justify-content: center; padding-right: 4px;">
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 4px 8px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 50px; display: flex; align-items: center; justify-content: flex-end;">
                 """, unsafe_allow_html=True)
-                trigger_delete = st.button("🗑️", key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
+                trigger_delete = st.button(btn_label, key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
                 st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 48px;">
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 50px;">
                 </div>
                 """, unsafe_allow_html=True)
                 trigger_delete = False
