@@ -2923,78 +2923,103 @@ if is_manager:
         if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
             st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
         
-        # Prepare dataframe for data_editor with explicit "Select" column for 2-step deletion
+        # Prepare dataframe for data_editor
         df_for_editor = st.session_state.manual_employees.copy() if st.session_state.manual_employees is not None else pd.DataFrame()
         if "Select" in df_for_editor.columns:
             df_for_editor.drop(columns=["Select"], inplace=True)
         if "🗑️ Delete" in df_for_editor.columns:
             df_for_editor.drop(columns=["🗑️ Delete"], inplace=True)
-            
+
+        name_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME") if (st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty) else "NAME"
+
+        # Check if any employee checkbox is currently checked in session state
+        selected_names_pre = []
+        if "edit_employees" in st.session_state and isinstance(st.session_state.edit_employees, dict):
+            edited_rows = st.session_state.edit_employees.get("edited_rows", {})
+            for r_idx_str, changes in edited_rows.items():
+                if changes.get("Select") is True:
+                    try:
+                        r_idx = int(r_idx_str)
+                        if st.session_state.manual_employees is not None and 0 <= r_idx < len(st.session_state.manual_employees):
+                            val = str(st.session_state.manual_employees.iloc[r_idx][name_col]).strip()
+                            if val:
+                                selected_names_pre.append(val)
+                    except:
+                        pass
+
+        # TABLE HEADER WITH INTEGRATED TINY TRASH ICON
+        c_hdr_left, c_hdr_right = st.columns([12, 1])
+        with c_hdr_left:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 48px; display: flex; align-items: center;">
+                👥 Bakery Staff Members List (Editable Table)
+            </div>
+            """, unsafe_allow_html=True)
+        with c_hdr_right:
+            if selected_names_pre:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 48px; display: flex; align-items: center; justify-content: center; padding-right: 4px;">
+                """, unsafe_allow_html=True)
+                trigger_delete = st.button("🗑️", key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
+                st.markdown("</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 48px;">
+                </div>
+                """, unsafe_allow_html=True)
+                trigger_delete = False
+
         if not df_for_editor.empty:
             df_for_editor.insert(0, "Select", False)
 
         employees_df = st.data_editor(
             df_for_editor,
             num_rows="dynamic",
+            hide_index=True,
             key="edit_employees",
             column_config={
-                "Select": st.column_config.CheckboxColumn("Select", help="Check box to select employee for deletion", default=False)
+                "Select": st.column_config.CheckboxColumn("", help="Check box to select employee for deletion", default=False)
             }
         )
 
         if employees_df is not None:
-            name_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME") if (st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty) else "NAME"
-            
-            # Step 1: Check if any rows are selected via checkbox
+            # Check selected names from employees_df
             selected_names = []
             if "Select" in employees_df.columns:
                 selected_rows = employees_df[employees_df["Select"] == True]
                 if not selected_rows.empty and name_col in selected_rows.columns:
                     selected_names = [str(n).strip() for n in selected_rows[name_col].dropna().tolist() if str(n).strip()]
 
-            # Step 2: Show Delete Action UI ONLY if 1 or more checkboxes are selected
-            if selected_names:
-                count = len(selected_names)
-                names_str = ", ".join([f"**{n}**" for n in selected_names])
-                
-                st.markdown(f"""
-                <div style="background: #fff3f3; border: 1.5px solid #ff4d4f; padding: 12px 18px; border-radius: 10px; margin-top: 12px; margin-bottom: 12px;">
-                    <span style="color: #cf1322; font-weight: 700; font-size: 1rem;">🚨 {count} employee(s) selected for deletion: {names_str}</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                c_del1, c_del2 = st.columns([1.5, 2])
-                with c_del1:
-                    if st.button(f"🗑️ Delete Selected ({count})", key="btn_confirm_delete_checked", type="primary", use_container_width=True):
-                        # 1. Remove from user_profiles.json
-                        profiles_to_update = get_active_user_profiles()
-                        profiles_changed = False
-                        for del_name in selected_names:
-                            keys_to_del = []
-                            for u_k, u_v in profiles_to_update.items():
-                                emp_n = u_v.get("employee_name", u_k).strip()
-                                full_n = u_v.get("profile", {}).get("full_name", "").strip()
-                                if emp_n.lower() == del_name.lower() or full_n.lower() == del_name.lower() or u_k.lower() == del_name.lower():
-                                    keys_to_del.append(u_k)
-                            for k in keys_to_del:
-                                del profiles_to_update[k]
-                                profiles_changed = True
-                        if profiles_changed:
-                            save_user_profiles(profiles_to_update)
+            # Execute deletion if tiny header trash icon was clicked
+            if trigger_delete and (selected_names or selected_names_pre):
+                target_del_names = selected_names if selected_names else selected_names_pre
+                profiles_to_update = get_active_user_profiles()
+                profiles_changed = False
+                for del_name in target_del_names:
+                    keys_to_del = []
+                    for u_k, u_v in profiles_to_update.items():
+                        emp_n = u_v.get("employee_name", u_k).strip()
+                        full_n = u_v.get("profile", {}).get("full_name", "").strip()
+                        if emp_n.lower() == del_name.lower() or full_n.lower() == del_name.lower() or u_k.lower() == del_name.lower():
+                            keys_to_del.append(u_k)
+                    for k in keys_to_del:
+                        del profiles_to_update[k]
+                        profiles_changed = True
+                if profiles_changed:
+                    save_user_profiles(profiles_to_update)
 
-                        # 2. Filter out selected employees from manual_employees
-                        remaining_df = employees_df[employees_df["Select"] == False].drop(columns=["Select"], errors="ignore")
-                        st.session_state.manual_employees = cleanup_duplicate_employee_columns(remaining_df)
-                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                # Filter out selected employees from manual_employees
+                remaining_df = employees_df[employees_df["Select"] == False].drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
+                st.session_state.manual_employees = cleanup_duplicate_employee_columns(remaining_df)
+                save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
-                        # 3. Clear editor widget cache
-                        if "edit_employees" in st.session_state:
-                            del st.session_state["edit_employees"]
+                if "edit_employees" in st.session_state:
+                    del st.session_state["edit_employees"]
 
-                        st.success(f"✅ Successfully deleted {count} employee(s): {names_str}")
-                        st.rerun()
+                st.success(f"✅ Deleted selected employee(s): {', '.join(target_del_names)}")
+                st.rerun()
 
-            # Normal table edits save (with Select column removed)
+            # Normal table edits save
             clean_df = employees_df.drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
             st.session_state.manual_employees = cleanup_duplicate_employee_columns(clean_df)
             save_persisted_df(st.session_state.manual_employees, "employees.csv")
