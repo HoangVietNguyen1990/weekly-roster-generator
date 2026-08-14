@@ -2942,11 +2942,34 @@ if is_manager:
                     except:
                         pass
 
-        # SINGLE TABLE HEADER WITH CONDITIONAL DELETE BUTTON ON RIGHT
-        c_hdr_left, c_hdr_right = st.columns([9, 2])
+        # CSS TO ALIGN DELETE BUTTON PERFECTLY INSIDE HEADER BAR
+        st.markdown("""
+        <style>
+        div[data-testid="stColumn"]:has(button[key="btn_header_tiny_trash"]) {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+        }
+        div[data-testid="stColumn"]:has(button[key="btn_header_tiny_trash"]) button {
+            margin-top: -6px !important;
+            margin-bottom: 0px !important;
+            padding: 4px 14px !important;
+            height: 36px !important;
+            font-size: 0.85rem !important;
+            font-weight: 700 !important;
+            background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%) !important;
+            color: #ffffff !important;
+            border: 1px solid #ff7875 !important;
+            border-radius: 6px !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.25) !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        c_hdr_left, c_hdr_right = st.columns([8, 2])
         with c_hdr_left:
             st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 50px; display: flex; align-items: center;">
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 52px; display: flex; align-items: center;">
                 👥 Bakery Staff Members List (Editable Table)
             </div>
             """, unsafe_allow_html=True)
@@ -2954,13 +2977,13 @@ if is_manager:
             if selected_names_pre:
                 btn_label = f"🗑️ Delete ({len(selected_names_pre)})"
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 4px 8px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 50px; display: flex; align-items: center; justify-content: flex-end;">
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 0 12px 0 0; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 52px; display: flex; align-items: center; justify-content: flex-end;">
                 """, unsafe_allow_html=True)
                 trigger_delete = st.button(btn_label, key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
                 st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 50px;">
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 18px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 52px;">
                 </div>
                 """, unsafe_allow_html=True)
                 trigger_delete = False
