@@ -2942,50 +2942,56 @@ if is_manager:
                     except:
                         pass
 
-        # CSS TO ALIGN DELETE BUTTON PERFECTLY INSIDE HEADER BAR
+        # UNIFIED TABLE HEADER CONTAINER WITH INTEGRATED DELETE BUTTON
         st.markdown("""
         <style>
-        div[data-testid="stColumn"]:has(button[key="btn_header_tiny_trash"]) {
+        /* Style the stHorizontalBlock to be the single unified header bar */
+        div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) {
+            background: linear-gradient(135deg, #081d19 0%, #16443c 100%) !important;
+            border: 2px solid #e5a93c !important;
+            border-bottom: none !important;
+            border-radius: 12px 12px 0 0 !important;
+            margin-top: 15px !important;
+            padding: 8px 16px !important;
+            min-height: 54px !important;
+            align-items: center !important;
+        }
+        #staff-table-hdr-mark {
+            color: #ffffff !important;
+            font-weight: 800 !important;
+            font-size: 1.1rem !important;
+            letter-spacing: 0.3px !important;
             display: flex !important;
             align-items: center !important;
-            justify-content: flex-end !important;
         }
-        div[data-testid="stColumn"]:has(button[key="btn_header_tiny_trash"]) button {
-            margin-top: -6px !important;
-            margin-bottom: 0px !important;
-            padding: 4px 14px !important;
-            height: 36px !important;
-            font-size: 0.85rem !important;
-            font-weight: 700 !important;
+        div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) div[data-testid="stColumn"]:nth-child(2) {
+            display: flex !important;
+            justify-content: flex-end !important;
+            align-items: center !important;
+        }
+        button[key="btn_header_tiny_trash"] {
             background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%) !important;
             color: #ffffff !important;
             border: 1px solid #ff7875 !important;
             border-radius: 6px !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.25) !important;
+            border-radius: 6px !important;
+            font-weight: 700 !important;
+            font-size: 0.85rem !important;
+            padding: 4px 14px !important;
+            height: 36px !important;
+            margin: 0 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
         }
         </style>
         """, unsafe_allow_html=True)
 
-        c_hdr_left, c_hdr_right = st.columns([8, 2])
+        c_hdr_left, c_hdr_right = st.columns([7.5, 2.5])
         with c_hdr_left:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 18px; border-radius: 12px 0 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; border: 2px solid #e5a93c; border-right: none; border-bottom: none; margin-top: 15px; height: 52px; display: flex; align-items: center;">
-                👥 Bakery Staff Members List (Editable Table)
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown('<div id="staff-table-hdr-mark">👥 Bakery Staff Members List (Editable Table)</div>', unsafe_allow_html=True)
         with c_hdr_right:
             if selected_names_pre:
-                btn_label = f"🗑️ Delete ({len(selected_names_pre)})"
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 0 12px 0 0; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 52px; display: flex; align-items: center; justify-content: flex-end;">
-                """, unsafe_allow_html=True)
-                trigger_delete = st.button(btn_label, key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
-                st.markdown("</div>", unsafe_allow_html=True)
+                trigger_delete = st.button(f"🗑️ Delete ({len(selected_names_pre)})", key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
             else:
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 18px; border-radius: 0 12px 0 0; border: 2px solid #e5a93c; border-left: none; border-bottom: none; margin-top: 15px; height: 52px;">
-                </div>
-                """, unsafe_allow_html=True)
                 trigger_delete = False
 
         if not df_for_editor.empty:
