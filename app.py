@@ -745,6 +745,9 @@ def save_persisted_df(df, filename):
         pass
 
 def build_roster_excel_bytes(edited_final_df, start_date):
+    if edited_final_df is not None and not edited_final_df.empty:
+        edited_final_df = sort_dataframe_by_team_and_age(edited_final_df)
+        
     if isinstance(start_date, str):
         try:
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1118,8 +1121,10 @@ def calculate_roster_wages(edited_df):
         if age < 21:
             status_label += f" ({age}yo)"
 
+        emp_team = get_employee_team(meta.get("position", ""))
         emp_summary.append({
             "Staff Member": emp_raw_name,
+            "Team": emp_team,
             "Status": status_label,
             "Paid Hours": round(total_emp_hours, 1),
             "Gross Pay": round(total_emp_gross, 2),
@@ -1129,6 +1134,7 @@ def calculate_roster_wages(edited_df):
         })
 
     breakdown_df = pd.DataFrame(emp_summary)
+    breakdown_df = sort_dataframe_by_team_and_age(breakdown_df)
     tot_gross = sum(x["Gross Pay"] for x in emp_summary)
     tot_tax = sum(x["Est. Tax"] for x in emp_summary)
     tot_net = sum(x["Net Pay"] for x in emp_summary)
@@ -1540,6 +1546,124 @@ def calculate_age_from_dob(dob_str):
         pass
     return None
 
+def get_employee_team(role_str):
+    if not role_str or pd.isna(role_str):
+        return "Service Team"
+    role_lower = str(role_str).strip().lower()
+    if any(kw in role_lower for kw in ["baker", "baking", "pastry"]):
+        return "Baking Team"
+    return "Service Team"
+
+def get_employee_team_and_age(emp_name, role_str="", age_val=None, dob_str=""):
+    emp_name_clean = str(emp_name).strip() if pd.notna(emp_name) else ""
+    if not emp_name_clean or emp_name_clean.lower() in ["none", "nan", "total", "summary", "select", ""]:
+        return (99, 0, "")
+        
+    team = None
+    role_check = str(role_str).strip().lower() if role_str else ""
+    if role_check:
+        if any(kw in role_check for kw in ["baker", "baking", "pastry"]):
+            team = "Baking Team"
+        elif any(kw in role_check for kw in ["service", "senior team", "junior team", "sales", "retail"]):
+            team = "Service Team"
+
+    # Check active user profiles if available
+    profiles = get_active_user_profiles()
+    prof_age = None
+    prof_role = ""
+    for u_key, u_data in profiles.items():
+        ename = str(u_data.get("employee_name", u_key)).strip().lower()
+        if ename == emp_name_clean.lower():
+            prof = u_data.get("profile", {})
+            prof_role = prof.get("employment_level", "")
+            dob = prof.get("dob", "")
+            if dob:
+                res = calculate_age_from_dob(dob)
+                if res:
+                    prof_age = res[0]
+            break
+
+    if not team or team == "Service Team":
+        if prof_role and any(kw in str(prof_role).lower() for kw in ["baker", "baking", "pastry"]):
+            team = "Baking Team"
+        else:
+            team = "Service Team"
+
+    team_code = 0 if team == "Baking Team" else 1
+
+    # Determine Age
+    final_age = None
+    if age_val is not None and str(age_val).strip().replace('.', '', 1).isdigit():
+        try:
+            final_age = int(float(age_val))
+        except:
+            pass
+            
+    if final_age is None and dob_str:
+        res = calculate_age_from_dob(dob_str)
+        if res:
+            final_age = res[0]
+            
+    if final_age is None:
+        final_age = prof_age
+
+    if final_age is None:
+        if "manual_employees" in st.session_state and isinstance(st.session_state.manual_employees, pd.DataFrame):
+            e_df = st.session_state.manual_employees
+            n_col = find_column(e_df, ["name", "employee", "staff"], "NAME")
+            a_col = find_column(e_df, ["age"], "Age")
+            d_col = find_column(e_df, ["dob"], "DOB")
+            for _, r in e_df.iterrows():
+                if str(r.get(n_col, "")).strip().lower() == emp_name_clean.lower():
+                    if a_col and pd.notna(r.get(a_col)) and str(r.get(a_col)).replace('.', '', 1).isdigit():
+                        final_age = int(float(r.get(a_col)))
+                    elif d_col and pd.notna(r.get(d_col)):
+                        res = calculate_age_from_dob(r.get(d_col))
+                        if res:
+                            final_age = res[0]
+                    break
+
+    if final_age is None:
+        known_ages = {
+            "robert": 45, "aroha": 32, "viet": 35, "elizabeth": 28, 
+            "jude": 25, "aimi": 20, "ainsley mactier": 19, "ainsley": 19, 
+            "stella": 17, "anastasia": 26, "jack": 15, "shaelyn": 15, "amy": 16
+        }
+        final_age = known_ages.get(emp_name_clean.lower(), 21)
+
+    return (team_code, -final_age, emp_name_clean.lower())
+
+def sort_dataframe_by_team_and_age(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    df_copy = df.copy()
+
+    emp_col = find_column(df_copy, ["employee", "name", "staff", "employee name", "staff name"], "")
+    if not emp_col:
+        if df_copy.columns[0] not in ["Shift", "Date", "Day"]:
+            emp_col = df_copy.columns[0]
+        else:
+            return df_copy
+
+    role_col = find_column(df_copy, ["position", "role", "employment level", "job", "title", "team"], "")
+    age_col = find_column(df_copy, ["age"], "")
+    dob_col = find_column(df_copy, ["dob", "date of birth", "birth date"], "")
+
+    sort_keys = []
+    for idx, row in df_copy.iterrows():
+        emp_name = str(row.get(emp_col, "")).strip()
+        role_val = str(row.get(role_col, "")) if role_col else ""
+        age_val = row.get(age_col) if age_col else None
+        dob_val = str(row.get(dob_col, "")) if dob_col else ""
+
+        key = get_employee_team_and_age(emp_name, role_val, age_val, dob_val)
+        sort_keys.append(key)
+
+    df_copy["_sort_key"] = sort_keys
+    df_copy = df_copy.sort_values(by="_sort_key").drop(columns=["_sort_key"]).reset_index(drop=True)
+    return df_copy
+
 def cleanup_duplicate_employee_columns(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return df
@@ -1548,6 +1672,7 @@ def cleanup_duplicate_employee_columns(df):
     
     concept_mappings = {
         "NAME": ["name", "employee", "staff", "staff name", "employee name"],
+        "Team": ["team", "department", "group"],
         "DOB": ["dob", "date of birth", "birth date"],
         "Commencing Date": ["commencing date", "commence date", "commencement date", "start date", "started", "start"],
         "status": ["status", "employment type", "type", "classification", "employmenttype"],
@@ -1589,14 +1714,18 @@ def cleanup_duplicate_employee_columns(df):
             except:
                 pass
 
+        if not row_dict.get("Team"):
+            row_dict["Team"] = get_employee_team(row_dict.get("position", ""))
+
         new_rows.append(row_dict)
 
-    res_df = pd.DataFrame(new_rows, columns=["NAME", "DOB", "Commencing Date", "status", "position"])
+    res_df = pd.DataFrame(new_rows, columns=["NAME", "Team", "DOB", "Commencing Date", "status", "position"])
+    res_df = sort_dataframe_by_team_and_age(res_df)
     return res_df
 
 def sync_user_profiles_to_employees(emp_df):
     if emp_df is None:
-        emp_df = pd.DataFrame(columns=["NAME", "DOB", "Commencing Date", "status", "position"])
+        emp_df = pd.DataFrame(columns=["NAME", "Team", "DOB", "Commencing Date", "status", "position"])
     
     emp_df = cleanup_duplicate_employee_columns(emp_df)
     
@@ -1624,20 +1753,23 @@ def sync_user_profiles_to_employees(emp_df):
                         comm_date = dt.strftime('%d/%m/%Y')
                 except:
                     pass
+                pos_val = str(prof.get("employment_level", "Service Staff"))
                 new_rows.append({
                     "NAME": emp_name,
+                    "Team": get_employee_team(pos_val),
                     "DOB": prof.get("dob", ""),
                     "Commencing Date": comm_date,
                     "status": str(prof.get("classification", "casual")).lower(),
-                    "position": str(prof.get("employment_level", "Service Staff"))
+                    "position": pos_val
                 })
                 existing_names.append(emp_name.lower())
                 
     if new_rows:
         combined = pd.concat([emp_df, pd.DataFrame(new_rows)], ignore_index=True)
         emp_df = cleanup_duplicate_employee_columns(combined)
-        save_persisted_df(emp_df, "employees.csv")
         
+    emp_df = sort_dataframe_by_team_and_age(emp_df)
+    save_persisted_df(emp_df, "employees.csv")
     return emp_df
 
 def standardize_unavailability_df(df):
@@ -1693,13 +1825,13 @@ def clean_win_display(win_str):
 
 if 'manual_employees' not in st.session_state:
     default_emp = pd.DataFrame([
-        {"Name": "Elizabeth", "Role": "Senior Team Member", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
-        {"Name": "Stella", "Role": "Junior Team Member", "Age": "17", "Employment Type": "Casual", "Start Date": "2024-03-15"},
-        {"Name": "Ainsley Mactier", "Role": "Junior Team Member", "Age": "19", "Employment Type": "Casual", "Start Date": "2024-05-10"},
-        {"Name": "Aimi", "Role": "Junior Team Member", "Age": "20", "Employment Type": "Casual", "Start Date": "2024-06-01"},
-        {"Name": "Jude", "Role": "Senior Team Member", "Age": "25", "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
-        {"Name": "Aroha", "Role": "Senior Team Member", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
-        {"Name": "Robert", "Role": "Senior Team Member", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
+        {"Name": "Robert", "Role": "Baker", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
+        {"Name": "Aroha", "Role": "Baker Assistant", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
+        {"Name": "Elizabeth", "Role": "Service Staff", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
+        {"Name": "Jude", "Role": "Service Staff", "Age": "25", "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
+        {"Name": "Aimi", "Role": "Service Staff", "Age": "20", "Employment Type": "Casual", "Start Date": "2024-06-01"},
+        {"Name": "Ainsley Mactier", "Role": "Service Staff", "Age": "19", "Employment Type": "Casual", "Start Date": "2024-05-10"},
+        {"Name": "Stella", "Role": "Service Staff", "Age": "17", "Employment Type": "Casual", "Start Date": "2024-03-15"},
     ])
     st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
@@ -1716,7 +1848,7 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
         {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
         {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
     ])
-    st.session_state.manual_unavailability = standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail))
+    st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
 if 'manual_requirements' not in st.session_state:
@@ -1728,12 +1860,13 @@ if 'manual_requirements' not in st.session_state:
 
 if 'manual_fixed' not in st.session_state:
     default_fixed = pd.DataFrame([
-        {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "", "Wednesday": "", "Thursday": "", "Friday": "", "Saturday": "", "Sunday": ""},
         {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "", "Friday": "", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
+        {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "", "Wednesday": "", "Thursday": "", "Friday": "", "Saturday": "", "Sunday": ""},
     ])
-    st.session_state.manual_fixed = load_persisted_df("fixed.csv", default_fixed)
+    st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
 if st.session_state.manual_fixed is not None:
     st.session_state.manual_fixed = st.session_state.manual_fixed.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "")
+    st.session_state.manual_fixed = sort_dataframe_by_team_and_age(st.session_state.manual_fixed)
 
 # --- ROLE-BASED TAB NAVIGATION ---
 is_manager = (st.session_state.user_role == "Manager")
@@ -2616,6 +2749,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                 row[day] = val
         roster_rows.append(row)
     res_df = pd.DataFrame(roster_rows)
+    res_df = sort_dataframe_by_team_and_age(res_df)
     return res_df
 
 if is_manager:
