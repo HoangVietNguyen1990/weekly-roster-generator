@@ -1559,41 +1559,82 @@ def get_employee_team_and_age(emp_name, role_str="", age_val=None, dob_str=""):
     if not emp_name_clean or emp_name_clean.lower() in ["none", "nan", "total", "summary", "select", ""]:
         return (99, 0, "")
         
+    emp_lower = emp_name_clean.lower()
+
+    # Known store bakers
+    known_bakers = ["robert", "viet", "aroha"]
+    
+    # Store master ages for accurate intra-group ordering
+    known_ages = {
+        "jane": 50,
+        "robert": 45,
+        "viet": 35,
+        "aroha": 32,
+        "elizabeth": 28,
+        "anastasia": 26,
+        "jude": 25,
+        "esther amataiti": 24,
+        "esther": 24,
+        "aimi": 20,
+        "ainsley mactier": 19,
+        "ainsley": 19,
+        "stella": 17,
+        "amy": 16,
+        "jack": 15,
+        "shaelyn": 15,
+        "olivia": 15
+    }
+
+    # 1. Determine Team (0 = Baking Team, 1 = Service Team)
     team = None
-    role_check = str(role_str).strip().lower() if role_str else ""
-    if role_check:
-        if any(kw in role_check for kw in ["baker", "baking", "pastry"]):
-            team = "Baking Team"
-        elif any(kw in role_check for kw in ["service", "senior team", "junior team", "sales", "retail"]):
-            team = "Service Team"
+    if any(b in emp_lower for b in known_bakers):
+        team = "Baking Team"
+    else:
+        role_check = str(role_str).strip().lower() if role_str else ""
+        if role_check:
+            if any(kw in role_check for kw in ["baker", "baking", "pastry"]):
+                team = "Baking Team"
+            elif any(kw in role_check for kw in ["service", "senior team", "junior team", "sales", "retail"]):
+                team = "Service Team"
 
-    # Check active user profiles if available
-    profiles = get_active_user_profiles()
-    prof_age = None
-    prof_role = ""
-    for u_key, u_data in profiles.items():
-        ename = str(u_data.get("employee_name", u_key)).strip().lower()
-        if ename == emp_name_clean.lower():
-            prof = u_data.get("profile", {})
-            prof_role = prof.get("employment_level", "")
-            dob = prof.get("dob", "")
-            if dob:
-                res = calculate_age_from_dob(dob)
-                if res:
-                    prof_age = res[0]
-            break
+    if not team:
+        profiles = get_active_user_profiles()
+        for u_key, u_data in profiles.items():
+            ename = str(u_data.get("employee_name", u_key)).strip().lower()
+            if ename == emp_lower or emp_lower in ename:
+                prof = u_data.get("profile", {})
+                prof_role = str(prof.get("employment_level", "")).lower()
+                if any(kw in prof_role for kw in ["baker", "baking", "pastry"]):
+                    team = "Baking Team"
+                break
 
-    if not team or team == "Service Team":
-        if prof_role and any(kw in str(prof_role).lower() for kw in ["baker", "baking", "pastry"]):
-            team = "Baking Team"
-        else:
-            team = "Service Team"
+    if not team and "manual_employees" in st.session_state and isinstance(st.session_state.manual_employees, pd.DataFrame):
+        e_df = st.session_state.manual_employees
+        n_col = find_column(e_df, ["name", "employee", "staff"], "NAME")
+        p_col = find_column(e_df, ["position", "role", "employment level", "team"], "position")
+        for _, r in e_df.iterrows():
+            r_name = str(r.get(n_col, "")).strip().lower()
+            if r_name == emp_lower or emp_lower in r_name:
+                r_pos = str(r.get(p_col, "")).lower()
+                if any(kw in r_pos for kw in ["baker", "baking", "pastry"]):
+                    team = "Baking Team"
+                break
+
+    if not team:
+        team = "Service Team"
 
     team_code = 0 if team == "Baking Team" else 1
 
-    # Determine Age
-    final_age = None
-    if age_val is not None and str(age_val).strip().replace('.', '', 1).isdigit():
+    # 2. Determine Age
+    final_age = known_ages.get(emp_lower)
+    
+    if final_age is None and any(k in emp_lower for k in known_ages):
+        for k, v in known_ages.items():
+            if k in emp_lower:
+                final_age = v
+                break
+
+    if final_age is None and age_val is not None and str(age_val).strip().replace('.', '', 1).isdigit():
         try:
             final_age = int(float(age_val))
         except:
@@ -1603,35 +1644,11 @@ def get_employee_team_and_age(emp_name, role_str="", age_val=None, dob_str=""):
         res = calculate_age_from_dob(dob_str)
         if res:
             final_age = res[0]
-            
-    if final_age is None:
-        final_age = prof_age
 
     if final_age is None:
-        if "manual_employees" in st.session_state and isinstance(st.session_state.manual_employees, pd.DataFrame):
-            e_df = st.session_state.manual_employees
-            n_col = find_column(e_df, ["name", "employee", "staff"], "NAME")
-            a_col = find_column(e_df, ["age"], "Age")
-            d_col = find_column(e_df, ["dob"], "DOB")
-            for _, r in e_df.iterrows():
-                if str(r.get(n_col, "")).strip().lower() == emp_name_clean.lower():
-                    if a_col and pd.notna(r.get(a_col)) and str(r.get(a_col)).replace('.', '', 1).isdigit():
-                        final_age = int(float(r.get(a_col)))
-                    elif d_col and pd.notna(r.get(d_col)):
-                        res = calculate_age_from_dob(r.get(d_col))
-                        if res:
-                            final_age = res[0]
-                    break
+        final_age = 21
 
-    if final_age is None:
-        known_ages = {
-            "robert": 45, "aroha": 32, "viet": 35, "elizabeth": 28, 
-            "jude": 25, "aimi": 20, "ainsley mactier": 19, "ainsley": 19, 
-            "stella": 17, "anastasia": 26, "jack": 15, "shaelyn": 15, "amy": 16
-        }
-        final_age = known_ages.get(emp_name_clean.lower(), 21)
-
-    return (team_code, -final_age, emp_name_clean.lower())
+    return (team_code, -final_age, emp_lower)
 
 def sort_dataframe_by_team_and_age(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
@@ -2915,6 +2932,7 @@ if is_manager:
                         emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
                         if emp_c in df_clean.columns:
                             df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.success("🎉 Weekly Roster successfully generated!")
                     except Exception as e:
@@ -2931,6 +2949,7 @@ if is_manager:
                         emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
                         if emp_c in df_clean.columns:
                             df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.session_state.last_uploaded_roster_key = file_key
                         st.success(f"📁 Roster loaded for week starting {start_date.strftime('%d/%m/%Y')}!")
