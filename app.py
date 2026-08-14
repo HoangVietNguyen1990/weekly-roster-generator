@@ -587,7 +587,8 @@ def load_smtp_config():
         "sender_email": "",
         "sender_password": "",
         "portal_url": "https://weekly-roster-generator.streamlit.app",
-        "sender_name": "Bakery Manager"
+        "sender_name": "Bakery Manager",
+        "notification_recipients": "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
     }
     if os.path.exists(SMTP_CONFIG_FILE):
         try:
@@ -720,6 +721,56 @@ def send_test_email_smtp(recipient_email):
         return False, "❌ Gmail Authentication Failed (Error 535). Gmail requires a 16-character 'Google App Password' generated in your Google Account Security settings."
     except Exception as e:
         return False, f"❌ Connection Error: {e}"
+
+def send_availability_notification_email_smtp(emp_name, action_type, details_str):
+    cfg = load_smtp_config()
+    smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
+    smtp_port = int(cfg.get("smtp_port", 587))
+    sender_email = cfg.get("sender_email", "").strip()
+    sender_pass = cfg.get("sender_password", "").strip()
+    sender_name = cfg.get("sender_name", "Bakery Manager")
+    
+    recipients_raw = cfg.get("notification_recipients", "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com")
+    recipient_list = [r.strip() for r in re.split(r'[,;]', str(recipients_raw)) if r.strip()]
+    if not recipient_list:
+        recipient_list = ["quietsong2006@yahoo.com", "uyentrinhtran2309@gmail.com"]
+
+    if not sender_email or not sender_pass:
+        return False, "SMTP credentials not configured."
+
+    subject = f"📅 Staff Availability Alert: {emp_name} — {action_type}"
+    now_str = datetime.now().strftime("%d/%m/%Y at %I:%M %p")
+
+    body = f"""Subject: {subject}
+
+Staff Availability Notification Alert 🥐
+Brumby's Pakenham
+
+Employee Name: {emp_name}
+Action: {action_type}
+Timestamp: {now_str}
+
+Details of Availability Change:
+{details_str}
+
+This is an automated notification sent from the Brumby's Bakery Portal to keep managers informed of staff availability updates.
+"""
+
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = f"{sender_name} <{sender_email}>"
+        msg["To"] = ", ".join(recipient_list)
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.starttls()
+        server.login(sender_email, sender_pass)
+        server.send_message(msg)
+        server.quit()
+        return True, f"Notification sent to {', '.join(recipient_list)}"
+    except Exception as e:
+        return False, f"SMTP Notification Error: {e}"
 
 def load_persisted_df(filename, default_df):
     path = os.path.join(DATA_DIR, filename)
@@ -1370,6 +1421,9 @@ if role_title == "Manager":
             cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
             cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
             
+            st.markdown("##### 🔔 Manager Notification Recipients")
+            cfg_recipients = st.text_input("Notification Emails (comma-separated)", value=smtp_cfg.get("notification_recipients", "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"))
+            
             c_save, c_test = st.columns([1.2, 1])
             with c_save:
                 btn_save_smtp = st.form_submit_button("💾 Save Settings")
@@ -1383,7 +1437,8 @@ if role_title == "Manager":
                     "sender_email": cfg_semail.strip(),
                     "sender_password": cfg_spass.strip(),
                     "smtp_server": cfg_host.strip(),
-                    "smtp_port": int(cfg_port)
+                    "smtp_port": int(cfg_port),
+                    "notification_recipients": cfg_recipients.strip()
                 }
                 save_smtp_config(new_cfg)
                 st.success("✅ Email settings saved successfully!")
@@ -1395,7 +1450,8 @@ if role_title == "Manager":
                     "sender_email": cfg_semail.strip(),
                     "sender_password": cfg_spass.strip(),
                     "smtp_server": cfg_host.strip(),
-                    "smtp_port": int(cfg_port)
+                    "smtp_port": int(cfg_port),
+                    "notification_recipients": cfg_recipients.strip()
                 }
                 save_smtp_config(new_cfg)
                 ok, msg = send_test_email_smtp(cfg_semail.strip())
@@ -2241,15 +2297,24 @@ def render_employee_availability_manager(user_key):
                 win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
                 
                 new_entries = []
+                details_lines = [f"Effective Date Range: {date_note}"]
                 for d in checked_days:
                     t_val = day_inputs[d]["spec_time"]
                     final_win_str = f"{t_val} ({date_note})"
                     new_entries.append({emp_col: emp_name, day_col: d, win_col: final_win_str})
+                    details_lines.append(f"  • {d}: {t_val}")
                     
                 df_updated = pd.concat([df_curr, pd.DataFrame(new_entries)], ignore_index=True)
-                st.session_state.manual_unavailability = df_updated
-                save_persisted_df(df_updated, "unavailability.csv")
+                st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(df_updated)
+                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                
+                # Send email notification to managers
+                details_str = "\n".join(details_lines)
+                sent_ok, email_msg = send_availability_notification_email_smtp(emp_name, "Logged New Availability Constraints", details_str)
+
                 st.success(f"✅ Saved unavailability for {len(checked_days)} day(s) ({', '.join(checked_days)}) from {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}!")
+                if sent_ok:
+                    st.toast("📧 Managers notified via email (quietsong2006@yahoo.com & uyentrinhtran2309@gmail.com)!", icon="📧")
                 st.rerun()
 
     st.markdown("---")
@@ -2276,8 +2341,14 @@ def render_employee_availability_manager(user_key):
                 st.markdown(f'<span style="background-color: {badge_bg}; color: white; padding: 4px 14px; border-radius: 12px; font-weight: 700;">{win_val}</span>', unsafe_allow_html=True)
             with c3:
                 if st.button("🗑️ Delete", key=f"btn_delete_unavail_{idx}"):
+                    day_del = row.get(day_col, "")
+                    win_del = row.get(win_col, "")
                     st.session_state.manual_unavailability = df_curr.drop(idx).reset_index(drop=True)
                     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                    
+                    del_details = f"Removed Constraint:\n  • Day: {day_del}\n  • Details: {win_del}"
+                    send_availability_notification_email_smtp(emp_name, "Deleted Availability Constraint", del_details)
+
                     st.success("Constraint deleted.")
                     st.rerun()
 
