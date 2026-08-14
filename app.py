@@ -2957,6 +2957,7 @@ if is_manager:
             </div>
             """, unsafe_allow_html=True)
             
+            st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
 
             # Real-Time Financial Breakdown for Generated Roster
@@ -3053,7 +3054,7 @@ if is_manager:
             st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
         
         # Prepare dataframe for data_editor
-        df_for_editor = st.session_state.manual_employees.copy() if st.session_state.manual_employees is not None else pd.DataFrame()
+        df_for_editor = sort_dataframe_by_team_and_age(st.session_state.manual_employees.copy()) if st.session_state.manual_employees is not None else pd.DataFrame()
         if "Select" in df_for_editor.columns:
             df_for_editor.drop(columns=["Select"], inplace=True)
         if "🗑️ Delete" in df_for_editor.columns:
@@ -3486,6 +3487,8 @@ if is_manager:
             📌 Fixed Baseline Staff Shifts
         </div>
         """, unsafe_allow_html=True)
+        if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
+            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(st.session_state.manual_fixed)
         fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
         st.session_state.manual_fixed = fixed_df
         save_persisted_df(fixed_df, "fixed.csv")
