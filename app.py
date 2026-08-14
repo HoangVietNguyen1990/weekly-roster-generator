@@ -2923,7 +2923,42 @@ if is_manager:
         if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
             st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
         employees_df = st.data_editor(st.session_state.manual_employees, num_rows="dynamic", key="edit_employees")
-        if employees_df is not None and not employees_df.empty:
+        if employees_df is not None:
+            # Check if any row was deleted directly in data_editor table
+            if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                name_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME")
+                if name_col in st.session_state.manual_employees.columns:
+                    editor_state = st.session_state.get("edit_employees", {})
+                    deleted_indices = editor_state.get("deleted_rows", []) if isinstance(editor_state, dict) else []
+                    
+                    deleted_names = set()
+                    if deleted_indices:
+                        for idx in deleted_indices:
+                            if 0 <= idx < len(st.session_state.manual_employees):
+                                val = str(st.session_state.manual_employees.iloc[idx][name_col]).strip()
+                                if val:
+                                    deleted_names.add(val)
+                    else:
+                        old_names = [str(n).strip() for n in st.session_state.manual_employees[name_col].dropna().tolist() if str(n).strip()]
+                        new_names = [str(n).strip() for n in employees_df[name_col].dropna().tolist() if str(n).strip()] if (employees_df is not None and name_col in employees_df.columns) else []
+                        deleted_names = set(old_names) - set(new_names)
+
+                    if deleted_names:
+                        profiles_to_update = get_active_user_profiles()
+                        profiles_changed = False
+                        for del_name in deleted_names:
+                            keys_to_del = []
+                            for u_k, u_v in profiles_to_update.items():
+                                emp_n = u_v.get("employee_name", u_k).strip()
+                                full_n = u_v.get("profile", {}).get("full_name", "").strip()
+                                if emp_n.lower() == del_name.lower() or full_n.lower() == del_name.lower() or u_k.lower() == del_name.lower():
+                                    keys_to_del.append(u_k)
+                            for k in keys_to_del:
+                                del profiles_to_update[k]
+                                profiles_changed = True
+                        if profiles_changed:
+                            save_user_profiles(profiles_to_update)
+
             st.session_state.manual_employees = cleanup_duplicate_employee_columns(employees_df)
             save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
