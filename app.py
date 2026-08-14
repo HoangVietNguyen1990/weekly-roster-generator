@@ -2963,6 +2963,8 @@ if is_manager:
                     <li>Fulfills daily shift requirements</li>
                     <li>Ensures mandatory award break times</li>
                     <li>Enforces minimum rest periods between shifts</li>
+                    <li>Optimizes total wage costs (junior rate prioritization & penalty minimization)</li>
+                    <li>Organizes table layout: Baking Team first, followed by Service Team (Age Descending)</li>
                 </ul>
             </div>
             """, unsafe_allow_html=True)
