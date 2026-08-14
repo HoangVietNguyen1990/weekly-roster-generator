@@ -3018,6 +3018,9 @@ if is_manager:
             # Execute deletion if tiny header trash icon was clicked
             if trigger_delete and (selected_names or selected_names_pre):
                 target_del_names = selected_names if selected_names else selected_names_pre
+                target_lower = [n.lower() for n in target_del_names]
+
+                # 1. Remove from user_profiles.json (if account exists)
                 profiles_to_update = get_active_user_profiles()
                 profiles_changed = False
                 for del_name in target_del_names:
@@ -3033,11 +3036,16 @@ if is_manager:
                 if profiles_changed:
                     save_user_profiles(profiles_to_update)
 
-                # Filter out selected employees from manual_employees
-                remaining_df = employees_df[employees_df["Select"] == False].drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
-                st.session_state.manual_employees = cleanup_duplicate_employee_columns(remaining_df)
-                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                # 2. Explicitly remove selected employees from manual_employees table (works even if they don't have an account!)
+                if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                    emp_df = st.session_state.manual_employees.copy()
+                    n_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
+                    if n_col in emp_df.columns:
+                        emp_df = emp_df[~emp_df[n_col].astype(str).str.strip().str.lower().isin(target_lower)].reset_index(drop=True)
+                        st.session_state.manual_employees = emp_df
+                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
+                # 3. Clear widget cache and rerun
                 if "edit_employees" in st.session_state:
                     del st.session_state["edit_employees"]
 
@@ -3049,8 +3057,59 @@ if is_manager:
             st.session_state.manual_employees = cleanup_duplicate_employee_columns(clean_df)
             save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
-        # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM ---
-        with st.expander("➕ Add New Staff Account (Create Login & Roster Record)", expanded=False):
+        # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM & MISSING ACCOUNTS TOOL ---
+        with st.expander("➕ Add New Staff Account / Auto-Create Missing Logins", expanded=False):
+            # Check for employees in table without an account
+            if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                n_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME")
+                if n_col in st.session_state.manual_employees.columns:
+                    all_names = [str(n).strip() for n in st.session_state.manual_employees[n_col].dropna().tolist() if str(n).strip()]
+                    current_profiles = get_active_user_profiles()
+                    account_names = set()
+                    for u_k, u_v in current_profiles.items():
+                        if u_v.get("role") == "Employee":
+                            account_names.add(u_v.get("employee_name", u_k).strip().lower())
+                            account_names.add(u_v.get("profile", {}).get("full_name", "").strip().lower())
+                            account_names.add(u_k.lower())
+
+                    unlinked = [name for name in set(all_names) if name.lower() not in account_names and "demo" not in name.lower()]
+                    if unlinked:
+                        st.info(f"💡 Found **{len(unlinked)} staff member(s)** in the table without a login account: **{', '.join(unlinked)}**")
+                        if st.button("⚡ Auto-Create Login Accounts for All Missing Staff", key="btn_autocreate_missing_logins"):
+                            created_count = 0
+                            for un_name in unlinked:
+                                base_user = un_name.lower().replace(" ", ".")
+                                u_username = base_user
+                                counter = 1
+                                while u_username in current_profiles:
+                                    u_username = f"{base_user}{counter}"
+                                    counter += 1
+                                
+                                current_profiles[u_username] = {
+                                    "username": u_username,
+                                    "password": "TempPass123!",
+                                    "role": "Employee",
+                                    "employee_name": un_name,
+                                    "profile": {
+                                        "full_name": un_name,
+                                        "email": "",
+                                        "store": "Brumby's Pakenham",
+                                        "classification": "Casual",
+                                        "employment_level": "Service Staff",
+                                        "commencement_date": datetime.now().strftime("%Y-%m-%d")
+                                    }
+                                }
+                                created_count += 1
+                            
+                            save_user_profiles(current_profiles)
+                            st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                            save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                            if "edit_employees" in st.session_state:
+                                del st.session_state["edit_employees"]
+                            st.success(f"🎉 Successfully created {created_count} user login accounts! Initial Password: `TempPass123!`")
+                            st.rerun()
+
+            st.markdown("---")
             send_email_chk = st.checkbox("☑️ Send Welcome Email automatically", value=True, key="chk_send_welcome_email")
             
             emp_email_val = ""
