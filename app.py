@@ -1035,9 +1035,16 @@ def extract_date_from_filename(filename):
     # Ignore sample files like 00.00.2025
     if "00.00." in filename or ("SAMPLE" in filename.upper() and "ROSTER" not in filename.upper()):
         return None
+
+    month_map = {
+        'jan': 1, 'january': 1, 'feb': 2, 'february': 2, 'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4, 'may': 5, 'june': 6, 'jun': 6,
+        'jul': 7, 'july': 7, 'aug': 8, 'august': 8, 'sep': 9, 'sept': 9, 'september': 9,
+        'oct': 10, 'october': 10, 'nov': 11, 'november': 11, 'dec': 12, 'december': 12
+    }
         
     # Match YYYY-MM-DD
-    m = re.search(r'(20\d{2})[-._](\d{2})[-._](\d{2})', filename)
+    m = re.search(r'(20\d{2})[-._](\d{1,2})[-._](\d{1,2})', filename)
     if m:
         y, m_str, d = m.groups()
         try:
@@ -1069,6 +1076,32 @@ def extract_date_from_filename(filename):
                 return dt
         except:
             pass
+
+    # Match DD Month YYYY or DD-Month-YYYY (e.g. 10 August 2026, 10-Aug-2026)
+    m = re.search(r'(\d{1,2})[-._\s]+([a-zA-Z]{3,9})[-._\s]+(20\d{2})', filename)
+    if m:
+        d, m_name, y = m.groups()
+        m_num = month_map.get(m_name.lower())
+        if m_num:
+            try:
+                dt = datetime(int(y), m_num, int(d)).date()
+                if 2020 <= dt.year <= 2030:
+                    return dt
+            except:
+                pass
+
+    # Match Month DD YYYY or Month-DD-YYYY (e.g. August 10 2026, Aug-10-2026)
+    m = re.search(r'([a-zA-Z]{3,9})[-._\s]+(\d{1,2})[-._\s]+(20\d{2})', filename)
+    if m:
+        m_name, d, y = m.groups()
+        m_num = month_map.get(m_name.lower())
+        if m_num:
+            try:
+                dt = datetime(int(y), m_num, int(d)).date()
+                if 2020 <= dt.year <= 2030:
+                    return dt
+            except:
+                pass
 
     return None
 
@@ -1138,7 +1171,8 @@ def auto_import_reference_rosters(force_scan=False):
         csv_filename = f"Roster_{date_str}.csv"
         csv_path = os.path.join(FINALIZED_DIR, csv_filename)
         
-        if not os.path.exists(csv_path) or force_scan:
+        # Preserve existing user-saved rosters: only import if roster file does not exist or is empty
+        if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
             try:
                 if file_path.endswith(".csv"):
                     df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
@@ -3102,11 +3136,17 @@ if is_manager:
                     for u_file in uploaded_old_files:
                         u_key = f"bulk_file_done_{u_file.name}_{u_file.size}"
                         if st.session_state.get(u_key) is not True:
-                            dt_u = extract_date_from_filename(u_file.name)
-                            if dt_u is None:
-                                dt_u = datetime.now().date()
                             df_u = read_excel_robust(u_file) if u_file.name.endswith(".xlsx") else pd.read_csv(u_file, dtype=str)
                             if df_u is not None and not df_u.empty:
+                                dt_u = extract_date_from_filename(u_file.name)
+                                if dt_u is None:
+                                    for col in df_u.columns:
+                                        dt_cand = extract_date_from_filename(str(col))
+                                        if dt_cand:
+                                            dt_u = dt_cand
+                                            break
+                                if dt_u is None:
+                                    dt_u = datetime.now().date()
                                 save_finalized_roster(df_u, dt_u)
                                 st.session_state[u_key] = True
                                 bulk_count += 1
@@ -3298,7 +3338,9 @@ if is_manager:
                         df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.session_state.last_uploaded_roster_key = file_key
-                        st.success(f"📁 Roster loaded for week starting {start_date.strftime('%d/%m/%Y')}!")
+                        # Save immediately to disk so it is persisted after turn off / restart
+                        save_finalized_roster(df_clean, start_date)
+                        st.success(f"🎉 Roster loaded & permanently saved to disk for week starting {start_date.strftime('%d/%m/%Y')}!")
 
         with col2:
             st.markdown("""
