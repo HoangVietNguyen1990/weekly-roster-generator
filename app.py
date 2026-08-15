@@ -6,6 +6,7 @@ import io
 import os
 import copy
 import json
+import re
 from datetime import datetime, timedelta
 
 # Set page configuration with a modern design
@@ -1028,43 +1029,147 @@ def save_finalized_roster(df, start_date):
         
     return date_str, xlsx_filename, excel_bytes
 
-def auto_import_reference_rosters():
+def extract_date_from_filename(filename):
+    if not filename:
+        return None
+    # Ignore sample files like 00.00.2025
+    if "00.00." in filename or ("SAMPLE" in filename.upper() and "ROSTER" not in filename.upper()):
+        return None
+        
+    # Match YYYY-MM-DD
+    m = re.search(r'(20\d{2})[-._](\d{2})[-._](\d{2})', filename)
+    if m:
+        y, m_str, d = m.groups()
+        try:
+            dt = datetime(int(y), int(m_str), int(d)).date()
+            if 2020 <= dt.year <= 2030:
+                return dt
+        except:
+            pass
+
+    # Match DD.MM.YYYY or DD-MM-YYYY or DD_MM_YYYY
+    m = re.search(r'(\d{1,2})[-._](\d{1,2})[-._](20\d{2})', filename)
+    if m:
+        d, m_str, y = m.groups()
+        try:
+            dt = datetime(int(y), int(m_str), int(d)).date()
+            if 2020 <= dt.year <= 2030:
+                return dt
+        except:
+            pass
+
+    # Match DD-MM-YY or DD.MM.YY
+    m = re.search(r'(\d{1,2})[-._](\d{1,2})[-._](\d{2})', filename)
+    if m:
+        d, m_str, y_short = m.groups()
+        y = 2000 + int(y_short)
+        try:
+            dt = datetime(y, int(m_str), int(d)).date()
+            if 2020 <= dt.year <= 2030:
+                return dt
+        except:
+            pass
+
+    return None
+
+def find_all_old_roster_files():
+    found_files = []
+    seen = set()
+    
+    known_candidates = [
+        os.path.join(BASE_DIR, "Team Roster 10.08.2026.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 27.07.2026 Pakenham payroll_.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 20.07.2026 Pakenham payroll_.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 13.07.2026 Pakenham payroll_.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 29.06.2026 Pakenham payroll_.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "weekly roster demo.xlsx"),
+    ]
+    for kp in known_candidates:
+        if os.path.exists(kp) and kp not in seen:
+            seen.add(kp)
+            found_files.append(kp)
+
+    search_dirs = [
+        BASE_DIR,
+        DATA_DIR,
+        os.path.join(DATA_DIR, "demo doc"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster"),
+        os.path.expanduser(r"~\Downloads"),
+        os.path.expanduser(r"~\OneDrive\Desktop\wage"),
+        os.path.expanduser(r"~\OneDrive\Desktop\Happy Roli\New folder\roster"),
+        os.path.expanduser(r"~\OneDrive\Desktop\roli sugarhouse\roster"),
+        os.path.expanduser(r"~\OneDrive\Desktop"),
+    ]
+    
+    for sdir in search_dirs:
+        if os.path.exists(sdir):
+            try:
+                for root, dirs, files in os.walk(sdir):
+                    if "finalized_rosters" in root:
+                        continue
+                    for f in files:
+                        ext = os.path.splitext(f)[1].lower()
+                        if ext in [".xlsx", ".csv"] and not f.startswith("~$"):
+                            f_lower = f.lower()
+                            if any(k in f_lower for k in ["roster", "payroll", "pakenham", "team"]):
+                                full_p = os.path.abspath(os.path.join(root, f))
+                                if full_p not in seen:
+                                    seen.add(full_p)
+                                    found_files.append(full_p)
+            except Exception:
+                pass
+
+    return found_files
+
+def auto_import_reference_rosters(force_scan=False):
     if not os.path.exists(FINALIZED_DIR):
         os.makedirs(FINALIZED_DIR, exist_ok=True)
         
-    candidates = [
-        (os.path.join(BASE_DIR, "Team Roster 10.08.2026.xlsx"), "2026-08-10"),
-        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 27.07.2026 Pakenham payroll_.xlsx"), "2026-07-27"),
-        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 20.07.2026 Pakenham payroll_.xlsx"), "2026-07-20"),
-        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 13.07.2026 Pakenham payroll_.xlsx"), "2026-07-13"),
-        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 29.06.2026 Pakenham payroll_.xlsx"), "2026-06-29"),
-        (os.path.join(DATA_DIR, "demo doc", "weekly roster demo.xlsx"), "2026-08-10"),
-    ]
+    imported_count = 0
+    candidate_paths = find_all_old_roster_files()
     
-    for xlsx_path, date_str in candidates:
+    for file_path in candidate_paths:
+        fname = os.path.basename(file_path)
+        dt = extract_date_from_filename(fname)
+        if dt is None:
+            continue
+            
+        date_str = dt.strftime("%Y-%m-%d")
         csv_filename = f"Roster_{date_str}.csv"
         csv_path = os.path.join(FINALIZED_DIR, csv_filename)
-        if not os.path.exists(csv_path) and os.path.exists(xlsx_path):
+        
+        if not os.path.exists(csv_path) or force_scan:
             try:
-                df = read_excel_robust(xlsx_path)
+                if file_path.endswith(".csv"):
+                    df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+                else:
+                    df = read_excel_robust(file_path)
+                    
                 if df is not None and not df.empty:
                     name_col = find_column(df, ["name", "employee", "staff"], "NAME")
                     if name_col in df.columns:
                         df = df.rename(columns={name_col: "NAME"})
+                        
+                    date_label = dt.strftime("%d.%m.%Y")
+                    xlsx_filename = f"Team_Roster_{date_label}.xlsx"
+                    xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
+                    
                     df.astype(str).to_csv(csv_path, index=False)
-            except:
+                    excel_bytes = build_roster_excel_bytes(df, dt)
+                    with open(xlsx_path, "wb") as f:
+                        f.write(excel_bytes)
+                    imported_count += 1
+            except Exception:
                 pass
+    return imported_count
 
 def list_finalized_rosters():
     if not os.path.exists(FINALIZED_DIR):
         os.makedirs(FINALIZED_DIR, exist_ok=True)
         
+    auto_import_reference_rosters()
+    
     files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
-    if not files:
-        auto_import_reference_rosters()
-        if os.path.exists(FINALIZED_DIR):
-            files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
-            
     files.sort(reverse=True)
     results = []
     for f in files:
@@ -2973,6 +3078,41 @@ if is_manager:
             <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Select published weekly rosters to view, edit shifts, review real-time payroll breakdowns, and analyze historical financial trends.</p>
         </div>
         """, unsafe_allow_html=True)
+
+        with st.expander("📥 Bulk Upload & System Auto-Scan for Old Rosters", expanded=False):
+            col_sc1, col_sc2 = st.columns([1, 1])
+            with col_sc1:
+                st.markdown("#### 🔍 Auto-Scan System Folders")
+                st.write("Scan Downloads, Desktop, and project folders to automatically import all historical roster files.")
+                if st.button("🚀 Start Deep System Scan for Rosters", key="btn_deep_scan_rosters", use_container_width=True):
+                    num_found = auto_import_reference_rosters(force_scan=True)
+                    st.success(f"🎉 Deep system scan complete! Imported / refreshed {num_found} old roster(s).")
+                    st.rerun()
+            with col_sc2:
+                st.markdown("#### 📤 Drag & Drop Old Roster Files")
+                st.write("Upload multiple past roster Excel (.xlsx) or CSV files directly to publish them in the app.")
+                uploaded_old_files = st.file_uploader(
+                    "Upload Old Roster Files",
+                    type=["xlsx", "csv"],
+                    accept_multiple_files=True,
+                    key="bulk_uploader_old_rosters"
+                )
+                if uploaded_old_files:
+                    bulk_count = 0
+                    for u_file in uploaded_old_files:
+                        u_key = f"bulk_file_done_{u_file.name}_{u_file.size}"
+                        if st.session_state.get(u_key) is not True:
+                            dt_u = extract_date_from_filename(u_file.name)
+                            if dt_u is None:
+                                dt_u = datetime.now().date()
+                            df_u = read_excel_robust(u_file) if u_file.name.endswith(".xlsx") else pd.read_csv(u_file, dtype=str)
+                            if df_u is not None and not df_u.empty:
+                                save_finalized_roster(df_u, dt_u)
+                                st.session_state[u_key] = True
+                                bulk_count += 1
+                    if bulk_count > 0:
+                        st.success(f"🎉 Successfully imported {bulk_count} uploaded roster file(s)!")
+                        st.rerun()
 
         past_rosters = list_finalized_rosters()
         if past_rosters:
