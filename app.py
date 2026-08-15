@@ -875,8 +875,8 @@ def build_roster_excel_bytes(edited_final_df, start_date):
             c = ws.cell(row=r_idx, column=c_idx)
             val_str = "" if pd.isna(val) else str(val).strip()
             
-            # Don't show "unavailable" or "off" in exported Excel file - leave cells clean & blank
-            if val_str.lower() in ["unavailable", " unavailable", "off", "none", "nan"]:
+            # Leave unavailable, off, and none cells completely clean & blank in exported Excel file
+            if not val_str or val_str.lower() in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_str.lower().startswith("unavail"):
                 val_str = ""
             
             c.value = val_str
@@ -1217,12 +1217,29 @@ def list_finalized_rosters():
         results.append({"csv_filename": f, "date_str": raw_date, "label": label})
     return results
 
+def clean_roster_unavailability_display(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    df_out = df.copy()
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    days_in_df = [d for d in days_of_week if d in df_out.columns]
+    
+    for idx, row in df_out.iterrows():
+        for day in days_in_df:
+            val = str(row.get(day, "")).strip()
+            val_lower = val.lower()
+            if not val or val_lower in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_lower.startswith("unavail"):
+                df_out.at[idx, day] = ""
+
+    return df_out
+
 def load_finalized_roster(csv_filename):
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     if os.path.exists(csv_path):
         try:
             df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-            return df
+            return clean_roster_unavailability_display(df)
         except:
             return None
     return None
@@ -3089,13 +3106,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         row = {"Employee": name}
         for day in days_of_week:
             val = str(sched.get(day, "")).strip()
-            key = (norm_name, day.lower())
-            if not val or val.lower() in ["off", "none", "nan", "unavailable", ""] or val.lower().startswith("unavailable"):
-                if key in unavail_map and unavail_map[key]:
-                    clean_win = clean_win_display(unavail_map[key][0])
-                    row[day] = f"Unavailable ({clean_win})"
-                else:
-                    row[day] = ""
+            if not val or val.lower() in ["off", "none", "nan", "null", "unavailable", ""] or val.lower().startswith("unavail"):
+                row[day] = ""
             else:
                 row[day] = val
         roster_rows.append(row)
