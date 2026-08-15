@@ -1360,16 +1360,24 @@ def calculate_roster_wages(edited_df):
     if "manual_employees" in st.session_state and isinstance(st.session_state.manual_employees, pd.DataFrame):
         e_df = st.session_state.manual_employees
         n_col = find_column(e_df, ["name", "employee", "staff"], "Name")
-        a_col = find_column(e_df, ["age"], "Age")
+        a_col = find_column(e_df, ["age"], None)
+        dob_col = find_column(e_df, ["dob", "date of birth", "birth date", "birthdate"], None)
         s_col = find_column(e_df, ["employment type", "status", "classification", "type"], "Employment Type")
         
         for _, r in e_df.iterrows():
             name = str(r.get(n_col, "")).strip()
             if name:
-                age_val = r.get(a_col, 21)
-                try:
-                    age = int(float(age_val))
-                except:
+                age = None
+                if dob_col and dob_col in e_df.columns:
+                    dob_res = calculate_age_from_dob(r.get(dob_col))
+                    if dob_res:
+                        age = dob_res[0] if isinstance(dob_res, tuple) else dob_res
+                if age is None and a_col and a_col in e_df.columns:
+                    try:
+                        age = int(float(r.get(a_col)))
+                    except:
+                        age = None
+                if age is None:
                     age = 21
                 status = str(r.get(s_col, "Casual")).strip().lower()
                 emp_meta[name.lower()] = {"name": name, "age": age, "status": status}
@@ -1378,8 +1386,11 @@ def calculate_roster_wages(edited_df):
         emp_name = u_data.get("employee_name", u_key)
         prof = u_data.get("profile", {})
         status = str(prof.get("classification", "Casual")).strip().lower()
-        if emp_name.lower() not in emp_meta:
-            emp_meta[emp_name.lower()] = {"name": emp_name, "age": 21, "status": status}
+        dob_val = prof.get("dob", "")
+        dob_res = calculate_age_from_dob(dob_val)
+        age = (dob_res[0] if isinstance(dob_res, tuple) else dob_res) if dob_res else 21
+        if emp_name.lower() not in emp_meta or emp_meta[emp_name.lower()]["age"] == 21:
+            emp_meta[emp_name.lower()] = {"name": emp_name, "age": age, "status": status}
 
     emp_col = find_column(edited_df, ["employee", "name", "staff"], "Employee")
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
