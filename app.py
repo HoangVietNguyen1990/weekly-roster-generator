@@ -1028,10 +1028,43 @@ def save_finalized_roster(df, start_date):
         
     return date_str, xlsx_filename, excel_bytes
 
+def auto_import_reference_rosters():
+    if not os.path.exists(FINALIZED_DIR):
+        os.makedirs(FINALIZED_DIR, exist_ok=True)
+        
+    candidates = [
+        (os.path.join(BASE_DIR, "Team Roster 10.08.2026.xlsx"), "2026-08-10"),
+        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 27.07.2026 Pakenham payroll_.xlsx"), "2026-07-27"),
+        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 20.07.2026 Pakenham payroll_.xlsx"), "2026-07-20"),
+        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 13.07.2026 Pakenham payroll_.xlsx"), "2026-07-13"),
+        (os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 29.06.2026 Pakenham payroll_.xlsx"), "2026-06-29"),
+        (os.path.join(DATA_DIR, "demo doc", "weekly roster demo.xlsx"), "2026-08-10"),
+    ]
+    
+    for xlsx_path, date_str in candidates:
+        csv_filename = f"Roster_{date_str}.csv"
+        csv_path = os.path.join(FINALIZED_DIR, csv_filename)
+        if not os.path.exists(csv_path) and os.path.exists(xlsx_path):
+            try:
+                df = read_excel_robust(xlsx_path)
+                if df is not None and not df.empty:
+                    name_col = find_column(df, ["name", "employee", "staff"], "NAME")
+                    if name_col in df.columns:
+                        df = df.rename(columns={name_col: "NAME"})
+                    df.astype(str).to_csv(csv_path, index=False)
+            except:
+                pass
+
 def list_finalized_rosters():
     if not os.path.exists(FINALIZED_DIR):
-        return []
+        os.makedirs(FINALIZED_DIR, exist_ok=True)
+        
     files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+    if not files:
+        auto_import_reference_rosters()
+        if os.path.exists(FINALIZED_DIR):
+            files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+            
     files.sort(reverse=True)
     results = []
     for f in files:
@@ -3023,7 +3056,10 @@ if is_manager:
                 if not wages_summary["breakdown_df"].empty:
                     st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
         else:
-            st.info("ℹ️ No finalized rosters stored yet. Go to the '⚡ Weekly Roster Generator' tab to generate, upload, and finalize weekly schedules.")
+            st.info("ℹ️ No finalized rosters displayed yet.")
+            if st.button("🔄 Auto-Scan & Restore Published Master Rosters", key="btn_load_past_home_1", use_container_width=True):
+                auto_import_reference_rosters()
+                st.rerun()
 
         # --- HISTORICAL PROGRESS LINE GRAPH ---
         st.markdown("<br><hr>", unsafe_allow_html=True)
@@ -3040,7 +3076,10 @@ if is_manager:
             st.line_chart(chart_df, use_container_width=True)
             st.dataframe(trend_df, use_container_width=True, hide_index=True)
         else:
-            st.info("ℹ️ Finalize at least one weekly roster to view the historical progress line graph!")
+            st.info("ℹ️ Click below to load and analyze historical published rosters.")
+            if st.button("🔄 Load Historical Roster Data & Line Graph", key="btn_load_past_home_2", use_container_width=True):
+                auto_import_reference_rosters()
+                st.rerun()
 
     # --- TAB 2: WEEKLY ROSTER GENERATOR ---
     with tab_gen:
