@@ -1432,16 +1432,34 @@ def calculate_roster_wages(edited_df):
                     total_emp_hours += paid_hrs
 
                     if day in ["Saturday"]:
-                        multiplier = 1.50 if is_casual else 1.25
+                        mult = 1.50 if is_casual else 1.25
+                        total_emp_gross += paid_hrs * base_hourly * mult
                     elif day in ["Sunday"]:
-                        multiplier = 1.75 if is_casual else 1.50
+                        mult = 1.75 if is_casual else 1.50
+                        total_emp_gross += paid_hrs * base_hourly * mult
                     else:
-                        if end_t > 18.0:
-                            multiplier = 1.50 if is_casual else 1.25
-                        else:
-                            multiplier = 1.25 if is_casual else 1.00
+                        # Weekday shift (Mon-Fri)
+                        ord_mult = 1.25 if is_casual else 1.00
+                        eve_mult = 1.50 if is_casual else 1.25
 
-                    total_emp_gross += paid_hrs * base_hourly * multiplier
+                        if end_t <= 18.0:
+                            total_emp_gross += paid_hrs * base_hourly * ord_mult
+                        elif start_t >= 18.0:
+                            total_emp_gross += paid_hrs * base_hourly * eve_mult
+                        else:
+                            # Shift spans across 6:00 PM (18.0)
+                            pre_6_hrs = max(0.0, 18.0 - start_t)
+                            post_6_hrs = max(0.0, end_t - 18.0)
+                            
+                            if duration >= 5.0:
+                                ratio = paid_hrs / duration
+                                pre_paid = pre_6_hrs * ratio
+                                post_paid = post_6_hrs * ratio
+                            else:
+                                pre_paid = pre_6_hrs
+                                post_paid = post_6_hrs
+
+                            total_emp_gross += (pre_paid * ord_mult + post_paid * eve_mult) * base_hourly
 
         g = total_emp_gross
         if g <= 359:
@@ -1454,7 +1472,12 @@ def calculate_roster_wages(edited_df):
             tax = 627.51 + (g - 2500) * 0.37
 
         net_pay = max(0.0, g - tax)
-        super_sg = g * 0.125
+
+        # ATO Superannuation Guarantee Rule: Under-18 employees working 30h or less in a week receive $0.00 super
+        if age < 18 and total_emp_hours <= 30.0:
+            super_sg = 0.0
+        else:
+            super_sg = g * 0.125
 
         status_label = "Casual" if is_casual else ("Part-Time" if "part" in status_clean else "Full-Time")
         if age < 21:
