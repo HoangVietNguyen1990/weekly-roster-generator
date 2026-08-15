@@ -1229,10 +1229,87 @@ def clean_roster_unavailability_display(df):
         for day in days_in_df:
             val = str(row.get(day, "")).strip()
             val_lower = val.lower()
-            if not val or val_lower in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_lower.startswith("unavail"):
+            if not val or val_lower in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_lower.startswith("unavail") or val.startswith("🚫"):
                 df_out.at[idx, day] = ""
 
     return df_out
+
+def format_roster_with_unavailability_badges(df, unavail_data=None):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    df_out = df.copy()
+    emp_col = find_column(df_out, ["employee", "name", "staff", "staff name"], df_out.columns[0])
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    days_in_df = [d for d in days_of_week if d in df_out.columns]
+    
+    if not days_in_df:
+        return df_out
+
+    if unavail_data is None or (isinstance(unavail_data, pd.DataFrame) and unavail_data.empty):
+        unavail_data = st.session_state.get("manual_unavailability", None)
+        if unavail_data is None or (isinstance(unavail_data, pd.DataFrame) and unavail_data.empty):
+            unavail_path = os.path.join(DATA_DIR, "unavailability.csv")
+            if os.path.exists(unavail_path):
+                try:
+                    unavail_data = pd.read_csv(unavail_path, dtype=str, keep_default_na=False)
+                except:
+                    unavail_data = pd.DataFrame()
+
+    unavail_map = {}
+    if isinstance(unavail_data, pd.DataFrame) and not unavail_data.empty:
+        un_name_c = find_column(unavail_data, ["employee", "name", "staff", "person"])
+        un_day_c = find_column(unavail_data, ["day", "date", "weekday"])
+        un_win_c = find_column(unavail_data, ["time window", "window", "time", "unavailability", "reason"])
+        
+        if un_name_c and un_day_c and un_win_c:
+            for _, u_row in unavail_data.iterrows():
+                u_emp = str(u_row.get(un_name_c, "")).strip().lower()
+                u_day = str(u_row.get(un_day_c, "")).strip().lower()
+                u_win = str(u_row.get(un_win_c, "Full Day")).strip()
+                if u_emp and u_day:
+                    key = (u_emp, u_day)
+                    if key not in unavail_map:
+                        unavail_map[key] = []
+                    unavail_map[key].append(u_win)
+
+    for idx, row in df_out.iterrows():
+        emp_name = str(row.get(emp_col, "")).strip()
+        if not emp_name:
+            continue
+        emp_lower = emp_name.lower()
+
+        for day in days_in_df:
+            val = str(row.get(day, "")).strip()
+            val_lower = val.lower()
+            key = (emp_lower, day.lower())
+
+            if not val or val_lower in ["off", "none", "nan", "unavailable", " unavailable"] or "unavail" in val_lower or val.startswith("🚫"):
+                if key in unavail_map and unavail_map[key]:
+                    clean_win = clean_win_display(unavail_map[key][0])
+                    df_out.at[idx, day] = f"🚫 Unavailable ({clean_win})"
+                elif "unavail" in val_lower or val.startswith("🚫"):
+                    df_out.at[idx, day] = "🚫 Unavailable (Full Day)"
+
+    return df_out
+
+def highlight_unavailability_dataframe(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    days_in_df = [c for c in days_of_week if c in df.columns]
+    
+    def color_cells(val):
+        v = str(val).strip()
+        if not v:
+            return ''
+        if "🚫" in v or "unavail" in v.lower():
+            # Crimson alert background with bold text for admin visual assistance
+            return 'background-color: rgba(184, 40, 40, 0.45); color: #ffe6e6; font-weight: 800; border: 1.5px solid #ff4d4d;'
+        return 'background-color: rgba(14, 43, 38, 0.6); color: #ffffff; font-weight: 600;'
+
+    return df.style.map(color_cells, subset=days_in_df)
 
 def load_finalized_roster(csv_filename):
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
@@ -3106,8 +3183,15 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         row = {"Employee": name}
         for day in days_of_week:
             val = str(sched.get(day, "")).strip()
-            if not val or val.lower() in ["off", "none", "nan", "null", "unavailable", ""] or val.lower().startswith("unavail"):
-                row[day] = ""
+            key = (norm_name, day.lower())
+            if not val or val.lower() in ["off", "none", "nan", "null", "unavailable", ""] or val.lower().startswith("unavail") or val.startswith("🚫"):
+                if key in unavail_map and unavail_map[key]:
+                    clean_win = clean_win_display(unavail_map[key][0])
+                    row[day] = f"🚫 Unavailable ({clean_win})"
+                elif "unavail" in val.lower() or val.startswith("🚫"):
+                    row[day] = "🚫 Unavailable (Full Day)"
+                else:
+                    row[day] = ""
             else:
                 row[day] = val
         roster_rows.append(row)
@@ -3378,8 +3462,20 @@ if is_manager:
             </div>
             """, unsafe_allow_html=True)
             
+            st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
             st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
+            
+            st.markdown("""
+            <div style="background: rgba(184, 40, 40, 0.15); border: 1px solid rgba(255, 77, 77, 0.5); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.92rem; color: #ffe6e6;">
+                💡 <b>Admin Editing Assist:</b> Staff unavailability constraints are marked with <b>🚫 Unavailable (Window)</b> in the editor below and highlighted in crimson red in the visual map.
+            </div>
+            """, unsafe_allow_html=True)
+            
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
+
+            with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
+                st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
+                st.dataframe(highlight_unavailability_dataframe(st.session_state.final_roster_df), use_container_width=True)
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
