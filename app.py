@@ -1407,11 +1407,13 @@ def calculate_roster_wages(edited_df):
         status_clean = meta["status"]
         is_casual = "casual" in status_clean
 
-        base_adult_rate = 26.10
-        if "manager" in emp_raw_name.lower() or "owner" in status_clean:
-            base_adult_rate = 30.00
-        elif "senior" in status_clean:
-            base_adult_rate = 26.80
+        base_adult_rate = 27.81
+        if "baker" in emp_raw_name.lower() or "baker" in status_clean:
+            base_adult_rate = 29.45
+        elif "manager" in emp_raw_name.lower() or "owner" in status_clean:
+            base_adult_rate = 38.15
+        elif "senior" in status_clean or "level 3" in status_clean:
+            base_adult_rate = 28.89
 
         if age < 16:
             j_scale = 0.45
