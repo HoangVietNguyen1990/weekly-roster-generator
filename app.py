@@ -1392,7 +1392,7 @@ def build_payroll_historical_trend():
     if not records:
         return pd.DataFrame()
         
-    trend_df = pd.DataFrame(records).sort_values("date").drop(columns=["date"]).reset_index(drop=True)
+    trend_df = pd.DataFrame(records).sort_values("date").reset_index(drop=True)
     return trend_df
 
 def find_column(df, candidates, default=""):
@@ -3236,10 +3236,13 @@ if is_manager:
         
         trend_df = build_payroll_historical_trend()
         if not trend_df.empty and len(trend_df) >= 1:
-            st.markdown("Historical trend analysis of **Gross Payroll**, **Est. PAYG Tax**, **Net Take-Home**, and **Super (12.5% SG)** across all finalized weekly rosters:")
-            chart_df = trend_df.set_index("Roster Week")
+            st.markdown("Historical trend analysis of **Gross Payroll**, **Est. PAYG Tax**, **Net Take-Home**, and **Super (12.5% SG)** across all finalized weekly rosters (chronologically ordered):")
+            chart_df = trend_df.copy()
+            chart_df["Date"] = pd.to_datetime(chart_df["date"])
+            chart_df = chart_df.sort_values("Date").set_index("Date").drop(columns=["date", "Roster Week"], errors="ignore")
             st.line_chart(chart_df, use_container_width=True)
-            st.dataframe(trend_df, use_container_width=True, hide_index=True)
+            display_df = trend_df.drop(columns=["date"], errors="ignore")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ Click below to load and analyze historical published rosters.")
             if st.button("🔄 Load Historical Roster Data & Line Graph", key="btn_load_past_home_2", use_container_width=True):
