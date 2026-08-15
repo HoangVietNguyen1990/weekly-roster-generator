@@ -3456,26 +3456,36 @@ if is_manager:
         if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
             st.markdown("<br>", unsafe_allow_html=True)
             
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
-                📅 Generated Weekly Roster Schedule (Editable)
-            </div>
-            """, unsafe_allow_html=True)
+            col_tbl_h1, col_tbl_h2 = st.columns([2, 1])
+            with col_tbl_h1:
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
+                    📅 Generated Weekly Roster Schedule (Editable)
+                </div>
+                """, unsafe_allow_html=True)
+            with col_tbl_h2:
+                show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
             
-            st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
+            if show_unavail:
+                st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
+            else:
+                st.session_state.final_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
+
             st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
             
-            st.markdown("""
-            <div style="background: rgba(184, 40, 40, 0.15); border: 1px solid rgba(255, 77, 77, 0.5); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.92rem; color: #ffe6e6;">
-                💡 <b>Admin Editing Assist:</b> Staff unavailability constraints are marked with <b>🚫 Unavailable (Window)</b> in the editor below and highlighted in crimson red in the visual map.
-            </div>
-            """, unsafe_allow_html=True)
+            if show_unavail:
+                st.markdown("""
+                <div style="background: rgba(184, 40, 40, 0.15); border: 1px solid rgba(255, 77, 77, 0.5); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.92rem; color: #ffe6e6;">
+                    💡 <b>Admin Editing Assist:</b> Staff unavailability constraints are marked with <b>🚫 Unavailable (Window)</b> in the editor below and highlighted in crimson red in the visual map.
+                </div>
+                """, unsafe_allow_html=True)
             
             edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
 
-            with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
-                st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
-                st.dataframe(highlight_unavailability_dataframe(st.session_state.final_roster_df), use_container_width=True)
+            if show_unavail:
+                with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
+                    st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
+                    st.dataframe(highlight_unavailability_dataframe(st.session_state.final_roster_df), use_container_width=True)
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
