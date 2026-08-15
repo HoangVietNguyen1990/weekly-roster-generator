@@ -1973,7 +1973,7 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
-if 'manual_requirements' not in st.session_state:
+if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
     default_req = pd.DataFrame([
         {"Shift": "12:00pm-5:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
         {"Shift": "7:00am-10:00am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
@@ -1991,7 +1991,7 @@ if 'manual_requirements' not in st.session_state:
     ])
     st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
-if 'manual_fixed' not in st.session_state:
+if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
     default_fixed = pd.DataFrame([
         {"Employee": "Viet Nguyen", "Monday": "off", "Tuesday": "4:00am-12:00pm", "Wednesday": "off", "Thursday": "5:30am-12:30pm", "Friday": "5:30am-12:30pm", "Saturday": "4:00am-12:00pm", "Sunday": "5:30am-12:30pm"},
         {"Employee": "Anastasia", "Monday": "12:00am-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
@@ -3593,7 +3593,20 @@ if is_manager:
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
-        st.subheader("Daily Bakery Shift Requirements")
+        col_hdr_r1, col_hdr_r2 = st.columns([3, 1])
+        with col_hdr_r1:
+            st.subheader("Daily Bakery Shift Requirements")
+        with col_hdr_r2:
+            if st.button("🔄 Reset Master Requirements Data", key="btn_reset_req_master"):
+                st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
+                if "edit_requirements" in st.session_state:
+                    del st.session_state["edit_requirements"]
+                st.success("✅ Requirements reloaded from master data!")
+                st.rerun()
+
+        if st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
+            st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
+
         req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
         upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
         
@@ -3616,13 +3629,26 @@ if is_manager:
             📋 Daily Shift Coverage Requirements (Mon-Sun)
         </div>
         """, unsafe_allow_html=True)
-        requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements")
+        requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements_v2")
         st.session_state.manual_requirements = requirements_df
         save_persisted_df(requirements_df, "requirements.csv")
 
     # --- TAB 5: FIXED SHIFTS ---
     with tab_fixed:
-        st.subheader("Fixed Baseline Shifts")
+        col_hdr_f1, col_hdr_f2 = st.columns([3, 1])
+        with col_hdr_f1:
+            st.subheader("Fixed Baseline Shifts")
+        with col_hdr_f2:
+            if st.button("🔄 Reset Master Fixed Shifts Data", key="btn_reset_fixed_master"):
+                st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
+                if "edit_fixed" in st.session_state:
+                    del st.session_state["edit_fixed"]
+                st.success("✅ Fixed shifts reloaded from master data!")
+                st.rerun()
+
+        if st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
+            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
+
         fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
         upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
         
@@ -3647,6 +3673,6 @@ if is_manager:
         """, unsafe_allow_html=True)
         if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
             st.session_state.manual_fixed = sort_dataframe_by_team_and_age(st.session_state.manual_fixed)
-        fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed")
+        fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed_v2")
         st.session_state.manual_fixed = fixed_df
         save_persisted_df(fixed_df, "fixed.csv")
