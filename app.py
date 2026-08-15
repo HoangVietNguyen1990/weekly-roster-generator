@@ -457,72 +457,72 @@ USER_PROFILES_FILE = os.path.join(DATA_DIR, "user_profiles.json")
 
 DEFAULT_PROFILES = {
   "admin": {
-    "username": "admin",
-    "password": "admin123",
-    "role": "Manager",
-    "employee_name": "Bakery Manager",
-    "profile": {
-      "full_name": "Bakery Manager", "address": "", "home_phone": "", "mobile": "",
-      "email": "manager@brumbys.com.au", "dob": "", "gender": "", "tfn": "",
-      "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "",
-      "employment_level": "Store Manager", "super_fund": "", "super_policy": "",
-      "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "",
-      "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": ""
-    }
+    "username": "admin", "password": "admin123", "role": "Manager", "employee_name": "Bakery Manager",
+    "profile": { "full_name": "Bakery Manager", "address": "", "home_phone": "", "mobile": "", "email": "manager@brumbys.com.au", "dob": "", "gender": "", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "", "employment_level": "Store Manager", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
   },
   "ainsley.mactier": {
-    "username": "ainsley.mactier",
-    "password": "TempPass123!",
-    "role": "Employee",
-    "employee_name": "Ainsley Mactier",
-    "profile": {
-      "full_name": "Ainsley Brenda Mactier",
-      "address": "8 Knapton Ave, Beaconsfield Upper, Vic 3808",
-      "home_phone": "0359192106",
-      "mobile": "0479122444",
-      "email": "ainsley.mac@outlook.com",
-      "dob": "14th August 2006",
-      "gender": "Female",
-      "tfn": "520700",
-      "store": "Brumby's Pakenham",
-      "classification": "Casual",
-      "commencement_date": "2024-05-10",
-      "employment_level": "Junior Team Member",
-      "super_fund": "Australian Super",
-      "super_policy": "9124950",
-      "super_address": "",
-      "super_contact": "",
-      "super_abn": "",
-      "bank_name": "Commonwealth",
-      "bank_branch": "",
-      "bank_bsb": "062 948",
-      "bank_account": "2847 7286",
-      "account_name": "Ainsley Mactier"
-    }
+    "username": "ainsley.mactier", "password": "TempPass123!", "role": "Employee", "employee_name": "Ainsley Mactier",
+    "profile": { "full_name": "Ainsley Brenda Mactier", "address": "8 Knapton Ave, Beaconsfield Upper, Vic 3808", "home_phone": "0359192106", "mobile": "0479122444", "email": "ainsley.mac@outlook.com", "dob": "14/08/2006", "gender": "Female", "tfn": "520700", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "04/10/2021", "employment_level": "Service Staff" }
   },
   "elizabeth": {
     "username": "elizabeth", "password": "TempPass123!", "role": "Employee", "employee_name": "Elizabeth",
-    "profile": { "full_name": "Elizabeth", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Part-Time", "commencement_date": "2024-01-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Elizabeth", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "30/07/2004", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "03/06/2024", "employment_level": "Service Staff" }
   },
   "stella": {
     "username": "stella", "password": "TempPass123!", "role": "Employee", "employee_name": "Stella",
-    "profile": { "full_name": "Stella", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-03-15", "employment_level": "Junior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Stella", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "03/07/2007", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "09/01/2024", "employment_level": "Service Staff" }
   },
   "aimi": {
     "username": "aimi", "password": "TempPass123!", "role": "Employee", "employee_name": "Aimi",
-    "profile": { "full_name": "Aimi", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-06-01", "employment_level": "Junior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Aimi", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "10/11/2006", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "01/10/2023", "employment_level": "Service Staff" }
   },
   "jude": {
     "username": "jude", "password": "TempPass123!", "role": "Employee", "employee_name": "Jude",
-    "profile": { "full_name": "Jude", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2024-01-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Jude", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "28/04/2011", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "27/07/2026", "employment_level": "Service Staff" }
   },
   "aroha": {
     "username": "aroha", "password": "TempPass123!", "role": "Employee", "employee_name": "Aroha",
-    "profile": { "full_name": "Aroha", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-11-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Aroha", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "24/05/2005", "gender": "Female", "tfn": "", "store": "Brumby's Pakenham", "classification": "part time", "commencement_date": "27/09/2021", "employment_level": "baker assitant" }
   },
   "robert": {
     "username": "robert", "password": "TempPass123!", "role": "Employee", "employee_name": "Robert",
-    "profile": { "full_name": "Robert", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-10-01", "employment_level": "Senior Team Member", "super_fund": "", "super_policy": "", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "", "bank_branch": "", "bank_bsb": "", "bank_account": "", "account_name": "" }
+    "profile": { "full_name": "Robert", "address": "", "home_phone": "", "mobile": "", "email": "", "dob": "19/02/2004", "gender": "Male", "tfn": "", "store": "Brumby's Pakenham", "classification": "part time", "commencement_date": "22/01/2024", "employment_level": "baker" }
+  },
+  "anastasia": {
+    "username": "anastasia", "password": "TempPass123!", "role": "Employee", "employee_name": "Anastasia",
+    "profile": { "full_name": "Anastasia", "dob": "02/03/2000", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "04/10/2021", "employment_level": "Service Staff" }
+  },
+  "jack": {
+    "username": "jack", "password": "TempPass123!", "role": "Employee", "employee_name": "Jack",
+    "profile": { "full_name": "Jack", "dob": "28/04/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "27/07/2026", "employment_level": "Service Staff" }
+  },
+  "jane": {
+    "username": "jane", "password": "TempPass123!", "role": "Employee", "employee_name": "Jane",
+    "profile": { "full_name": "Jane", "store": "Brumby's Pakenham", "classification": "owner", "employment_level": "Service Staff" }
+  },
+  "amy": {
+    "username": "amy", "password": "TempPass123!", "role": "Employee", "employee_name": "Amy",
+    "profile": { "full_name": "Amy", "dob": "27/02/2010", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "25/05/2026", "employment_level": "Service Staff" }
+  },
+  "viet": {
+    "username": "viet", "password": "TempPass123!", "role": "Employee", "employee_name": "Viet",
+    "profile": { "full_name": "Viet", "store": "Brumby's Pakenham", "classification": "owner", "employment_level": "baker" }
+  },
+  "esther.amataiti": {
+    "username": "esther.amataiti", "password": "TempPass123!", "role": "Employee", "employee_name": "Esther Amataiti",
+    "profile": { "full_name": "Esther Amataiti", "dob": "20/09/2001", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "20/09/2021", "employment_level": "Service Staff" }
+  },
+  "olivia": {
+    "username": "olivia", "password": "TempPass123!", "role": "Employee", "employee_name": "Olivia",
+    "profile": { "full_name": "Olivia", "dob": "15/01/2007", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "27/05/2024", "employment_level": "Service Staff" }
+  },
+  "violet": {
+    "username": "violet", "password": "TempPass123!", "role": "Employee", "employee_name": "Violet",
+    "profile": { "full_name": "Violet", "dob": "27/02/2010", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "25/05/2026", "employment_level": "Service Staff" }
+  },
+  "shaelyn": {
+    "username": "shaelyn", "password": "TempPass123!", "role": "Employee", "employee_name": "Shaelyn",
+    "profile": { "full_name": "Shaelyn", "dob": "01/08/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "01/08/2026", "employment_level": "Service Staff" }
   },
   "demo.employee": {
     "username": "demo.employee", "password": "DemoPass123!", "role": "Employee", "employee_name": "Demo Employee (Test Account)",
@@ -778,11 +778,33 @@ def load_persisted_df(filename, default_df):
         try:
             # Read all columns as string without converting empty cells to NaN
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
-            if df is None or df.empty:
-                return default_df
-            return df
+            if df is not None and not df.empty:
+                return df
         except:
-            return default_df
+            pass
+            
+    # Auto-recovery fallback: Check if master Excel document exists in data/Document/
+    doc_mapping = {
+        "employees.csv": "EMPLOYEE LIST.xlsx",
+        "unavailability.csv": "unavailability list.xlsx",
+        "requirements.csv": "Daily Shift personel requirement.xlsx",
+        "fixed.csv": "Roster fixed - dont change.xlsx"
+    }
+    excel_name = doc_mapping.get(filename)
+    if excel_name:
+        excel_path = os.path.join(DATA_DIR, "Document", excel_name)
+        if os.path.exists(excel_path):
+            try:
+                excel_df = read_excel_robust(excel_path)
+                if excel_df is not None and not excel_df.empty:
+                    try:
+                        excel_df.astype(str).to_csv(path, index=False)
+                    except:
+                        pass
+                    return excel_df
+            except:
+                pass
+                
     return default_df
 
 def save_persisted_df(df, filename):
@@ -1898,13 +1920,22 @@ def clean_win_display(win_str):
 
 if 'manual_employees' not in st.session_state:
     default_emp = pd.DataFrame([
-        {"Name": "Robert", "Role": "Baker", "Age": "45", "Employment Type": "Full-Time", "Start Date": "2023-10-01"},
-        {"Name": "Aroha", "Role": "Baker Assistant", "Age": "32", "Employment Type": "Full-Time", "Start Date": "2023-11-01"},
-        {"Name": "Elizabeth", "Role": "Service Staff", "Age": "28", "Employment Type": "Part-Time", "Start Date": "2024-01-01"},
-        {"Name": "Jude", "Role": "Service Staff", "Age": "25", "Employment Type": "Full-Time", "Start Date": "2024-01-01"},
-        {"Name": "Aimi", "Role": "Service Staff", "Age": "20", "Employment Type": "Casual", "Start Date": "2024-06-01"},
-        {"Name": "Ainsley Mactier", "Role": "Service Staff", "Age": "19", "Employment Type": "Casual", "Start Date": "2024-05-10"},
-        {"Name": "Stella", "Role": "Service Staff", "Age": "17", "Employment Type": "Casual", "Start Date": "2024-03-15"},
+        {"NAME": "Aimi", "Team": "Service Staff", "DOB": "10/11/2006", "Commencing Date": "01/10/2023", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Ainsley Mactier", "Team": "Service Staff", "DOB": "14/08/2006", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Aroha", "Team": "Bakery Staff", "DOB": "24/05/2005", "Commencing Date": "27/09/2021", "status": "part time", "position": "baker assitant"},
+        {"NAME": "Elizabeth", "Team": "Service Staff", "DOB": "30/07/2004", "Commencing Date": "03/06/2024", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Olivia", "Team": "Service Staff", "DOB": "15/01/2007", "Commencing Date": "27/05/2024", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Robert", "Team": "Bakery Staff", "DOB": "19/02/2004", "Commencing Date": "22/01/2024", "status": "part time", "position": "baker"},
+        {"NAME": "Stella", "Team": "Service Staff", "DOB": "03/07/2007", "Commencing Date": "09/01/2024", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Violet", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Esther Amataiti", "Team": "Service Staff", "DOB": "20/09/2001", "Commencing Date": "20/09/2021", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Anastasia", "Team": "Service Staff", "DOB": "02/03/2000", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Jude", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Jack", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Jane", "Team": "Store Owners", "DOB": "", "Commencing Date": "", "status": "owner", "position": "Service Staff"},
+        {"NAME": "Amy", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
+        {"NAME": "Viet", "Team": "Bakery Staff", "DOB": "", "Commencing Date": "", "status": "owner", "position": "baker"},
+        {"NAME": "Shaelyn", "Team": "Service Staff", "DOB": "01/08/2011", "Commencing Date": "01/08/2026", "status": "casual", "position": "Service Staff"}
     ])
     st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
@@ -1917,24 +1948,59 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
         {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
         {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
         {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
+        {"Employee": "Aimi", "Day": "Sunday", "Time Window": "All Day (Uni)"},
         {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
         {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
         {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
+        {"Employee": "Jack", "Day": "Monday", "Time Window": "4:30pm-7:00pm"},
+        {"Employee": "Jack", "Day": "Tuesday", "Time Window": "4:30pm-7:00pm"},
+        {"Employee": "Jack", "Day": "Wednesday", "Time Window": "4:30pm-7:00pm"},
+        {"Employee": "Jack", "Day": "Thursday", "Time Window": "4:30pm-7:00pm"},
+        {"Employee": "Jack", "Day": "Friday", "Time Window": "2:30pm-5:30pm"},
+        {"Employee": "Violet", "Day": "Saturday", "Time Window": "All Day"},
+        {"Employee": "Violet", "Day": "Sunday", "Time Window": "All Day"},
+        {"Employee": "Amy", "Day": "Monday", "Time Window": "All Day"},
+        {"Employee": "Amy", "Day": "Tuesday", "Time Window": "All Day"},
+        {"Employee": "Amy", "Day": "Wednesday", "Time Window": "All Day"},
+        {"Employee": "Amy", "Day": "Thursday", "Time Window": "All Day"},
+        {"Employee": "Amy", "Day": "Friday", "Time Window": "All Day"},
+        {"Employee": "Olivia", "Day": "Monday", "Time Window": "All Day"},
+        {"Employee": "Olivia", "Day": "Tuesday", "Time Window": "All Day"},
+        {"Employee": "Olivia", "Day": "Wednesday", "Time Window": "All Day"},
+        {"Employee": "Olivia", "Day": "Thursday", "Time Window": "All Day"},
+        {"Employee": "Olivia", "Day": "Friday", "Time Window": "All Day"}
     ])
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
 if 'manual_requirements' not in st.session_state:
     default_req = pd.DataFrame([
-        {"Shift": "7:30am-12:30pm", "Monday": "2", "Tuesday": "2", "Wednesday": "2", "Thursday": "2", "Friday": "2", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "12:30pm-5:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "2", "Sunday": "2"},
+        {"Shift": "12:00pm-5:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "7:00am-10:00am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+        {"Shift": "7:00am-12:00pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "7:30am-10:30am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+        {"Shift": "7:30am-12:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "7:30am-3:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "8:30am-1:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+        {"Shift": "9:00am-5:00pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "11:30am-2:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"},
+        {"Shift": "12:00pm-7:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "12:30pm-5:30pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "1"},
+        {"Shift": "4:00pm-7:00pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "1", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+        {"Shift": "2:30pm-5:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"}
     ])
     st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
 if 'manual_fixed' not in st.session_state:
     default_fixed = pd.DataFrame([
-        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "", "Friday": "", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
-        {"Employee": "Elizabeth", "Monday": "7:30am-12:30pm", "Tuesday": "", "Wednesday": "", "Thursday": "", "Friday": "", "Saturday": "", "Sunday": ""},
+        {"Employee": "Viet Nguyen", "Monday": "off", "Tuesday": "4:00am-12:00pm", "Wednesday": "off", "Thursday": "5:30am-12:30pm", "Friday": "5:30am-12:30pm", "Saturday": "4:00am-12:00pm", "Sunday": "5:30am-12:30pm"},
+        {"Employee": "Anastasia", "Monday": "12:00am-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
+        {"Employee": "Esther Amataiti", "Monday": "7:00am-12:00pm", "Tuesday": "7:00am-12:00pm", "Wednesday": "off", "Thursday": "7:30am-12:30pm", "Friday": "7:00am-12:00pm", "Saturday": "off", "Sunday": "off"},
+        {"Employee": "Jane", "Monday": "off", "Tuesday": "12:00pm-5:00pm", "Wednesday": "12:30pm-5:30pm", "Thursday": "12:30pm-5:30pm", "Friday": "off", "Saturday": "10:00am-3:00pm", "Sunday": "9:00am-2:00am"},
+        {"Employee": "Amy", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
+        {"Employee": "Olivia", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
+        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
+        {"Employee": "Robert", "Monday": "4:00am-12:00pm", "Tuesday": "off", "Wednesday": "4:00am-12:00pm", "Thursday": "4:00pm-12:00pm", "Friday": "4:00am-12:00pm", "Saturday": "off", "Sunday": "4:00am-12:00pm"}
     ])
     st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
 if st.session_state.manual_fixed is not None:
