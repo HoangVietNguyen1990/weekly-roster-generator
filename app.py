@@ -1566,15 +1566,40 @@ def read_excel_robust(uploaded_file):
         df.columns = [str(c).strip() for c in df.columns]
         
         # Convert all columns to strings to make them fully editable in st.data_editor
-        for col in df.columns:
-            if pd.api.types.is_datetime64_any_dtype(df[col]):
-                df[col] = df[col].dt.strftime('%Y-%m-%d')
-            else:
-                df[col] = df[col].astype(str).replace("NaT", "").replace("nan", "")
+        df = clean_roster_dataframe(df)
         return df
     except Exception as e:
         st.error(f"Error parsing Excel file structure: {e}")
         return None
+
+def clean_roster_dataframe(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+        
+    df = df.copy()
+    emp_col = find_column(df, ["employee", "name", "staff", "staff name", "employee name"], df.columns[0])
+    
+    junk_keywords = [
+        "hours or more", "hours up to", "less than", "shift duration", "break",
+        "total", "legend", "notes", "rationale", "brumby", "unnamed", "system.xml",
+        "week", "employee shift", "paid rest", "unpaid meal", "entitlement",
+        "new trainer", "personnel", "coverage", "requirements"
+    ]
+    
+    clean_indices = []
+    for idx, row in df.iterrows():
+        val = str(row.get(emp_col, "")).strip()
+        val_lower = val.lower()
+        
+        if not val or val_lower in ["nan", "none", "nat", "null", ""]:
+            continue
+            
+        if any(kw in val_lower for kw in junk_keywords):
+            continue
+            
+        clean_indices.append(idx)
+        
+    return df.loc[clean_indices].reset_index(drop=True)
 
 import re
 
@@ -3108,6 +3133,7 @@ if is_manager:
                         emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
                         if emp_c in df_clean.columns:
                             df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        df_clean = clean_roster_dataframe(df_clean)
                         df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.success("🎉 Weekly Roster successfully generated!")
@@ -3125,6 +3151,7 @@ if is_manager:
                         emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
                         if emp_c in df_clean.columns:
                             df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                        df_clean = clean_roster_dataframe(df_clean)
                         df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.session_state.last_uploaded_roster_key = file_key
