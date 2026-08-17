@@ -1404,33 +1404,63 @@ def calculate_roster_wages(edited_df):
 
         meta = emp_meta.get(emp_raw_name.lower(), {"name": emp_raw_name, "age": 21, "status": "casual"})
         age = meta["age"]
-        status_clean = meta["status"]
-        is_casual = "casual" in status_clean
+        status_clean = meta["status"].lower()
+        emp_name_lower = emp_raw_name.lower()
 
-        base_adult_rate = 27.81
-        if "baker" in emp_raw_name.lower() or "baker" in status_clean:
-            base_adult_rate = 29.45
-        elif "manager" in emp_raw_name.lower() or "owner" in status_clean:
-            base_adult_rate = 38.15
-        elif "senior" in status_clean or "level 3" in status_clean:
-            base_adult_rate = 28.89
+        # Specific user classification rules:
+        # 1. Viet & Jane calculate as Casual Level 1
+        # 2. Robert is Baker Level 1
+        is_viet_or_jane = any(k in emp_name_lower for k in ["viet", "jane"]) or "owner" in status_clean
+        is_casual = is_viet_or_jane or "casual" in status_clean
+        emp_type = "casual" if is_casual else "pt_ft"
 
-        if age < 16:
-            j_scale = 0.45
-        elif age == 16:
-            j_scale = 0.50
-        elif age == 17:
-            j_scale = 0.60
-        elif age == 18:
-            j_scale = 0.70
-        elif age == 19:
-            j_scale = 0.80
-        elif age == 20:
-            j_scale = 0.90
+        # Level assignment: Robert is Level 1, others with explicit level 3 remain level 3 if specified
+        if "robert" in emp_name_lower:
+            lvl = "level1"
+        elif is_viet_or_jane:
+            lvl = "level1"
         else:
-            j_scale = 1.00
+            is_baker_lvl3 = "level 3" in status_clean
+            lvl = "level3" if is_baker_lvl3 else "level1"
 
-        base_hourly = base_adult_rate * j_scale
+        age_key = "adult" if age >= 21 else (age if age in [15, 16, 17, 18, 19, 20] else (15 if age < 15 else "adult"))
+
+        # Strict Fair Work Ombudsman Pay Guide - General Retail Industry Award [MA000004] (Effective 01/07/2026)
+        PAY_GUIDE_MA000004 = {
+            # Casual Level 1 (Service Staff & Casual Level 1)
+            ("casual", "level1", "adult"): {"ord": 34.76, "eve": 41.72, "sat": 41.72, "sun": 48.67, "ph": 69.53},
+            ("casual", "level1", 20): {"ord": 34.76, "eve": 41.72, "sat": 41.72, "sun": 48.67, "ph": 69.53},
+            ("casual", "level1", 19): {"ord": 27.81, "eve": 33.38, "sat": 33.38, "sun": 38.94, "ph": 55.63},
+            ("casual", "level1", 18): {"ord": 24.34, "eve": 29.21, "sat": 29.21, "sun": 34.07, "ph": 48.68},
+            ("casual", "level1", 17): {"ord": 20.86, "eve": 25.04, "sat": 25.04, "sun": 29.21, "ph": 41.73},
+            ("casual", "level1", 16): {"ord": 17.39, "eve": 20.87, "sat": 20.87, "sun": 24.34, "ph": 34.78},
+            ("casual", "level1", 15): {"ord": 15.64, "eve": 18.77, "sat": 18.77, "sun": 21.89, "ph": 31.28},
+            # Full-time / Part-time Level 1 (Service Staff & Baker Lvl 1)
+            ("pt_ft", "level1", "adult"): {"ord": 27.81, "eve": 34.76, "sat": 34.76, "sun": 41.72, "ph": 62.57},
+            ("pt_ft", "level1", 20): {"ord": 27.81, "eve": 34.76, "sat": 34.76, "sun": 41.72, "ph": 62.57},
+            ("pt_ft", "level1", 19): {"ord": 22.25, "eve": 27.81, "sat": 27.81, "sun": 33.38, "ph": 50.06},
+            ("pt_ft", "level1", 18): {"ord": 19.47, "eve": 24.34, "sat": 24.34, "sun": 29.21, "ph": 43.81},
+            ("pt_ft", "level1", 17): {"ord": 16.69, "eve": 20.86, "sat": 20.86, "sun": 25.04, "ph": 37.55},
+            ("pt_ft", "level1", 16): {"ord": 13.91, "eve": 17.39, "sat": 17.39, "sun": 20.87, "ph": 31.30},
+            ("pt_ft", "level1", 15): {"ord": 12.51, "eve": 15.64, "sat": 15.64, "sun": 18.77, "ph": 28.15},
+            # Casual Level 3
+            ("casual", "level3", "adult"): {"ord": 36.11, "eve": 43.34, "sat": 43.34, "sun": 50.56, "ph": 72.23},
+            ("casual", "level3", 20): {"ord": 36.11, "eve": 43.34, "sat": 43.34, "sun": 50.56, "ph": 72.23},
+            ("casual", "level3", 19): {"ord": 28.89, "eve": 34.67, "sat": 34.67, "sun": 40.44, "ph": 57.78},
+            ("casual", "level3", 18): {"ord": 25.28, "eve": 30.33, "sat": 30.33, "sun": 35.39, "ph": 50.55},
+            ("casual", "level3", 17): {"ord": 21.66, "eve": 26.00, "sat": 26.00, "sun": 30.33, "ph": 43.33},
+            ("casual", "level3", 16): {"ord": 18.05, "eve": 21.66, "sat": 21.66, "sun": 25.27, "ph": 36.10},
+            ("casual", "level3", 15): {"ord": 16.25, "eve": 19.50, "sat": 19.50, "sun": 22.75, "ph": 32.50},
+            # Full-time / Part-time Level 3
+            ("pt_ft", "level3", "adult"): {"ord": 28.89, "eve": 36.11, "sat": 36.11, "sun": 43.34, "ph": 65.00},
+            ("pt_ft", "level3", 20): {"ord": 28.89, "eve": 36.11, "sat": 36.11, "sun": 43.34, "ph": 65.00},
+            ("pt_ft", "level3", 19): {"ord": 23.11, "eve": 28.89, "sat": 28.89, "sun": 34.67, "ph": 52.00},
+            ("pt_ft", "level3", 18): {"ord": 20.22, "eve": 25.28, "sat": 25.28, "sun": 30.33, "ph": 45.50},
+            ("pt_ft", "level3", 17): {"ord": 17.33, "eve": 21.66, "sat": 21.66, "sun": 26.00, "ph": 38.99},
+            ("pt_ft", "level3", 16): {"ord": 14.44, "eve": 18.05, "sat": 18.05, "sun": 21.66, "ph": 32.49},
+            ("pt_ft", "level3", 15): {"ord": 13.00, "eve": 16.25, "sat": 16.25, "sun": 19.50, "ph": 29.25},
+        }
+        rates = PAY_GUIDE_MA000004.get((emp_type, lvl, age_key), PAY_GUIDE_MA000004[("casual", "level1", "adult")])
 
         total_emp_hours = 0.0
         total_emp_gross = 0.0
@@ -1445,25 +1475,18 @@ def calculate_roster_wages(edited_df):
                     total_emp_hours += paid_hrs
 
                     if day in ["Saturday"]:
-                        mult = 1.50 if is_casual else 1.25
-                        total_emp_gross += paid_hrs * base_hourly * mult
+                        total_emp_gross += paid_hrs * rates["sat"]
                     elif day in ["Sunday"]:
-                        mult = 1.75 if is_casual else 1.50
-                        total_emp_gross += paid_hrs * base_hourly * mult
+                        total_emp_gross += paid_hrs * rates["sun"]
                     else:
-                        # Weekday shift (Mon-Fri)
-                        ord_mult = 1.25 if is_casual else 1.00
-                        eve_mult = 1.50 if is_casual else 1.25
-
+                        # Mon-Fri
                         if end_t <= 18.0:
-                            total_emp_gross += paid_hrs * base_hourly * ord_mult
+                            total_emp_gross += paid_hrs * rates["ord"]
                         elif start_t >= 18.0:
-                            total_emp_gross += paid_hrs * base_hourly * eve_mult
+                            total_emp_gross += paid_hrs * rates["eve"]
                         else:
-                            # Shift spans across 6:00 PM (18.0)
                             pre_6_hrs = max(0.0, 18.0 - start_t)
                             post_6_hrs = max(0.0, end_t - 18.0)
-                            
                             if duration >= 5.0:
                                 ratio = paid_hrs / duration
                                 pre_paid = pre_6_hrs * ratio
@@ -1471,8 +1494,7 @@ def calculate_roster_wages(edited_df):
                             else:
                                 pre_paid = pre_6_hrs
                                 post_paid = post_6_hrs
-
-                            total_emp_gross += (pre_paid * ord_mult + post_paid * eve_mult) * base_hourly
+                            total_emp_gross += pre_paid * rates["ord"] + post_paid * rates["eve"]
 
         g = total_emp_gross
         if g <= 359:
@@ -1492,9 +1514,14 @@ def calculate_roster_wages(edited_df):
         else:
             super_sg = g * 0.125
 
-        status_label = "Casual" if is_casual else ("Part-Time" if "part" in status_clean else "Full-Time")
-        if age < 21:
-            status_label += f" ({age}yo)"
+        if is_viet_or_jane:
+            status_label = "Casual Lvl 1 (Owner)"
+        elif "robert" in emp_name_lower:
+            status_label = "Part-Time (Baker Lvl 1)"
+        else:
+            status_label = "Casual" if is_casual else ("Part-Time" if "part" in status_clean else "Full-Time")
+            if age < 21:
+                status_label += f" ({age}yo)"
 
         emp_team = get_employee_team(meta.get("position", ""))
         emp_summary.append({
