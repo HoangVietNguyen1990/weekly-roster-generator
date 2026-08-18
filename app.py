@@ -634,20 +634,57 @@ def load_smtp_config():
         "sender_name": "Bakery Manager",
         "notification_recipients": "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
     }
+    cfg = default_config.copy()
     if os.path.exists(SMTP_CONFIG_FILE):
         try:
             with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                for k, v in default_config.items():
-                    if k not in cfg:
+                disk_cfg = json.load(f)
+                for k, v in disk_cfg.items():
+                    if v or k not in cfg:
                         cfg[k] = v
-                return cfg
         except:
             pass
-    return default_config
+
+    # Check Streamlit secrets or env vars fallback if password is empty
+    if not cfg.get("sender_password"):
+        try:
+            if hasattr(st, "secrets") and "SENDER_PASSWORD" in st.secrets:
+                cfg["sender_password"] = str(st.secrets["SENDER_PASSWORD"]).strip()
+            elif hasattr(st, "secrets") and "SMTP_PASSWORD" in st.secrets:
+                cfg["sender_password"] = str(st.secrets["SMTP_PASSWORD"]).strip()
+            elif os.environ.get("SENDER_PASSWORD"):
+                cfg["sender_password"] = os.environ.get("SENDER_PASSWORD").strip()
+        except:
+            pass
+
+    # Check session memory shield
+    if not cfg.get("sender_password") and st.session_state.get("memory_smtp_password"):
+        cfg["sender_password"] = st.session_state["memory_smtp_password"]
+
+    return cfg
 
 def save_smtp_config(cfg):
     try:
+        # Load existing disk config to prevent erasing existing password with an empty string
+        existing_cfg = {}
+        if os.path.exists(SMTP_CONFIG_FILE):
+            try:
+                with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f_in:
+                    existing_cfg = json.load(f_in)
+            except:
+                pass
+        
+        # If new password is empty string, preserve existing password from disk or session memory
+        new_pass = str(cfg.get("sender_password", "")).strip()
+        if not new_pass:
+            old_pass = str(existing_cfg.get("sender_password", "")).strip()
+            if not old_pass:
+                old_pass = str(st.session_state.get("memory_smtp_password", "")).strip()
+            if old_pass:
+                cfg["sender_password"] = old_pass
+        else:
+            st.session_state["memory_smtp_password"] = new_pass
+
         with open(SMTP_CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(cfg, f, indent=2)
     except:
@@ -1856,24 +1893,29 @@ if role_title == "Manager":
                 btn_test_smtp = st.form_submit_button("🧪 Test Email")
 
             if btn_save_smtp:
+                saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
                 new_cfg = {
                     "portal_url": cfg_url.strip(),
                     "sender_name": cfg_sname.strip(),
                     "sender_email": cfg_semail.strip(),
-                    "sender_password": cfg_spass.strip(),
+                    "sender_password": saved_pass,
                     "smtp_server": cfg_host.strip(),
                     "smtp_port": int(cfg_port),
                     "notification_recipients": cfg_recipients.strip()
                 }
                 save_smtp_config(new_cfg)
-                st.success("✅ Email settings saved successfully!")
+                if saved_pass:
+                    st.success("✅ Email settings saved successfully!")
+                else:
+                    st.warning("⚠️ Settings saved, but **Sender App Password** is currently blank. Email notifications will not send until a 16-character Google App Password is entered.")
 
             if btn_test_smtp:
+                saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
                 new_cfg = {
                     "portal_url": cfg_url.strip(),
                     "sender_name": cfg_sname.strip(),
                     "sender_email": cfg_semail.strip(),
-                    "sender_password": cfg_spass.strip(),
+                    "sender_password": saved_pass,
                     "smtp_server": cfg_host.strip(),
                     "smtp_port": int(cfg_port),
                     "notification_recipients": cfg_recipients.strip()
@@ -2808,7 +2850,9 @@ def render_employee_availability_manager(user_key):
 
                 st.success(f"✅ Saved unavailability for {len(checked_days)} day(s) ({', '.join(checked_days)}) from {start_date.strftime('%d/%m/%Y')} to {end_date.strftime('%d/%m/%Y')}!")
                 if sent_ok:
-                    st.toast("📧 Managers notified via email (quietsong2006@yahoo.com & uyentrinhtran2309@gmail.com)!", icon="📧")
+                    st.toast("📧 Managers notified via email!", icon="📧")
+                else:
+                    st.toast(f"⚠️ Unavailability saved locally, but email failed: {email_msg}", icon="⚠️")
                 st.rerun()
 
     st.markdown("---")
@@ -2841,7 +2885,11 @@ def render_employee_availability_manager(user_key):
                     save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
                     
                     del_details = f"Removed Constraint:\n  • Day: {day_del}\n  • Details: {win_del}"
-                    send_availability_notification_email_smtp(emp_name, "Deleted Availability Constraint", del_details)
+                    sent_ok_del, email_msg_del = send_availability_notification_email_smtp(emp_name, "Deleted Availability Constraint", del_details)
+                    if sent_ok_del:
+                        st.toast("📧 Managers notified of deletion!", icon="📧")
+                    else:
+                        st.toast(f"⚠️ Constraint deleted locally, but email failed: {email_msg_del}", icon="⚠️")
 
                     st.success("Constraint deleted.")
                     st.rerun()
