@@ -3701,22 +3701,6 @@ if is_manager:
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
 
-                # High-Contrast Aligned Bottom Daily Gross Cell Strip Bar
-                daily_badges_html = "".join([
-                    f"<div style='flex:1; min-width:105px; background:#081d19; border:1.5px solid #e5a93c; border-radius:8px; padding:6px 10px; text-align:center; margin:3px;'>"
-                    f"<div style='color:#e5a93c; font-size:0.75rem; font-weight:800; text-transform:uppercase;'>{d[:3]} Gross</div>"
-                    f"<div style='color:#ffffff; font-size:1.05rem; font-weight:900; margin-top:2px;'>${daily_gross_map.get(d, 0.0):,.2f}</div>"
-                    f"</div>"
-                    for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                ])
-                st.markdown(f"""
-                <div style="background: rgba(6, 24, 20, 0.95); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 10px 14px; margin-top: -14px; margin-bottom: 20px;">
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: space-between;">
-                        {daily_badges_html}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
             if show_unavail:
                 with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
                     st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
