@@ -863,6 +863,7 @@ def save_persisted_df(df, filename):
 
 def build_roster_excel_bytes(edited_final_df, start_date):
     if edited_final_df is not None and not edited_final_df.empty:
+        edited_final_df = strip_daily_gross_row(edited_final_df)
         edited_final_df = sort_dataframe_by_team_and_age(edited_final_df)
         
     if isinstance(start_date, str):
@@ -1354,6 +1355,30 @@ def highlight_unavailability_dataframe(df):
 
     return df.style.map(color_cells, subset=days_in_df)
 
+def strip_daily_gross_row(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    emp_col = df.columns[0]
+    return df[~df[emp_col].astype(str).str.contains("💰|Predicted|Summary|Total", case=False, na=False)].copy()
+
+def attach_daily_gross_row(df, daily_gross_dict):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    df_clean = strip_daily_gross_row(df)
+    emp_col = df_clean.columns[0]
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    summary_row = {c: "" for c in df_clean.columns}
+    summary_row[emp_col] = "💰 PREDICTED DAILY GROSS"
+    
+    for day in days_of_week:
+        if day in df_clean.columns:
+            val = daily_gross_dict.get(day, 0.0) if isinstance(daily_gross_dict, dict) else 0.0
+            summary_row[day] = f"${val:,.2f}" if val > 0 else "$0.00"
+            
+    df_out = pd.concat([df_clean, pd.DataFrame([summary_row])], ignore_index=True)
+    return df_out
+
 def load_finalized_roster(csv_filename):
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     if os.path.exists(csv_path):
@@ -1439,10 +1464,11 @@ def calculate_roster_wages(edited_df):
     days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
     emp_summary = []
+    daily_gross_totals = {day: 0.0 for day in days_of_week}
 
     for _, row in edited_df.iterrows():
         emp_raw_name = str(row.get(emp_col, "")).strip()
-        if not emp_raw_name or emp_raw_name.lower() in ["none", "nan", "total", "summary"]:
+        if not emp_raw_name or emp_raw_name.lower() in ["none", "nan", "total", "summary"] or "💰" in emp_raw_name or "predicted" in emp_raw_name.lower():
             continue
 
         meta = emp_meta.get(emp_raw_name.lower(), {"name": emp_raw_name, "age": 21, "status": "casual"})
@@ -1517,16 +1543,17 @@ def calculate_roster_wages(edited_df):
                     paid_hrs = duration - 0.5 if duration >= 5.0 else duration
                     total_emp_hours += paid_hrs
 
+                    day_shift_gross = 0.0
                     if day in ["Saturday"]:
-                        total_emp_gross += paid_hrs * rates["sat"]
+                        day_shift_gross = paid_hrs * rates["sat"]
                     elif day in ["Sunday"]:
-                        total_emp_gross += paid_hrs * rates["sun"]
+                        day_shift_gross = paid_hrs * rates["sun"]
                     else:
                         # Mon-Fri
                         if end_t <= 18.0:
-                            total_emp_gross += paid_hrs * rates["ord"]
+                            day_shift_gross = paid_hrs * rates["ord"]
                         elif start_t >= 18.0:
-                            total_emp_gross += paid_hrs * rates["eve"]
+                            day_shift_gross = paid_hrs * rates["eve"]
                         else:
                             pre_6_hrs = max(0.0, 18.0 - start_t)
                             post_6_hrs = max(0.0, end_t - 18.0)
@@ -1537,7 +1564,10 @@ def calculate_roster_wages(edited_df):
                             else:
                                 pre_paid = pre_6_hrs
                                 post_paid = post_6_hrs
-                            total_emp_gross += pre_paid * rates["ord"] + post_paid * rates["eve"]
+                            day_shift_gross = pre_paid * rates["ord"] + post_paid * rates["eve"]
+
+                    total_emp_gross += day_shift_gross
+                    daily_gross_totals[day] += day_shift_gross
 
         g = total_emp_gross
         if g <= 359:
@@ -1594,6 +1624,7 @@ def calculate_roster_wages(edited_df):
         "total_super": round(tot_super, 2),
         "total_hours": round(tot_hrs, 1),
         "avg_hourly_rate": round(avg_rate, 2),
+        "daily_gross": {d: round(daily_gross_totals[d], 2) for d in days_of_week},
         "breakdown_df": breakdown_df
     }
 
@@ -3580,13 +3611,17 @@ if is_manager:
                 horizontal=True
             )
 
-            if show_unavail:
-                st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
-            else:
-                st.session_state.final_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
-
+            # Strip out any existing summary row first to get pure staff dataframe
+            st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
             st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
             
+            # Calculate wages & daily gross breakdown
+            wages_summary_gen = calculate_roster_wages(st.session_state.final_roster_df)
+            daily_gross_map = wages_summary_gen.get("daily_gross", {})
+
+            # Attach bottom summary row for visual display in data_editor
+            df_for_editor = attach_daily_gross_row(st.session_state.final_roster_df, daily_gross_map)
+
             if show_unavail:
                 st.markdown("""
                 <div style="background: rgba(184, 40, 40, 0.15); border: 1px solid rgba(255, 77, 77, 0.5); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.92rem; color: #ffe6e6;">
@@ -3595,22 +3630,48 @@ if is_manager:
                 """, unsafe_allow_html=True)
             
             # Compute dynamic height based on row count to display the entire team without internal scrolling
-            num_roster_rows = len(st.session_state.final_roster_df) if st.session_state.final_roster_df is not None else 0
+            num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
             roster_table_height = max(350, (num_roster_rows + 1) * 38 + 25)
 
             if roster_view_mode == "📅 Single Day Focus":
                 selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
-                emp_col = st.session_state.final_roster_df.columns[0]
-                day_cols = [emp_col, selected_day] if selected_day in st.session_state.final_roster_df.columns else list(st.session_state.final_roster_df.columns)
-                edited_final_df = st.data_editor(
-                    st.session_state.final_roster_df[day_cols],
+                emp_col = df_for_editor.columns[0]
+                day_cols = [emp_col, selected_day] if selected_day in df_for_editor.columns else list(df_for_editor.columns)
+                edited_display_df = st.data_editor(
+                    df_for_editor[day_cols],
                     num_rows="dynamic",
                     key="edit_generated_roster_single",
                     height=roster_table_height,
                     use_container_width=True
                 )
+                edited_final_df = strip_daily_gross_row(edited_display_df)
+                
+                day_g = daily_gross_map.get(selected_day, 0.0)
+                st.markdown(f"""
+                <div style="background: rgba(8, 29, 25, 0.95); border: 2px solid #e5a93c; border-radius: 10px; padding: 12px 18px; margin-top: 8px; text-align: center;">
+                    <span style="color: #e5a93c; font-weight: 800; font-size: 1.1rem;">💵 {selected_day} Predicted Gross Payroll: </span>
+                    <span style="color: #ffffff; font-weight: 900; font-size: 1.3rem; margin-left: 8px;">${day_g:,.2f}</span>
+                </div>
+                """, unsafe_allow_html=True)
+
             elif roster_view_mode == "🎴 Mobile Staff Cards":
-                edited_final_df = st.session_state.final_roster_df
+                edited_final_df = strip_daily_gross_row(st.session_state.final_roster_df)
+                
+                # Daily Gross Header Strip for Mobile Staff Cards
+                daily_card_strip = "".join([
+                    f"<div style='background:#0d332b; border:1px solid #e5a93c; border-radius:8px; padding:6px 10px; text-align:center; min-width:85px; margin:2px;'>"
+                    f"<div style='color:#e5a93c; font-size:0.75rem; font-weight:800;'>{d[:3]}</div>"
+                    f"<div style='color:#ffffff; font-weight:900; font-size:0.95rem;'>${daily_gross_map.get(d, 0.0):,.2f}</div>"
+                    f"</div>"
+                    for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                ])
+                st.markdown(f"""
+                <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #e5a93c; border-radius: 12px; padding: 10px 14px; margin-bottom: 15px;">
+                    <div style="color: #f7d594; font-weight: 800; font-size: 1.0rem; margin-bottom: 8px;">💵 Daily Gross Payroll Breakdown</div>
+                    <div style="display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px;">{daily_card_strip}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
                 days_cols = [c for c in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] if c in edited_final_df.columns]
                 emp_col = edited_final_df.columns[0]
                 for idx, r_row in edited_final_df.iterrows():
@@ -3625,21 +3686,38 @@ if is_manager:
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                edited_final_df = st.data_editor(
-                    st.session_state.final_roster_df,
+                edited_display_df = st.data_editor(
+                    df_for_editor,
                     num_rows="dynamic",
                     key="edit_generated_roster",
                     height=roster_table_height,
                     use_container_width=True
                 )
+                edited_final_df = strip_daily_gross_row(edited_display_df)
+
+                # High-Contrast Aligned Bottom Daily Gross Cell Strip Bar
+                daily_badges_html = "".join([
+                    f"<div style='flex:1; min-width:105px; background:#081d19; border:1.5px solid #e5a93c; border-radius:8px; padding:6px 10px; text-align:center; margin:3px;'>"
+                    f"<div style='color:#e5a93c; font-size:0.75rem; font-weight:800; text-transform:uppercase;'>{d[:3]} Gross</div>"
+                    f"<div style='color:#ffffff; font-size:1.05rem; font-weight:900; margin-top:2px;'>${daily_gross_map.get(d, 0.0):,.2f}</div>"
+                    f"</div>"
+                    for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                ])
+                st.markdown(f"""
+                <div style="background: rgba(6, 24, 20, 0.95); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 10px 14px; margin-top: -14px; margin-bottom: 20px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 4px; justify-content: space-between;">
+                        {daily_badges_html}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
             if show_unavail:
                 with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
                     st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
                     st.dataframe(
-                        highlight_unavailability_dataframe(st.session_state.final_roster_df),
+                        highlight_unavailability_dataframe(strip_daily_gross_row(st.session_state.final_roster_df)),
                         use_container_width=True,
-                        height=roster_table_height
+                        height=max(300, (len(strip_daily_gross_row(st.session_state.final_roster_df)) + 1) * 38 + 25)
                     )
 
             # Real-Time Financial Breakdown for Generated Roster
