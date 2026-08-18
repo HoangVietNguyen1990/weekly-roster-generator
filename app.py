@@ -731,6 +731,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, portal_url="", sender_name=""):
+    if st.session_state.get("is_demo", False):
+        return True, f"🧪 Sandbox Mode: Welcome email previewed for {recipient_email} (live credentials protected)."
+
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
     smtp_port = int(cfg.get("smtp_port", 587))
@@ -771,6 +774,9 @@ def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, 
         return False, f"SMTP Error: {e}"
 
 def send_test_email_smtp(recipient_email):
+    if st.session_state.get("is_demo", False):
+        return True, "🧪 Sandbox Mode: Test email simulated successfully (live credentials protected)."
+
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
     smtp_port = int(cfg.get("smtp_port", 587))
@@ -804,6 +810,9 @@ def send_test_email_smtp(recipient_email):
         return False, f"❌ Connection Error: {e}"
 
 def send_availability_notification_email_smtp(emp_name, action_type, details_str):
+    if st.session_state.get("is_demo", False):
+        return True, "🧪 Sandbox Mode: Notification simulated successfully (live credentials protected)."
+
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
     smtp_port = int(cfg.get("smtp_port", 587))
