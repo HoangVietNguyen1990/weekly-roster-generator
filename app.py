@@ -442,6 +442,49 @@ st.markdown("""
         color: #ffffff !important;
         font-weight: 700 !important;
     }
+
+    /* RESPONSIVE MOBILE OPTIMIZATION (@media max-width 768px) */
+    @media screen and (max-width: 768px) {
+        .header-style {
+            font-size: 1.85rem !important;
+            letter-spacing: -0.5px !important;
+        }
+        .sub-header-style {
+            font-size: 0.95rem !important;
+            margin-bottom: 16px !important;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 8px !important;
+            padding: 10px 14px !important;
+            border-radius: 24px !important;
+            overflow-x: auto !important;
+            flex-wrap: nowrap !important;
+            white-space: nowrap !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .stTabs button[role="tab"],
+        .stTabs [data-baseweb="tab"] {
+            height: 42px !important;
+            padding-left: 18px !important;
+            padding-right: 18px !important;
+            font-size: 0.88rem !important;
+            margin: 0 2px !important;
+        }
+        .stButton > button,
+        .stFormSubmitButton > button,
+        button[data-testid="baseButton-secondary"],
+        button[data-testid="baseButton-primary"] {
+            font-size: 0.92rem !important;
+            padding: 10px 16px !important;
+            border-radius: 10px !important;
+        }
+        div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
+            font-size: 0.85rem !important;
+        }
+        div[data-testid="stExpanderDetails"], details[open] > div {
+            padding: 10px !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -3529,6 +3572,14 @@ if is_manager:
             with col_tbl_h2:
                 show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
             
+            # Mobile View Mode Control (Default: Full 7-Day Table on Laptop)
+            roster_view_mode = st.radio(
+                "📱 Mobile Layout Mode:",
+                ["📊 Full 7-Day Table", "📅 Single Day Focus", "🎴 Mobile Staff Cards"],
+                key="roster_view_mode",
+                horizontal=True
+            )
+
             if show_unavail:
                 st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
             else:
@@ -3547,13 +3598,40 @@ if is_manager:
             num_roster_rows = len(st.session_state.final_roster_df) if st.session_state.final_roster_df is not None else 0
             roster_table_height = max(350, (num_roster_rows + 1) * 38 + 25)
 
-            edited_final_df = st.data_editor(
-                st.session_state.final_roster_df,
-                num_rows="dynamic",
-                key="edit_generated_roster",
-                height=roster_table_height,
-                use_container_width=True
-            )
+            if roster_view_mode == "📅 Single Day Focus":
+                selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
+                emp_col = st.session_state.final_roster_df.columns[0]
+                day_cols = [emp_col, selected_day] if selected_day in st.session_state.final_roster_df.columns else list(st.session_state.final_roster_df.columns)
+                edited_final_df = st.data_editor(
+                    st.session_state.final_roster_df[day_cols],
+                    num_rows="dynamic",
+                    key="edit_generated_roster_single",
+                    height=roster_table_height,
+                    use_container_width=True
+                )
+            elif roster_view_mode == "🎴 Mobile Staff Cards":
+                edited_final_df = st.session_state.final_roster_df
+                days_cols = [c for c in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] if c in edited_final_df.columns]
+                emp_col = edited_final_df.columns[0]
+                for idx, r_row in edited_final_df.iterrows():
+                    emp_n = r_row.get(emp_col, f"Employee #{idx+1}")
+                    shifts_html = "".join([f"<span style='background:#0d332b; border:1px solid #e5a93c; border-radius:6px; padding:4px 8px; margin:2px; font-size:0.85rem; display:inline-block;'><b>{d[:3]}:</b> {r_row.get(d, 'OFF')}</span>" for d in days_cols if str(r_row.get(d, '')).strip()])
+                    if not shifts_html:
+                        shifts_html = "<span style='color:#aaaaaa; font-style:italic;'>No shifts assigned</span>"
+                    st.markdown(f"""
+                    <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #e5a93c; border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                        <div style="color: #f7d594; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px;">👤 {emp_n}</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">{shifts_html}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                edited_final_df = st.data_editor(
+                    st.session_state.final_roster_df,
+                    num_rows="dynamic",
+                    key="edit_generated_roster",
+                    height=roster_table_height,
+                    use_container_width=True
+                )
 
             if show_unavail:
                 with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
@@ -3575,8 +3653,8 @@ if is_manager:
             """, unsafe_allow_html=True)
             
             gen_summary_cards_html = f"""
-            <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 20px; margin-bottom: 20px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 18px;">
+            <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 18px;">
                     <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
                         <div style="color: #e5a93c; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">💵 Total Gross Payroll</div>
                         <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_gross']:,.2f}</div>
