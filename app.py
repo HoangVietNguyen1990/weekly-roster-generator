@@ -3543,12 +3543,26 @@ if is_manager:
                 </div>
                 """, unsafe_allow_html=True)
             
-            edited_final_df = st.data_editor(st.session_state.final_roster_df, num_rows="dynamic", key="edit_generated_roster")
+            # Compute dynamic height based on row count to display the entire team without internal scrolling
+            num_roster_rows = len(st.session_state.final_roster_df) if st.session_state.final_roster_df is not None else 0
+            roster_table_height = max(350, (num_roster_rows + 1) * 38 + 25)
+
+            edited_final_df = st.data_editor(
+                st.session_state.final_roster_df,
+                num_rows="dynamic",
+                key="edit_generated_roster",
+                height=roster_table_height,
+                use_container_width=True
+            )
 
             if show_unavail:
                 with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
                     st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
-                    st.dataframe(highlight_unavailability_dataframe(st.session_state.final_roster_df), use_container_width=True)
+                    st.dataframe(
+                        highlight_unavailability_dataframe(st.session_state.final_roster_df),
+                        use_container_width=True,
+                        height=roster_table_height
+                    )
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
