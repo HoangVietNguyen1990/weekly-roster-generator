@@ -634,6 +634,16 @@ def load_smtp_config():
         "sender_name": "Bakery Manager",
         "notification_recipients": "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
     }
+
+    # SANITIZE & REDACT credentials if running in DEMO mode
+    if st.session_state.get("is_demo", False):
+        demo_config = default_config.copy()
+        demo_config["sender_email"] = "brumby.pakenham@gmail.com"
+        demo_config["sender_password"] = "abcd efgh ijkl mnop"
+        demo_config["sender_name"] = "Demo Bakery Manager"
+        demo_config["notification_recipients"] = "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
+        return demo_config
+
     cfg = default_config.copy()
     if os.path.exists(SMTP_CONFIG_FILE):
         try:
