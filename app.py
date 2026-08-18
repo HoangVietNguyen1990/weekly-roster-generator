@@ -1356,6 +1356,10 @@ def format_roster_with_unavailability_badges(df, unavail_data=None):
                 except:
                     unavail_data = pd.DataFrame()
 
+    # Build name_map for robust employee name matching across table rows
+    roster_emp_names = [str(r.get(emp_col, "")).strip() for _, r in df_out.iterrows() if str(r.get(emp_col, "")).strip()]
+    name_map = {n.lower(): n for n in roster_emp_names}
+
     unavail_map = {}
     if isinstance(unavail_data, pd.DataFrame) and not unavail_data.empty:
         un_name_c = find_column(unavail_data, ["employee", "name", "staff", "person"])
@@ -1364,11 +1368,13 @@ def format_roster_with_unavailability_badges(df, unavail_data=None):
         
         if un_name_c and un_day_c and un_win_c:
             for _, u_row in unavail_data.iterrows():
-                u_emp = str(u_row.get(un_name_c, "")).strip().lower()
+                raw_u_emp = str(u_row.get(un_name_c, "")).strip()
                 u_day = str(u_row.get(un_day_c, "")).strip().lower()
                 u_win = str(u_row.get(un_win_c, "Full Day")).strip()
-                if u_emp and u_day:
-                    key = (u_emp, u_day)
+                
+                matched_emp = find_matching_employee(raw_u_emp, name_map)
+                if matched_emp and u_day:
+                    key = (matched_emp.lower(), u_day)
                     if key not in unavail_map:
                         unavail_map[key] = []
                     unavail_map[key].append(u_win)
@@ -1384,12 +1390,16 @@ def format_roster_with_unavailability_badges(df, unavail_data=None):
             val_lower = val.lower()
             key = (emp_lower, day.lower())
 
+            # Check if this cell is unassigned/off or already flagged as unavailable
             if not val or val_lower in ["off", "none", "nan", "unavailable", " unavailable"] or "unavail" in val_lower or val.startswith("🚫"):
                 if key in unavail_map and unavail_map[key]:
                     clean_win = clean_win_display(unavail_map[key][0])
+                    if "all day" in clean_win.lower():
+                        clean_win = "Full Day"
                     df_out.at[idx, day] = f"🚫 Unavailable ({clean_win})"
-                elif "unavail" in val_lower or val.startswith("🚫"):
-                    df_out.at[idx, day] = "🚫 Unavailable (Full Day)"
+                else:
+                    # Clean cell for employees with no logged unavailability on this day
+                    df_out.at[idx, day] = ""
 
     return df_out
 
