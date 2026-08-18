@@ -3611,6 +3611,12 @@ if is_manager:
                 horizontal=True
             )
 
+            # Apply or remove unavailability badges based on checkbox state
+            if show_unavail:
+                st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
+            else:
+                st.session_state.final_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
+
             # Strip out any existing summary row first to get pure staff dataframe
             st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
             st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
