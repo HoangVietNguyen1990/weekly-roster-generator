@@ -3060,6 +3060,47 @@ def render_team_monthly_calendar_grid():
                     </div>
                     """, unsafe_allow_html=True)
 
+    # --- Unavailability Breakdown by Employee Table according to chosen month ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        🚫 Unavailability Breakdown by Employee ({selected_month_str})
+    </div>
+    """, unsafe_allow_html=True)
+
+    month_days_list = [d for w in month_days for d in w if d > 0]
+    active_rows = []
+    if not clean_unavail_df.empty:
+        for _, urow in clean_unavail_df.iterrows():
+            u_emp = str(urow.get(emp_col, "")).strip()
+            u_day = str(urow.get(day_col, "")).strip()
+            u_win = str(urow.get(win_col, "")).strip()
+            
+            applies_to_month = False
+            for day_num in month_days_list:
+                dt_obj = date(sel_year, sel_month, day_num)
+                if is_unavail_applicable_to_date(dt_obj, u_day, u_win):
+                    applies_to_month = True
+                    break
+                    
+            if applies_to_month:
+                matched_name = find_matching_employee(u_emp, name_map) if name_map else u_emp
+                active_rows.append({
+                    "Employee": matched_name if matched_name else u_emp,
+                    "Day": u_day,
+                    "Time Window": u_win
+                })
+
+    if active_rows:
+        month_unavail_df = pd.DataFrame(active_rows).drop_duplicates()
+        month_unavail_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(month_unavail_df))
+        edited_month_df = st.data_editor(month_unavail_df, num_rows="dynamic", key=f"edit_unavail_month_{sel_month}_{sel_year}")
+        if edited_month_df is not None and not edited_month_df.empty:
+            st.session_state.manual_unavailability = standardize_unavailability_df(edited_month_df)
+            save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+    else:
+        st.info(f"🎉 No staff unavailability logged for {selected_month_str}. All employees are fully available!")
+
 # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
 if not is_manager:
     with tab_my_current_roster:
@@ -4205,60 +4246,8 @@ if is_manager:
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
-        col_hdr_u1, col_hdr_u2 = st.columns([3, 1])
-        with col_hdr_u1:
-            st.subheader("Log Staff Unavailability")
-        with col_hdr_u2:
-            if st.button("🔄 Reset Sample Data", key="btn_reset_unavail_sample"):
-                default_unavail_reset = pd.DataFrame([
-                    {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
-                    {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
-                    {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
-                    {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
-                    {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
-                    {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
-                    {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
-                    {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
-                    {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
-                    {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
-                ])
-                st.session_state.manual_unavailability = default_unavail_reset
-                save_persisted_df(default_unavail_reset, "unavailability.csv")
-                st.success("Reset data!")
-                st.rerun()
-        
-        unavail_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="unavail_upload_mode", horizontal=True)
-        upload_unavail = st.file_uploader("Upload unavailability list.xlsx (Optional)", type=["xlsx"], key="unavail_upload")
-        
-        if upload_unavail is not None:
-            file_key = f"processed_{upload_unavail.name}_{upload_unavail.size}_{unavail_mode}"
-            if st.session_state.get("last_unavail_file") != file_key:
-                loaded = read_excel_robust(upload_unavail)
-                if loaded is not None:
-                    loaded = standardize_unavailability_df(loaded)
-                    if unavail_mode == "Replace current data":
-                        st.session_state.manual_unavailability = loaded
-                    else:
-                        combined = pd.concat([st.session_state.manual_unavailability, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_unavailability = standardize_unavailability_df(combined)
-                    st.session_state.last_unavail_file = file_key
-                    save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
-                    st.rerun()
-                    
-        # Bakery Team Monthly Calendar & Unavailability Grid
+        # Bakery Team Monthly Calendar Grid & Monthly Unavailability Breakdown
         render_team_monthly_calendar_grid()
-        
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-            🚫 Staff Weekly Unavailability Constraints
-        </div>
-        """, unsafe_allow_html=True)
-        if st.session_state.manual_unavailability is not None and not st.session_state.manual_unavailability.empty:
-            st.session_state.manual_unavailability = standardize_unavailability_df(st.session_state.manual_unavailability)
-            unavailability_df = st.data_editor(st.session_state.manual_unavailability, num_rows="dynamic", key="edit_unavailability_v4")
-            if unavailability_df is not None and not unavailability_df.empty:
-                st.session_state.manual_unavailability = standardize_unavailability_df(unavailability_df)
-                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
