@@ -3510,14 +3510,23 @@ def render_employee_timeclock_tab(user_key):
         except:
             pass
 
+    lat_key = f"gps_lat_{user_key}_v4"
+    lon_key = f"gps_lon_{user_key}_v4"
+    
+    if url_lat:
+        st.session_state[lat_key] = url_lat
+    if url_lon:
+        st.session_state[lon_key] = url_lon
+
     col_gps1, col_gps2 = st.columns(2)
     with col_gps1:
-        user_lat = st.text_input("📍 Phone GPS Latitude", value=url_lat, placeholder="Auto-detected via smartphone GPS", key=f"gps_lat_{user_key}_v2")
+        user_lat = st.text_input("📍 Phone GPS Latitude", value=url_lat, placeholder="Auto-detected via smartphone GPS", key=lat_key)
     with col_gps2:
-        user_lon = st.text_input("📍 Phone GPS Longitude", value=url_lon, placeholder="Auto-detected via smartphone GPS", key=f"gps_lon_{user_key}_v2")
+        user_lon = st.text_input("📍 Phone GPS Longitude", value=url_lon, placeholder="Auto-detected via smartphone GPS", key=lon_key)
 
-    final_lat = user_lat if user_lat else url_lat
-    final_lon = user_lon if user_lon else url_lon
+    # Priority: Captured URL GPS > text input
+    final_lat = url_lat if url_lat else user_lat
+    final_lon = url_lon if url_lon else user_lon
 
     has_coords = bool(str(final_lat).strip() and str(final_lon).strip())
     dist_meters = calculate_haversine_distance(final_lat, final_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
