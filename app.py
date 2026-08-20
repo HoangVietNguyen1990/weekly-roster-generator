@@ -495,6 +495,8 @@ import json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
+FINALIZED_DIR = os.path.join(DATA_DIR, "finalized_rosters")
+os.makedirs(FINALIZED_DIR, exist_ok=True)
 TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
