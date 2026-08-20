@@ -518,6 +518,28 @@ def calculate_haversine_distance(lat1, lon1, lat2=BAKERY_LAT, lon2=BAKERY_LON):
     except:
         return 0.0
 
+# Robust Name Matcher
+def find_matching_employee(raw_name, name_map):
+    if not name_map or not isinstance(name_map, dict):
+        return str(raw_name).strip() if raw_name else None
+    raw_name_clean = str(raw_name).strip().lower()
+    if not raw_name_clean or raw_name_clean == "nan":
+        return None
+    # 1. Exact match
+    if raw_name_clean in name_map:
+        return name_map[raw_name_clean]
+    # 2. Prefix match (e.g. "Ainsley" matches "Ainsley Mactier", "Ana" matches "anastasia")
+    for norm_name, display_name in name_map.items():
+        if norm_name.startswith(raw_name_clean) or raw_name_clean.startswith(norm_name):
+            return display_name
+    # 3. First name matches first name
+    for norm_name, display_name in name_map.items():
+        first_raw = raw_name_clean.split()[0]
+        first_norm = norm_name.split()[0]
+        if first_raw == first_norm:
+            return display_name
+    return None
+
 def get_week_start_date_str(dt_obj=None):
     if dt_obj is None:
         dt_obj = datetime.now().date()
@@ -3703,26 +3725,6 @@ def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
         u_start, u_end, _ = r
         return max(shift_start, u_start) < min(shift_end, u_end)
     return False
-
-# Robust Name Matcher
-def find_matching_employee(raw_name, name_map):
-    raw_name_clean = str(raw_name).strip().lower()
-    if not raw_name_clean or raw_name_clean == "nan":
-        return None
-    # 1. Exact match
-    if raw_name_clean in name_map:
-        return name_map[raw_name_clean]
-    # 2. Prefix match (e.g. "Ainsley" matches "Ainsley Mactier", "Ana" matches "anastasia")
-    for norm_name, display_name in name_map.items():
-        if norm_name.startswith(raw_name_clean) or raw_name_clean.startswith(norm_name):
-            return display_name
-    # 3. First name matches first name
-    for norm_name, display_name in name_map.items():
-        first_raw = raw_name_clean.split()[0]
-        first_norm = norm_name.split()[0]
-        if first_raw == first_norm:
-            return display_name
-    return None
 
 # Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
