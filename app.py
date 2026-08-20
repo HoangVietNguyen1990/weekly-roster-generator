@@ -3072,15 +3072,37 @@ def render_team_monthly_calendar_grid():
     if active_rows:
         month_unavail_df = pd.DataFrame(active_rows).drop_duplicates()
         month_unavail_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(month_unavail_df))
-        edited_month_df = st.data_editor(month_unavail_df, num_rows="dynamic", key=f"edit_unavail_month_{sel_month}_{sel_year}")
-        if edited_month_df is not None:
-            std_edited = standardize_unavailability_df(edited_month_df)
-            if not std_edited.equals(month_unavail_df):
-                st.session_state.manual_unavailability = std_edited
-                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
-                st.rerun()
     else:
-        st.info(f"🎉 No staff unavailability logged for {selected_month_str}. All employees are fully available!")
+        month_unavail_df = pd.DataFrame(columns=["Employee", "Day", "Time Window"])
+
+    edited_month_df = st.data_editor(month_unavail_df, num_rows="dynamic", key=f"edit_unavail_month_{sel_month}_{sel_year}")
+    if edited_month_df is not None:
+        std_edited = standardize_unavailability_df(edited_month_df)
+        if not std_edited.equals(month_unavail_df):
+            # Merge edits safely back into master dataset without dropping rows for other months
+            full_df = load_persisted_df("unavailability.csv", None)
+            full_df = standardize_unavailability_df(full_df)
+            
+            keep_rows = []
+            if full_df is not None and not full_df.empty:
+                for _, r in full_df.iterrows():
+                    e = str(r.get("Employee", "")).strip()
+                    d = str(r.get("Day", "")).strip()
+                    w = str(r.get("Time Window", "")).strip()
+                    applies = False
+                    for day_num in month_days_list:
+                        dt_obj = date(sel_year, sel_month, day_num)
+                        if is_unavail_applicable_to_date(dt_obj, d, w):
+                            applies = True
+                            break
+                    if not applies and e:
+                        keep_rows.append({"Employee": e, "Day": d, "Time Window": w})
+            
+            combined_df = pd.concat([pd.DataFrame(keep_rows), std_edited], ignore_index=True).drop_duplicates()
+            combined_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(combined_df))
+            st.session_state.manual_unavailability = combined_df
+            save_persisted_df(combined_df, "unavailability.csv")
+            st.rerun()
 
 # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
 if not is_manager:
