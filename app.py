@@ -3386,7 +3386,7 @@ def render_employee_timeclock_tab(user_key):
     </div>
     """, unsafe_allow_html=True)
     
-    today_dt = datetime.now()
+    today_dt = datetime.utcnow() + timedelta(hours=10)
     today_str = today_dt.strftime("%d/%m/%Y")
     day_name = today_dt.strftime("%A")
     
@@ -3544,12 +3544,27 @@ def render_employee_timeclock_tab(user_key):
     else:
         st.success(f"🔓 **Unlocked**: You are at Brumby's Bakery Pakenham (Distance: `{dist_meters}m`).")
 
+    # Reset Today's Punch Helper for Testing
+    if today_punch:
+        with st.expander("🛠️ Reset Today's Clock-In Record for Testing", expanded=False):
+            st.write("Click below to clear today's test punch record and re-test clocking in with your live GPS location:")
+            if st.button("🔄 Reset Today's Clock-In Record", key=f"btn_reset_punch_{user_key}"):
+                if df_cards is not None and not df_cards.empty:
+                    rec_id = f"TC_{today_str.replace('/', '')}_{emp_name.replace(' ', '')}"
+                    df_updated = df_cards[df_cards["Record ID"] != rec_id]
+                    save_timecard_records(df_updated)
+                    st.success("🔄 Cleared today's punch record! You can now test clocking in again.")
+                    st.rerun()
+
     st.markdown("<br>", unsafe_allow_html=True)
     b_col1, b_col2 = st.columns(2)
 
+    # Use Melbourne AEST local time (UTC + 10)
+    melbourne_now = datetime.utcnow() + timedelta(hours=10)
+
     with b_col1:
         if st.button("🟢 CLOCK IN NOW", key=f"btn_clock_in_{user_key}", use_container_width=True, disabled=is_locked):
-            clock_in_time_str = datetime.now().strftime("%I:%M %p")
+            clock_in_time_str = melbourne_now.strftime("%I:%M %p")
             rec_id = f"TC_{today_str.replace('/', '')}_{emp_name.replace(' ', '')}"
             
             new_rec = {
@@ -3585,7 +3600,7 @@ def render_employee_timeclock_tab(user_key):
             if not today_punch or not today_punch.get("Clock In"):
                 st.error("❌ You have not clocked in yet today!")
             else:
-                clock_out_time_str = datetime.now().strftime("%I:%M %p")
+                clock_out_time_str = melbourne_now.strftime("%I:%M %p")
                 clock_in_str = today_punch.get("Clock In", "")
                 
                 c_in_dec = parse_time_to_decimal(clock_in_str)
