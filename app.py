@@ -3376,12 +3376,12 @@ def render_employee_timeclock_tab(user_key):
             loc_ver = today_punch.get("Location Verification", "")
             
             if c_in and not c_out:
-                st.markdown(f"**Status:** 🟢 `<span style='color: #48bb78; font-weight: 800;'>WORKING NOW</span>` (Clocked IN at `{c_in}`)", unsafe_allow_html=True)
+                st.markdown(f"**Status:** 🟢 <span style='color: #48bb78; font-weight: 800;'>WORKING NOW</span> (Clocked IN at `{c_in}`)", unsafe_allow_html=True)
             elif c_in and c_out:
-                st.markdown(f"**Status:** ✅ `<span style='color: #4299e1; font-weight: 800;'>SHIFT COMPLETED</span>` ({c_in} - {c_out})", unsafe_allow_html=True)
+                st.markdown(f"**Status:** ✅ <span style='color: #4299e1; font-weight: 800;'>SHIFT COMPLETED</span> ({c_in} - {c_out})", unsafe_allow_html=True)
             st.markdown(f"**📍 Location Status:** `{loc_ver}` (Distance: `{dist_m}m` from Bakery)")
         else:
-            st.markdown("**Status:** 🔴 `<span style='color: #fc8181; font-weight: 800;'>CLOCKED OUT</span>`", unsafe_allow_html=True)
+            st.markdown("**Status:** 🔴 <span style='color: #fc8181; font-weight: 800;'>CLOCKED OUT</span>", unsafe_allow_html=True)
 
     with c_status2:
         st.markdown("<div style='text-align: center; background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50;'>", unsafe_allow_html=True)
