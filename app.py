@@ -3443,20 +3443,69 @@ def render_employee_timeclock_tab(user_key):
         """, unsafe_allow_html=True)
 
     st.markdown("---")
+    st.markdown("#### 📍 Live Smartphone GPS Presence Verification")
+    
+    # Auto-requesting HTML5 Geolocation JS Component for continuous tracking while app is on
+    geo_html = """
+    <div style="background: #0c2b25; padding: 14px; border-radius: 10px; border: 1.5px solid #e5a93c; text-align: center; color: white; font-family: sans-serif;">
+        <div id="geo_title" style="font-weight: 800; font-size: 1.05rem; color: #e5a93c; margin-bottom: 6px;">
+            📡 Live Smartphone Location Tracking (Active While App Is Open)
+        </div>
+        <div id="geo_status" style="font-weight: 600; color: #a0aec0; font-size: 0.9rem;">
+            ⏳ Requesting browser location permission...
+        </div>
+        <button id="get_geo_btn" style="background: linear-gradient(135deg, #11362f 0%, #1f574d 100%); color: #e5a93c; border: 1.5px solid #e5a93c; padding: 8px 16px; font-weight: 700; font-size: 0.85rem; border-radius: 6px; cursor: pointer; margin-top: 8px; width: 100%;">
+            🔄 Refresh Live Phone GPS Signal
+        </button>
+    </div>
+    <script>
+        function updateLocation(position) {
+            var lat = position.coords.latitude.toFixed(6);
+            var lon = position.coords.longitude.toFixed(6);
+            var status = document.getElementById('geo_status');
+            status.innerHTML = "<span style='color:#48bb78; font-size:1.05rem; font-weight:800;'>✅ Live Phone Location Active: " + lat + ", " + lon + "</span><br><span style='font-size:0.8rem; color:#ecc94b;'>Enter or paste these coordinates into Latitude & Longitude boxes below.</span>";
+        }
+
+        function handleError(error) {
+            var status = document.getElementById('geo_status');
+            status.innerHTML = "<span style='color:#fc8181; font-weight:700;'>🔒 Location Access Needed: " + error.message + ". Please tap 'Allow While Using Site' in your browser settings (Safari/Chrome).</span>";
+        }
+
+        function startTracking() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(updateLocation, handleError, {enableHighAccuracy: true, timeout: 10000, maximumAge: 0});
+                navigator.geolocation.watchPosition(updateLocation, handleError, {enableHighAccuracy: true, maximumAge: 30000});
+            } else {
+                document.getElementById('geo_status').innerText = "❌ Browser does not support HTML5 Geolocation.";
+            }
+        }
+
+        document.getElementById('get_geo_btn').addEventListener('click', startTracking);
+        // Auto-start location tracking as soon as tab loads
+        startTracking();
+    </script>
+    """
+    st.components.v1.html(geo_html, height=155)
 
     col_gps1, col_gps2 = st.columns(2)
     with col_gps1:
-        user_lat = st.text_input("📍 Phone GPS Latitude (Auto / Manual)", value=str(BAKERY_LAT), key=f"gps_lat_{user_key}")
+        user_lat = st.text_input("📍 Phone GPS Latitude", value="", placeholder="e.g. -38.085123", key=f"gps_lat_{user_key}")
     with col_gps2:
-        user_lon = st.text_input("📍 Phone GPS Longitude (Auto / Manual)", value=str(BAKERY_LON), key=f"gps_lon_{user_key}")
+        user_lon = st.text_input("📍 Phone GPS Longitude", value="", placeholder="e.g. 145.460123", key=f"gps_lon_{user_key}")
 
-    dist_meters = calculate_haversine_distance(user_lat, user_lon, BAKERY_LAT, BAKERY_LON)
-    is_verified_at_bakery = (dist_meters <= 50.0)
+    has_coords = bool(str(user_lat).strip() and str(user_lon).strip())
+    dist_meters = calculate_haversine_distance(user_lat, user_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
+    
+    is_verified_at_bakery = (has_coords and dist_meters <= 50.0)
     is_locked = not is_verified_at_bakery
-    loc_badge = "✅ Verified at Bakery" if is_verified_at_bakery else f"⚠️ Remote Clock-In ({dist_meters}m away)"
+    loc_badge = f"✅ Verified at Bakery ({dist_meters}m)" if is_verified_at_bakery else (f"⚠️ Remote Clock-In ({dist_meters}m away)" if has_coords else "⚠️ GPS Coordinates Missing")
 
-    if is_locked:
-        st.error(f"🔒 **Clock In / Out Locked**: You must be within **50 meters** of Brumby's Bakery Pakenham to clock in or out. (Current Distance: `{dist_meters} meters`)")
+    if not has_coords:
+        st.error("🔒 **Clock In / Out Locked**: Tap **'TAP HERE TO CAPTURE MY REAL SMARTPHONE GPS LOCATION'** above or enter your phone's live GPS coordinates to verify your location.")
+    elif is_locked:
+        dist_km = round(dist_meters / 1000.0, 2)
+        dist_label = f"{dist_km} km ({int(dist_meters)} meters)" if dist_meters >= 1000 else f"{int(dist_meters)} meters"
+        st.error(f"🔒 **Clock In / Out Locked**: You are currently **{dist_label}** away from Brumby's Bakery Pakenham. You must be within **50 meters** of the bakery to clock in/out.")
     else:
         st.success(f"🔓 **Unlocked**: You are at Brumby's Bakery Pakenham (Distance: `{dist_meters}m`).")
 
