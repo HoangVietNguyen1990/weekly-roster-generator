@@ -876,9 +876,10 @@ def load_persisted_df(filename, default_df=None):
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
-            # Read all columns as string without converting empty cells to NaN
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
             if df is not None and not df.empty:
+                if filename == "unavailability.csv" and default_df is not None and isinstance(default_df, pd.DataFrame):
+                    df = pd.concat([default_df, df], ignore_index=True).drop_duplicates(subset=["Employee", "Day", "Time Window"], keep='last')
                 return df
         except:
             pass
@@ -2961,7 +2962,7 @@ def render_team_monthly_calendar_grid():
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
     # Always load fresh data from disk so calendar grid & breakdown table are 100% in sync with file
-    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv", None))
+    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail))
     st.session_state.manual_unavailability = unavail_df
 
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
@@ -3082,7 +3083,7 @@ def render_team_monthly_calendar_grid():
         std_edited = standardize_unavailability_df(edited_month_df)
         if not std_edited.equals(month_unavail_df):
             # Merge edits safely back into master dataset without dropping rows for other months
-            full_df = load_persisted_df("unavailability.csv", None)
+            full_df = load_persisted_df("unavailability.csv", default_unavail)
             full_df = standardize_unavailability_df(full_df)
             
             keep_rows = []
