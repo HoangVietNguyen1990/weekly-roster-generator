@@ -2447,7 +2447,6 @@ if 'manual_unavailability' not in st.session_state or st.session_state.manual_un
         {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
         {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
         {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
-        {"Employee": "Aimi", "Day": "Sunday", "Time Window": "All Day (Uni)"},
         {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
         {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
         {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
@@ -2961,10 +2960,9 @@ def render_team_monthly_calendar_grid():
     cal = calendar.Calendar(firstweekday=6)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
-    unavail_df = st.session_state.get("manual_unavailability", None)
-    if unavail_df is None or not isinstance(unavail_df, pd.DataFrame) or unavail_df.empty:
-        unavail_df = load_persisted_df("unavailability.csv")
-        st.session_state.manual_unavailability = unavail_df
+    # Always load fresh data from disk so calendar grid & breakdown table are 100% in sync with file
+    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv"))
+    st.session_state.manual_unavailability = unavail_df
 
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
     day_col = find_column(unavail_df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
