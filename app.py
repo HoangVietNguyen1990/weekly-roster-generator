@@ -3484,8 +3484,11 @@ def render_employee_timeclock_tab(user_key):
 
         function startTracking() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(updateLocation, handleError, {enableHighAccuracy: true, timeout: 10000, maximumAge: 0});
-                navigator.geolocation.watchPosition(updateLocation, handleError, {enableHighAccuracy: true, maximumAge: 30000});
+                navigator.geolocation.getCurrentPosition(updateLocation, function(err) {
+                    // Fallback to standard accuracy if high accuracy times out (desktop/indoor Wi-Fi)
+                    navigator.geolocation.getCurrentPosition(updateLocation, handleError, {enableHighAccuracy: false, timeout: 15000});
+                }, {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000});
+                navigator.geolocation.watchPosition(updateLocation, function(err){}, {enableHighAccuracy: false, maximumAge: 60000});
             } else {
                 document.getElementById('geo_status').innerText = "❌ Browser does not support HTML5 Geolocation.";
             }
@@ -3510,23 +3513,39 @@ def render_employee_timeclock_tab(user_key):
         except:
             pass
 
-    lat_key = f"gps_lat_{user_key}_v4"
-    lon_key = f"gps_lon_{user_key}_v4"
+    lat_key = f"gps_lat_{user_key}_v5"
+    lon_key = f"gps_lon_{user_key}_v5"
     
-    if url_lat:
+    col_reset1, col_reset2 = st.columns([3, 1])
+    with col_reset2:
+        if st.button("🔄 Reset / Clear GPS", key=f"btn_reset_gps_url_{user_key}"):
+            try:
+                st.query_params.clear()
+            except:
+                try:
+                    st.experimental_set_query_params()
+                except:
+                    pass
+            if lat_key in st.session_state:
+                del st.session_state[lat_key]
+            if lon_key in st.session_state:
+                del st.session_state[lon_key]
+            st.rerun()
+            
+    if url_lat and lat_key not in st.session_state:
         st.session_state[lat_key] = url_lat
-    if url_lon:
+    if url_lon and lon_key not in st.session_state:
         st.session_state[lon_key] = url_lon
 
     col_gps1, col_gps2 = st.columns(2)
     with col_gps1:
-        user_lat = st.text_input("📍 Phone GPS Latitude", value=url_lat, placeholder="Auto-detected via smartphone GPS", key=lat_key)
+        user_lat = st.text_input("📍 Phone GPS Latitude (Auto or Manual)", placeholder="e.g. -38.0583", key=lat_key)
     with col_gps2:
-        user_lon = st.text_input("📍 Phone GPS Longitude", value=url_lon, placeholder="Auto-detected via smartphone GPS", key=lon_key)
+        user_lon = st.text_input("📍 Phone GPS Longitude (Auto or Manual)", placeholder="e.g. 145.4746", key=lon_key)
 
-    # Priority: Captured URL GPS > text input
-    final_lat = url_lat if url_lat else user_lat
-    final_lon = url_lon if url_lon else user_lon
+    # Allow manual text input or auto URL GPS
+    final_lat = user_lat if user_lat else url_lat
+    final_lon = user_lon if user_lon else url_lon
 
     has_coords = bool(str(final_lat).strip() and str(final_lon).strip())
     dist_meters = calculate_haversine_distance(final_lat, final_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
