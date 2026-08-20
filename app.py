@@ -518,6 +518,57 @@ def calculate_haversine_distance(lat1, lon1, lat2=BAKERY_LAT, lon2=BAKERY_LON):
     except:
         return 0.0
 
+# Helpers for parsing times
+def parse_time_to_decimal(time_str):
+    try:
+        time_str = str(time_str).strip().lower().replace(" ", "")
+        is_pm = "pm" in time_str
+        time_str = time_str.replace("am", "").replace("pm", "")
+        if ":" in time_str:
+            parts = time_str.split(":")
+            hours = int(parts[0])
+            minutes = int(parts[1])
+        else:
+            hours = int(time_str)
+            minutes = 0
+        if is_pm and hours < 12:
+            hours += 12
+        elif not is_pm and hours == 12:
+            hours = 0
+        return hours + minutes / 60.0
+    except:
+        return 0.0
+
+def parse_shift_range(shift_str):
+    if not shift_str or "unavailable" in str(shift_str).strip().lower() or str(shift_str).strip().lower() in ["off", "nan", ""]:
+        return None
+    try:
+        parts = str(shift_str).split("-")
+        start = parse_time_to_decimal(parts[0])
+        end = parse_time_to_decimal(parts[1])
+        duration = end - start if end > start else (24 - start) + end
+        return start, end, duration
+    except:
+        return None
+
+def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
+    unavail_str = str(unavail_str).strip().lower()
+    if "all day" in unavail_str or "anytime" in unavail_str:
+        return True
+    if "before" in unavail_str:
+        time_part = unavail_str.replace("before", "").strip()
+        t = parse_time_to_decimal(time_part)
+        return shift_start < t
+    if "after" in unavail_str:
+        time_part = unavail_str.replace("after", "").strip()
+        t = parse_time_to_decimal(time_part)
+        return shift_end > t
+    r = parse_shift_range(unavail_str)
+    if r:
+        u_start, u_end, _ = r
+        return max(shift_start, u_start) < min(shift_end, u_end)
+    return False
+
 # Robust Name Matcher
 def find_matching_employee(raw_name, name_map):
     if not name_map or not isinstance(name_map, dict):
@@ -3676,57 +3727,6 @@ if not is_manager:
     with tab_my_timeclock:
         render_employee_timeclock_tab(st.session_state.logged_in_user)
 
-
-# Helpers for parsing times
-def parse_time_to_decimal(time_str):
-    try:
-        time_str = str(time_str).strip().lower().replace(" ", "")
-        is_pm = "pm" in time_str
-        time_str = time_str.replace("am", "").replace("pm", "")
-        if ":" in time_str:
-            parts = time_str.split(":")
-            hours = int(parts[0])
-            minutes = int(parts[1])
-        else:
-            hours = int(time_str)
-            minutes = 0
-        if is_pm and hours < 12:
-            hours += 12
-        elif not is_pm and hours == 12:
-            hours = 0
-        return hours + minutes / 60.0
-    except:
-        return 0.0
-
-def parse_shift_range(shift_str):
-    if not shift_str or "unavailable" in str(shift_str).strip().lower() or str(shift_str).strip().lower() in ["off", "nan", ""]:
-        return None
-    try:
-        parts = str(shift_str).split("-")
-        start = parse_time_to_decimal(parts[0])
-        end = parse_time_to_decimal(parts[1])
-        duration = end - start if end > start else (24 - start) + end
-        return start, end, duration
-    except:
-        return None
-
-def is_overlapping_unavailability(unavail_str, shift_start, shift_end):
-    unavail_str = str(unavail_str).strip().lower()
-    if "all day" in unavail_str or "anytime" in unavail_str:
-        return True
-    if "before" in unavail_str:
-        time_part = unavail_str.replace("before", "").strip()
-        t = parse_time_to_decimal(time_part)
-        return shift_start < t
-    if "after" in unavail_str:
-        time_part = unavail_str.replace("after", "").strip()
-        t = parse_time_to_decimal(time_part)
-        return shift_end > t
-    r = parse_shift_range(unavail_str)
-    if r:
-        u_start, u_end, _ = r
-        return max(shift_start, u_start) < min(shift_end, u_end)
-    return False
 
 # Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
