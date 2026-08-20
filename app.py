@@ -3384,10 +3384,12 @@ def render_employee_timeclock_tab(user_key):
             st.markdown("**Status:** 🔴 <span style='color: #fc8181; font-weight: 800;'>CLOCKED OUT</span>", unsafe_allow_html=True)
 
     with c_status2:
-        st.markdown("<div style='text-align: center; background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50;'>", unsafe_allow_html=True)
-        st.markdown(f"<div style='font-size: 1.5rem; font-weight: 900; color: #e5a93c;'>{today_dt.strftime('%I:%M %p')}</div>", unsafe_allow_html=True)
-        st.markdown("<div style='font-size: 0.8rem; color: #a0aec0;'>Melbourne AEST Time</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="text-align: center; background: #0c2b25; padding: 14px; border-radius: 10px; border: 1px solid #1f5c50; margin-top: 4px;">
+            <div style="font-size: 1.6rem; font-weight: 900; color: #e5a93c;">{today_dt.strftime('%I:%M %p')}</div>
+            <div style="font-size: 0.8rem; color: #a0aec0; font-weight: 600; margin-top: 2px;">Melbourne AEST Time</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("---")
 
