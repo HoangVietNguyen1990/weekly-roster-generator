@@ -501,8 +501,8 @@ TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
 
-BAKERY_LAT = -38.063524
-BAKERY_LON = 145.455306
+BAKERY_LAT = -38.0583
+BAKERY_LON = 145.4746
 
 def calculate_haversine_distance(lat1, lon1, lat2=BAKERY_LAT, lon2=BAKERY_LON):
     try:
