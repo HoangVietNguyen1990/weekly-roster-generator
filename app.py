@@ -2987,7 +2987,7 @@ def render_team_monthly_calendar_grid():
             if e and e.lower() not in ["nan", "none", ""] and d and d.lower() not in ["nan", "none", ""]:
                 clean_rows.append({emp_col: e, day_col: d, win_col: w})
                 
-    clean_unavail_df = pd.DataFrame(clean_rows)
+    clean_unavail_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(pd.DataFrame(clean_rows)))
 
     # Build name_map for matching employee names
     emp_df = st.session_state.get("manual_employees", None)
@@ -3032,9 +3032,11 @@ def render_team_monthly_calendar_grid():
                     chips_block = "".join(chips_html) if chips_html else '<div style="color: #718096; font-size: 0.75rem; font-weight: 600; padding: 4px 0;">Clear (All Available)</div>'
                     
                     st.markdown(f"""
-                    <div style="min-height: 110px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px;">
-                        <div style="font-weight: 800; font-size: 0.85rem; color: #e5a93c; border-bottom: 1px solid #1f5c50; margin-bottom: 4px; padding-bottom: 2px;">{day_num}</div>
-                        {chips_block}
+                    <div style="min-height: 120px; max-height: 150px; background: #11362f; border: 1px solid #1f5c50; border-radius: 8px; padding: 6px; margin-top: 4px; display: flex; flex-direction: column;">
+                        <div style="font-weight: 800; font-size: 0.85rem; color: #e5a93c; border-bottom: 1px solid #1f5c50; margin-bottom: 4px; padding-bottom: 2px; flex-shrink: 0;">{day_num}</div>
+                        <div style="overflow-y: auto; flex-grow: 1; padding-right: 2px;">
+                            {chips_block}
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
