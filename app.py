@@ -872,7 +872,7 @@ This is an automated notification sent from the Brumby's Bakery Portal to keep m
     except Exception as e:
         return False, f"SMTP Notification Error: {e}"
 
-def load_persisted_df(filename, default_df):
+def load_persisted_df(filename, default_df=None):
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
@@ -2961,7 +2961,7 @@ def render_team_monthly_calendar_grid():
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
     # Always load fresh data from disk so calendar grid & breakdown table are 100% in sync with file
-    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv"))
+    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv", None))
     st.session_state.manual_unavailability = unavail_df
 
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
