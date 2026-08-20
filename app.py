@@ -7,6 +7,7 @@ import os
 import copy
 import json
 import re
+import math
 from datetime import datetime, timedelta
 
 # Set page configuration with a modern design
@@ -494,8 +495,95 @@ import json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-FINALIZED_DIR = os.path.join(DATA_DIR, "finalized_rosters")
-os.makedirs(FINALIZED_DIR, exist_ok=True)
+TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
+os.makedirs(TIMESHEETS_DIR, exist_ok=True)
+TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
+
+BAKERY_LAT = -38.0718
+BAKERY_LON = 145.4851
+
+def calculate_haversine_distance(lat1, lon1, lat2=BAKERY_LAT, lon2=BAKERY_LON):
+    try:
+        if lat1 is None or lon1 is None or str(lat1).strip() == "" or str(lon1).strip() == "":
+            return 0.0
+        lat1, lon1, lat2, lon2 = map(math.radians, [float(lat1), float(lon1), float(lat2), float(lon2)])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        c = 2 * math.asin(math.sqrt(a))
+        r = 6371000
+        return round(c * r, 1)
+    except:
+        return 0.0
+
+def get_week_start_date_str(dt_obj=None):
+    if dt_obj is None:
+        dt_obj = datetime.now().date()
+    if isinstance(dt_obj, datetime):
+        dt_obj = dt_obj.date()
+    mon_dt = dt_obj - timedelta(days=dt_obj.weekday())
+    return mon_dt.strftime("%d.%m.%Y")
+
+def load_persisted_timecards():
+    df_cards = pd.DataFrame()
+    if os.path.exists(TIMECARDS_FILE):
+        try:
+            df_cards = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False)
+        except:
+            df_cards = pd.DataFrame()
+            
+    archived_rows = []
+    if os.path.exists(TIMESHEETS_DIR):
+        for f in os.listdir(TIMESHEETS_DIR):
+            if f.endswith(".json"):
+                fpath = os.path.join(TIMESHEETS_DIR, f)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as file:
+                        records = json.load(file)
+                        if isinstance(records, list):
+                            archived_rows.extend(records)
+                except:
+                    pass
+    if archived_rows:
+        df_arch = pd.DataFrame(archived_rows)
+        if df_cards is not None and not df_cards.empty:
+            df_cards = pd.concat([df_arch, df_cards], ignore_index=True)
+        else:
+            df_cards = df_arch
+        if not df_cards.empty and "Record ID" in df_cards.columns:
+            df_cards = df_cards.drop_duplicates(subset=["Record ID"], keep="last").reset_index(drop=True)
+            
+    return df_cards
+
+def save_timecard_records(df_cards):
+    if df_cards is None or not isinstance(df_cards, pd.DataFrame):
+        return
+    df_cards = df_cards.copy().astype(str)
+    try:
+        df_cards.to_csv(TIMECARDS_FILE, index=False)
+    except:
+        pass
+        
+    if "Date" in df_cards.columns:
+        weeks_map = {}
+        for idx, row in df_cards.iterrows():
+            d_str = row.get("Date", "")
+            d_obj = parse_date_robust(d_str)
+            if d_obj:
+                w_str = get_week_start_date_str(d_obj)
+                if w_str not in weeks_map:
+                    weeks_map[w_str] = []
+                weeks_map[w_str].append(row.to_dict())
+                
+        for w_str, week_rows in weeks_map.items():
+            week_json_file = os.path.join(TIMESHEETS_DIR, f"timesheet_week_{w_str}.json")
+            week_csv_file = os.path.join(TIMESHEETS_DIR, f"timesheet_week_{w_str}.csv")
+            try:
+                with open(week_json_file, "w", encoding="utf-8") as f_out:
+                    json.dump(week_rows, f_out, indent=2)
+                pd.DataFrame(week_rows).astype(str).to_csv(week_csv_file, index=False)
+            except:
+                pass
 
 USER_PROFILES_FILE = os.path.join(DATA_DIR, "user_profiles.json")
 
@@ -2511,20 +2599,22 @@ if st.session_state.manual_fixed is not None:
 is_manager = (st.session_state.user_role == "Manager")
 
 if is_manager:
-    tab_home, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed = st.tabs([
+    tab_home, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
         "🏠 Home / Executive Dashboard",
         "⚡ Weekly Roster Generator",
         "👥 Staff Members", 
         "🚫 Unavailability", 
         "📋 Daily Requirements", 
-        "📌 Fixed Shifts"
+        "📌 Fixed Shifts",
+        "⏱️ Shift Timesheet Audit & Live Attendance"
     ])
 else:
-    # Employee sees 3 tabs: Current Roster (1st), Personal Information (2nd), Availability (3rd)
-    tab_my_current_roster, tab_my_info, tab_my_avail = st.tabs([
+    # Employee sees 4 tabs: Current Roster (1st), Personal Information (2nd), Availability (3rd), Shift Timeclock (4th)
+    tab_my_current_roster, tab_my_info, tab_my_avail, tab_my_timeclock = st.tabs([
         "📅 Current Roster",
         "📋 Personal Information Form",
-        "📅 My Availability & Constraints"
+        "📅 My Availability & Constraints",
+        "⏱️ My Shift Timeclock"
     ])
 
 def render_employee_current_roster_tab(user_key):
@@ -3108,7 +3198,448 @@ def render_team_monthly_calendar_grid():
             save_persisted_df(combined_df, "unavailability.csv")
             st.rerun()
 
-# IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
+def build_weekly_timesheet_excel_bytes(selected_week_str):
+    wb = openpyxl.Workbook()
+    ws_summary = wb.active
+    ws_summary.title = "Weekly Audited Summary"
+    ws_details = wb.create_sheet(title="Daily Punch Details")
+    
+    header_fill = PatternFill(start_color="11362F", end_color="11362F", fill_type="solid")
+    header_font = Font(name="Arial", size=11, bold=True, color="E5A93C")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    
+    border_side = Side(style='thin', color='1F5C50')
+    cell_border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
+    
+    headers_summary = ["Employee", "Scheduled Shift Hours", "Actual Audited Hours", "Variance (Mins)", "Late Shift Status", "Manager Approval Status"]
+    ws_summary.append(headers_summary)
+    for col_num, h_text in enumerate(headers_summary, 1):
+        cell = ws_summary.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_align
+        cell.border = cell_border
+        
+    headers_details = ["Record ID", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Variance (Mins)", "GPS Distance (m)", "Location Verification", "Missing Punch Alert", "Late Correction Status", "Punch Status"]
+    ws_details.append(headers_details)
+    for col_num, h_text in enumerate(headers_details, 1):
+        cell = ws_details.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_align
+        cell.border = cell_border
+
+    df_cards = load_persisted_timecards()
+    week_cards = []
+    if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
+        for idx, row in df_cards.iterrows():
+            d_obj = parse_date_robust(row.get("Date", ""))
+            if d_obj and get_week_start_date_str(d_obj) == selected_week_str:
+                week_cards.append(row.to_dict())
+
+    emp_summary_map = {}
+    for r_dict in week_cards:
+        emp = r_dict.get("Employee", "")
+        if emp not in emp_summary_map:
+            emp_summary_map[emp] = {"sched_hrs": 0.0, "actual_hrs": 0.0, "var_mins": 0, "late_status": "Normal", "approval": "Approved"}
+            
+        try:
+            actual_h = float(r_dict.get("Net Hours", "0"))
+        except:
+            actual_h = 0.0
+        try:
+            var_m = int(float(r_dict.get("Variance (Mins)", "0")))
+        except:
+            var_m = 0
+            
+        emp_summary_map[emp]["actual_hrs"] += actual_h
+        emp_summary_map[emp]["var_mins"] += var_m
+        if r_dict.get("Late Correction Status") == "Late Shift Corrected":
+            emp_summary_map[emp]["late_status"] = "Late Shift Corrected"
+        if "Forgot" in r_dict.get("Missing Punch Alert", ""):
+            emp_summary_map[emp]["approval"] = "Action Required"
+
+        row_vals = [
+            r_dict.get("Record ID", ""),
+            r_dict.get("Date", ""),
+            emp,
+            r_dict.get("Scheduled Shift", ""),
+            r_dict.get("Clock In", ""),
+            r_dict.get("Clock Out", ""),
+            r_dict.get("Net Hours", "0"),
+            r_dict.get("Variance (Mins)", "0"),
+            r_dict.get("Distance (m)", "0"),
+            r_dict.get("Location Verification", ""),
+            r_dict.get("Missing Punch Alert", "None"),
+            r_dict.get("Late Correction Status", "Normal"),
+            r_dict.get("Status", "")
+        ]
+        ws_details.append(row_vals)
+
+    for emp, s_data in emp_summary_map.items():
+        ws_summary.append([
+            emp,
+            round(s_data["actual_hrs"], 2),
+            round(s_data["actual_hrs"], 2),
+            s_data["var_mins"],
+            s_data["late_status"],
+            s_data["approval"]
+        ])
+
+    for ws in [ws_summary, ws_details]:
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.border = cell_border
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 14)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+def render_employee_timeclock_tab(user_key):
+    user_info = user_profiles.get(user_key, {})
+    emp_name = user_info.get("employee_name", user_key)
+    
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 22px; border-radius: 12px; color: #ffffff !important; border: 2px solid #e5a93c; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #e5a93c;">⏱️ Mobile Shift Timeclock</h3>
+        <p style="margin: 4px 0 0 0; color: #d0e6df; font-size: 0.95rem;">Log your daily shift start and finish times directly from your smartphone.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    today_dt = datetime.now()
+    today_str = today_dt.strftime("%d/%m/%Y")
+    day_name = today_dt.strftime("%A")
+    
+    df_cards = load_persisted_timecards()
+    
+    today_punch = None
+    today_punch_idx = None
+    if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
+        for idx, r in df_cards.iterrows():
+            if str(r.get("Date", "")).strip() == today_str and str(r.get("Employee", "")).strip().lower() == emp_name.strip().lower():
+                today_punch = r.to_dict()
+                today_punch_idx = idx
+                break
+                
+    scheduled_shift = "7:00am-3:30pm"
+    past_rosters = list_finalized_rosters()
+    if past_rosters:
+        for r_name in past_rosters:
+            r_df, s_date = load_finalized_roster_df(r_name)
+            if r_df is not None and not r_df.empty and day_name in r_df.columns:
+                emp_col = find_column(r_df, ["name", "employee", "staff"])
+                if emp_col in r_df.columns:
+                    for _, r in r_df.iterrows():
+                        if find_matching_employee(emp_name, {str(r.get(emp_col, "")).strip().lower(): str(r.get(emp_col, "")).strip()}):
+                            val = str(r.get(day_name, "")).strip()
+                            if val and val.lower() not in ["off", "nan", "unavailable"]:
+                                scheduled_shift = val
+                                break
+
+    c_status1, c_status2 = st.columns([2, 1])
+    with c_status1:
+        st.markdown(f"**🗓️ Today:** `{day_name}, {today_str}`")
+        st.markdown(f"**📋 Scheduled Shift:** `{scheduled_shift}`")
+        if today_punch:
+            c_in = today_punch.get("Clock In", "")
+            c_out = today_punch.get("Clock Out", "")
+            dist_m = today_punch.get("Distance (m)", "0.0")
+            loc_ver = today_punch.get("Location Verification", "")
+            
+            if c_in and not c_out:
+                st.markdown(f"**Status:** 🟢 `<span style='color: #48bb78; font-weight: 800;'>WORKING NOW</span>` (Clocked IN at `{c_in}`)", unsafe_allow_html=True)
+            elif c_in and c_out:
+                st.markdown(f"**Status:** ✅ `<span style='color: #4299e1; font-weight: 800;'>SHIFT COMPLETED</span>` ({c_in} - {c_out})", unsafe_allow_html=True)
+            st.markdown(f"**📍 Location Status:** `{loc_ver}` (Distance: `{dist_m}m` from Bakery)")
+        else:
+            st.markdown("**Status:** 🔴 `<span style='color: #fc8181; font-weight: 800;'>CLOCKED OUT</span>`", unsafe_allow_html=True)
+
+    with c_status2:
+        st.markdown("<div style='text-align: center; background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50;'>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size: 1.5rem; font-weight: 900; color: #e5a93c;'>{today_dt.strftime('%I:%M %p')}</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 0.8rem; color: #a0aec0;'>Melbourne AEST Time</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    col_gps1, col_gps2 = st.columns(2)
+    with col_gps1:
+        user_lat = st.text_input("📍 Phone GPS Latitude (Auto / Manual)", value=str(BAKERY_LAT), key=f"gps_lat_{user_key}")
+    with col_gps2:
+        user_lon = st.text_input("📍 Phone GPS Longitude (Auto / Manual)", value=str(BAKERY_LON), key=f"gps_lon_{user_key}")
+
+    dist_meters = calculate_haversine_distance(user_lat, user_lon, BAKERY_LAT, BAKERY_LON)
+    is_verified_at_bakery = (dist_meters <= 50.0)
+    loc_badge = "✅ Verified at Bakery" if is_verified_at_bakery else f"⚠️ Remote Clock-In ({dist_meters}m away)"
+
+    if not is_verified_at_bakery:
+        st.warning(f"⚠️ Your location is detected `{dist_meters} meters` away from Brumby's Bakery Pakenham. Clock-ins >50m will be flagged for Manager Audit.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    b_col1, b_col2 = st.columns(2)
+
+    with b_col1:
+        if st.button("🟢 CLOCK IN NOW", key=f"btn_clock_in_{user_key}", use_container_width=True):
+            clock_in_time_str = datetime.now().strftime("%I:%M %p")
+            rec_id = f"TC_{today_str.replace('/', '')}_{emp_name.replace(' ', '')}"
+            
+            new_rec = {
+                "Record ID": rec_id,
+                "Date": today_str,
+                "Employee": emp_name,
+                "Scheduled Shift": scheduled_shift,
+                "Clock In": clock_in_time_str,
+                "Clock Out": "",
+                "Net Hours": "0",
+                "Variance (Mins)": "0",
+                "GPS Lat": str(user_lat),
+                "GPS Lon": str(user_lon),
+                "Distance (m)": str(dist_meters),
+                "Location Verification": loc_badge,
+                "Missing Punch Alert": "None",
+                "Late Correction Status": "Normal",
+                "Status": "Working"
+            }
+            
+            if df_cards is None or df_cards.empty:
+                df_updated = pd.DataFrame([new_rec])
+            else:
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
+                
+            save_timecard_records(df_updated)
+            st.success(f"✅ Welcome {emp_name}! Successfully Clocked IN at {clock_in_time_str} ({loc_badge})")
+            st.rerun()
+
+    with b_col2:
+        if st.button("🔴 CLOCK OUT NOW", key=f"btn_clock_out_{user_key}", use_container_width=True):
+            if not today_punch or not today_punch.get("Clock In"):
+                st.error("❌ You have not clocked in yet today!")
+            else:
+                clock_out_time_str = datetime.now().strftime("%I:%M %p")
+                clock_in_str = today_punch.get("Clock In", "")
+                
+                c_in_dec = parse_time_to_decimal(clock_in_str)
+                c_out_dec = parse_time_to_decimal(clock_out_time_str)
+                net_h = round(c_out_dec - c_in_dec, 2) if c_out_dec > c_in_dec else 0.0
+                
+                today_punch["Clock Out"] = clock_out_time_str
+                today_punch["Net Hours"] = str(net_h)
+                today_punch["Status"] = "Completed"
+                
+                rec_id = today_punch.get("Record ID")
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([today_punch])], ignore_index=True)
+                
+                save_timecard_records(df_updated)
+                st.success(f"✅ Goodbye {emp_name}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs)")
+                st.rerun()
+
+def render_manager_timesheet_audit_dashboard():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 22px; border-radius: 12px; color: #ffffff !important; border: 2px solid #e5a93c; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #e5a93c;">⏱️ Shift Timesheet Audit & Live Attendance</h3>
+        <p style="margin: 4px 0 0 0; color: #d0e6df; font-size: 0.95rem;">Review live working staff, resolve missing sign-ins/outs, apply late shift roster corrections, and download weekly timesheets.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    df_cards = load_persisted_timecards()
+    
+    working_count = 0
+    missing_in_count = 0
+    missing_out_count = 0
+    if df_cards is not None and not df_cards.empty:
+        if "Status" in df_cards.columns:
+            working_count = len(df_cards[df_cards["Status"] == "Working"])
+        if "Missing Punch Alert" in df_cards.columns:
+            missing_in_count = len(df_cards[df_cards["Missing Punch Alert"] == "Forgot Sign-In"])
+            missing_out_count = len(df_cards[df_cards["Missing Punch Alert"] == "Forgot Sign-Off"])
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.markdown(f"""
+        <div style="background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50; text-align: center;">
+            <div style="font-size: 0.85rem; color: #a0aec0; font-weight: 700;">ON-DUTY NOW</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: #48bb78;">🟢 {working_count} Staff</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""
+        <div style="background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50; text-align: center;">
+            <div style="font-size: 0.85rem; color: #a0aec0; font-weight: 700;">FORGOT SIGN-IN</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: #ecc94b;">⚠️ {missing_in_count} Alerts</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"""
+        <div style="background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50; text-align: center;">
+            <div style="font-size: 0.85rem; color: #a0aec0; font-weight: 700;">FORGOT SIGN-OFF</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: #f6ad55;">⚠️ {missing_out_count} Alerts</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with m4:
+        st.markdown(f"""
+        <div style="background: #0c2b25; padding: 12px; border-radius: 10px; border: 1px solid #1f5c50; text-align: center;">
+            <div style="font-size: 0.85rem; color: #a0aec0; font-weight: 700;">TOTAL TIMECARDS</div>
+            <div style="font-size: 1.6rem; font-weight: 900; color: #4299e1;">📋 {len(df_cards) if df_cards is not None else 0} Records</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    with st.expander("🚨 Missing Punch Approvals & Manual Timestamp Entry", expanded=True):
+        st.markdown("Use this section to manually resolve staff who **forgot to sign in or sign off** on their shifts.")
+        
+        col_man1, col_man2, col_man3, col_man4 = st.columns(4)
+        with col_man1:
+            emp_df = st.session_state.get("manual_employees", None)
+            emp_list = []
+            if emp_df is not None and not emp_df.empty:
+                emp_c = find_column(emp_df, ["name", "employee", "staff"], "NAME")
+                if emp_c in emp_df.columns:
+                    emp_list = [str(x).strip() for x in emp_df[emp_c].dropna() if str(x).strip()]
+            if not emp_list:
+                emp_list = ["Ainsley Mactier", "Elizabeth", "Stella", "Aimi", "Jude", "Jack", "Violet", "Amy", "Olivia"]
+            sel_emp = st.selectbox("Select Employee:", emp_list, key="mgr_sel_emp")
+            
+        with col_man2:
+            sel_date = st.date_input("Shift Date:", value=datetime.now().date(), key="mgr_sel_date")
+            sel_date_str = sel_date.strftime("%d/%m/%Y")
+            
+        with col_man3:
+            man_in = st.text_input("Manual Clock In (e.g. 7:00 AM):", value="07:00 AM", key="mgr_in_time")
+            
+        with col_man4:
+            man_out = st.text_input("Manual Clock Out (e.g. 3:30 PM):", value="03:30 PM", key="mgr_out_time")
+
+        if st.button("✅ Approve & Save Manual Timecard Record", key="btn_approve_manual_timecard"):
+            rec_id = f"TC_{sel_date_str.replace('/', '')}_{sel_emp.replace(' ', '')}"
+            c_in_dec = parse_time_to_decimal(man_in)
+            c_out_dec = parse_time_to_decimal(man_out)
+            net_h = round(c_out_dec - c_in_dec, 2) if c_out_dec > c_in_dec else 0.0
+            
+            approved_rec = {
+                "Record ID": rec_id,
+                "Date": sel_date_str,
+                "Employee": sel_emp,
+                "Scheduled Shift": f"{man_in}-{man_out}",
+                "Clock In": man_in,
+                "Clock Out": man_out,
+                "Net Hours": str(net_h),
+                "Variance (Mins)": "0",
+                "GPS Lat": str(BAKERY_LAT),
+                "GPS Lon": str(BAKERY_LON),
+                "Distance (m)": "0.0",
+                "Location Verification": "✅ Verified (Manager Approved)",
+                "Missing Punch Alert": "None (Manager Resolved)",
+                "Late Correction Status": "Manager Approved",
+                "Status": "Completed"
+            }
+            
+            if df_cards is None or df_cards.empty:
+                df_updated = pd.DataFrame([approved_rec])
+            else:
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([approved_rec])], ignore_index=True)
+                
+            save_timecard_records(df_updated)
+            st.success(f"✅ Approved and saved timecard for **{sel_emp}** on {sel_date_str} ({net_h} hrs)")
+            st.rerun()
+
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        📋 Master Timesheet Audit & Variance Log
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if df_cards is not None and not df_cards.empty:
+        edited_cards = st.data_editor(df_cards, num_rows="dynamic", key="edit_timecards_v1")
+        if not edited_cards.equals(df_cards):
+            save_timecard_records(edited_cards)
+            st.rerun()
+    else:
+        st.info("ℹ️ No timecard punch records logged yet. Staff can clock in from their mobile portal!")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("⚡ Late Shift Roster Auto-Correction")
+    st.markdown("If a staff member signed in late, select the record below to automatically update the finalized roster to match their actual late start time:")
+    
+    if df_cards is not None and not df_cards.empty:
+        late_records = []
+        for idx, r in df_cards.iterrows():
+            c_in = str(r.get("Clock In", "")).strip()
+            sched = str(r.get("Scheduled Shift", "")).strip()
+            if c_in and sched and "-" in sched:
+                sched_start_str = sched.split("-")[0].strip()
+                c_in_dec = parse_time_to_decimal(c_in)
+                s_in_dec = parse_time_to_decimal(sched_start_str)
+                var_mins = round((c_in_dec - s_in_dec) * 60)
+                if var_mins >= 10:
+                    late_records.append(f"{r.get('Date')} | {r.get('Employee')} | Scheduled: {sched} | Actual In: {c_in} (+{var_mins}m late)")
+
+        if late_records:
+            selected_late_item = st.selectbox("Select Late Shift to Correct Roster:", late_records, key="sel_late_item")
+            if st.button("⚡ Apply Late Shift Correction & Finalize Roster", key="btn_apply_late_correction"):
+                parts = [p.strip() for p in selected_late_item.split("|")]
+                l_date_str = parts[0]
+                l_emp_name = parts[1]
+                l_actual_in = parts[3].replace("Actual In:", "").split("(")[0].strip()
+                
+                past_rosters = list_finalized_rosters()
+                if past_rosters:
+                    for r_name in past_rosters:
+                        r_df, s_date = load_finalized_roster_df(r_name)
+                        if r_df is not None and not r_df.empty:
+                            l_date_obj = parse_date_robust(l_date_str)
+                            if l_date_obj:
+                                day_w_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][l_date_obj.weekday()]
+                                emp_col = find_column(r_df, ["name", "employee", "staff"])
+                                if emp_col in r_df.columns and day_w_name in r_df.columns:
+                                    for r_idx, r_row in r_df.iterrows():
+                                        if find_matching_employee(l_emp_name, {str(r_row.get(emp_col, "")).strip().lower(): str(r_row.get(emp_col, "")).strip()}):
+                                            old_shift = str(r_row.get(day_w_name, "")).strip()
+                                            if "-" in old_shift:
+                                                old_end = old_shift.split("-")[1].strip()
+                                                new_shift = f"{l_actual_in}-{old_end}"
+                                                r_df.at[r_idx, day_w_name] = new_shift
+                                                
+                                                save_persisted_df(r_df, os.path.join("finalized_rosters", r_name))
+                                                st.success(f"⚡ Successfully corrected roster shift for **{l_emp_name}** on {day_w_name} to `{new_shift}`!")
+                                                st.rerun()
+        else:
+            st.info("✅ No uncorrected late shift sign-ins detected.")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader("📥 Download Weekly Timesheet Workbook")
+    
+    available_weeks = []
+    if os.path.exists(TIMESHEETS_DIR):
+        for f in os.listdir(TIMESHEETS_DIR):
+            if f.startswith("timesheet_week_") and f.endswith(".csv"):
+                w_str = f.replace("timesheet_week_", "").replace(".csv", "")
+                available_weeks.append(w_str)
+                
+    if not available_weeks:
+        curr_w = get_week_start_date_str()
+        available_weeks = [curr_w]
+
+    sel_download_week = st.selectbox("Select Roster Week to Download:", available_weeks, key="sel_dl_week")
+    
+    excel_bytes = build_weekly_timesheet_excel_bytes(sel_download_week)
+    st.download_button(
+        label=f"📥 Download Timesheet_Audit_Week_{sel_download_week}.xlsx",
+        data=excel_bytes,
+        file_name=f"Timesheet_Audit_Week_{sel_download_week}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="btn_download_timesheet_excel"
+    )
+
+# IF EMPLOYEE, RENDER 4 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD, SHIFT TIMECLOCK 4TH)
 if not is_manager:
     with tab_my_current_roster:
         render_employee_current_roster_tab(st.session_state.logged_in_user)
@@ -3116,6 +3647,8 @@ if not is_manager:
         render_confidential_profile_form(st.session_state.logged_in_user)
     with tab_my_avail:
         render_employee_availability_manager(st.session_state.logged_in_user)
+    with tab_my_timeclock:
+        render_employee_timeclock_tab(st.session_state.logged_in_user)
 
 
 # Helpers for parsing times
@@ -4341,3 +4874,7 @@ if is_manager:
         fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed_v2")
         st.session_state.manual_fixed = fixed_df
         save_persisted_df(fixed_df, "fixed.csv")
+
+    # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
+    with tab_timesheets:
+        render_manager_timesheet_audit_dashboard()
