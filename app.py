@@ -3290,41 +3290,121 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     ws_summary.title = "Weekly Audited Summary"
     ws_details = wb.create_sheet(title="Daily Punch Details")
     
+    # Parse week start and end dates
+    mon_date_obj = parse_date_robust(selected_week_str)
+    if not mon_date_obj:
+        mon_date_obj = datetime.now().date()
+    if isinstance(mon_date_obj, datetime):
+        mon_date_obj = mon_date_obj.date()
+    sun_date_obj = mon_date_obj + timedelta(days=6)
+    
+    week_period_str = f"Roster Week Period: Monday {mon_date_obj.strftime('%d/%m/%Y')} – Sunday {sun_date_obj.strftime('%d/%m/%Y')}"
+    
+    # Fills & Fonts
+    title_fill = PatternFill(start_color="081D19", end_color="081D19", fill_type="solid")
+    subtitle_fill = PatternFill(start_color="0C2B25", end_color="0C2B25", fill_type="solid")
     header_fill = PatternFill(start_color="11362F", end_color="11362F", fill_type="solid")
+    day_header_fill = PatternFill(start_color="16443C", end_color="16443C", fill_type="solid")
+    
+    title_font = Font(name="Arial", size=14, bold=True, color="E5A93C")
+    subtitle_font = Font(name="Arial", size=11, bold=True, italic=True, color="FFFFFF")
     header_font = Font(name="Arial", size=11, bold=True, color="E5A93C")
+    day_header_font = Font(name="Arial", size=11, bold=True, color="E5A93C")
+    data_font = Font(name="Arial", size=10)
+    
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    right_align = Alignment(horizontal="right", vertical="center")
     
     border_side = Side(style='thin', color='1F5C50')
     cell_border = Border(left=border_side, right=border_side, top=border_side, bottom=border_side)
     
+    # ----------------------------------------------------
+    # 1. SETUP SHEET TITLES & PERIOD HEADERS
+    # ----------------------------------------------------
+    # Summary Sheet Title
+    ws_summary.merge_cells("A1:F1")
+    cell_s1 = ws_summary["A1"]
+    cell_s1.value = "BRUMBY'S BAKERY PAKENHAM — AUDITED WEEKLY TIMESHEET SUMMARY"
+    cell_s1.fill = title_fill
+    cell_s1.font = title_font
+    cell_s1.alignment = center_align
+    
+    ws_summary.merge_cells("A2:F2")
+    cell_s2 = ws_summary["A2"]
+    cell_s2.value = week_period_str
+    cell_s2.fill = subtitle_fill
+    cell_s2.font = subtitle_font
+    cell_s2.alignment = center_align
+    
+    # Details Sheet Title
+    ws_details.merge_cells("A1:M1")
+    cell_d1 = ws_details["A1"]
+    cell_d1.value = "BRUMBY'S BAKERY PAKENHAM — DAILY SHIFT PUNCH DETAILS"
+    cell_d1.fill = title_fill
+    cell_d1.font = title_font
+    cell_d1.alignment = center_align
+    
+    ws_details.merge_cells("A2:M2")
+    cell_d2 = ws_details["A2"]
+    cell_d2.value = week_period_str
+    cell_d2.fill = subtitle_fill
+    cell_d2.font = subtitle_font
+    cell_d2.alignment = center_align
+    
+    # Row 3 blank separator
+    ws_summary.row_dimensions[3].height = 10
+    ws_details.row_dimensions[3].height = 10
+    
+    # ----------------------------------------------------
+    # 2. COLUMN HEADERS (ROW 4)
+    # ----------------------------------------------------
     headers_summary = ["Employee", "Scheduled Shift Hours", "Actual Audited Hours", "Variance (Mins)", "Late Shift Status", "Manager Approval Status"]
-    ws_summary.append(headers_summary)
+    ws_summary.append([]) # Row 3 blank
+    ws_summary.append(headers_summary) # Row 4
     for col_num, h_text in enumerate(headers_summary, 1):
-        cell = ws_summary.cell(row=1, column=col_num)
+        cell = ws_summary.cell(row=4, column=col_num)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_align
         cell.border = cell_border
         
-    headers_details = ["Record ID", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Variance (Mins)", "GPS Distance (m)", "Location Verification", "Missing Punch Alert", "Late Correction Status", "Punch Status"]
-    ws_details.append(headers_details)
+    headers_details = ["Record ID", "Date", "Day", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Variance (Mins)", "GPS Distance (m)", "Location Verification", "Note / Alert", "Status"]
+    ws_details.append([]) # Row 3 blank
+    ws_details.append(headers_details) # Row 4
     for col_num, h_text in enumerate(headers_details, 1):
-        cell = ws_details.cell(row=1, column=col_num)
+        cell = ws_details.cell(row=4, column=col_num)
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_align
         cell.border = cell_border
 
+    # ----------------------------------------------------
+    # 3. LOAD & GROUP TIMECARDS BY DAY OF WEEK
+    # ----------------------------------------------------
     df_cards = load_persisted_timecards()
     week_cards = []
     if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
         for idx, row in df_cards.iterrows():
             d_obj = parse_date_robust(row.get("Date", ""))
             if d_obj and get_week_start_date_str(d_obj) == selected_week_str:
-                week_cards.append(row.to_dict())
+                row_dict = row.to_dict()
+                row_dict["_d_obj"] = d_obj
+                week_cards.append(row_dict)
 
+    # Sort chronologically by date
+    week_cards.sort(key=lambda x: x["_d_obj"])
+
+    days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    cards_by_day = {day: [] for day in days_order}
     emp_summary_map = {}
+
     for r_dict in week_cards:
+        d_obj = r_dict["_d_obj"]
+        day_w_name = days_order[d_obj.weekday()]
+        cards_by_day[day_w_name].append(r_dict)
+        
         emp = r_dict.get("Employee", "")
         if emp not in emp_summary_map:
             emp_summary_map[emp] = {"sched_hrs": 0.0, "actual_hrs": 0.0, "var_mins": 0, "late_status": "Normal", "approval": "Approved"}
@@ -3340,46 +3420,121 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
             
         emp_summary_map[emp]["actual_hrs"] += actual_h
         emp_summary_map[emp]["var_mins"] += var_m
-        if r_dict.get("Late Correction Status") == "Late Shift Corrected":
-            emp_summary_map[emp]["late_status"] = "Late Shift Corrected"
-        if "Forgot" in r_dict.get("Missing Punch Alert", ""):
+        if "Late" in r_dict.get("Late Correction Status", "") or "Late" in r_dict.get("Note", ""):
+            emp_summary_map[emp]["late_status"] = r_dict.get("Note", "Late Shift")
+        if "Missing" in r_dict.get("Note", ""):
             emp_summary_map[emp]["approval"] = "Action Required"
 
-        row_vals = [
-            r_dict.get("Record ID", ""),
-            r_dict.get("Date", ""),
-            emp,
-            r_dict.get("Scheduled Shift", ""),
-            r_dict.get("Clock In", ""),
-            r_dict.get("Clock Out", ""),
-            r_dict.get("Net Hours", "0"),
-            r_dict.get("Variance (Mins)", "0"),
-            r_dict.get("Distance (m)", "0"),
-            r_dict.get("Location Verification", ""),
-            r_dict.get("Missing Punch Alert", "None"),
-            r_dict.get("Late Correction Status", "Normal"),
-            r_dict.get("Status", "")
-        ]
-        ws_details.append(row_vals)
+    # ----------------------------------------------------
+    # 4. WRITE DAY OF WEEK SEPARATED ROWS (DETAILS SHEET)
+    # ----------------------------------------------------
+    current_row = 5
+    for day_idx, day_name in enumerate(days_order):
+        day_date_obj = mon_date_obj + timedelta(days=day_idx)
+        day_date_str = day_date_obj.strftime("%d/%m/%Y")
+        day_punches = cards_by_day[day_name]
+        
+        if day_punches:
+            # Day Section Header Divider Row
+            ws_details.append([f"📅 {day_name.upper()} — {day_date_str}"])
+            ws_details.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=13)
+            
+            for c_i in range(1, 14):
+                cell = ws_details.cell(row=current_row, column=c_i)
+                cell.fill = day_header_fill
+                cell.font = day_header_font
+                cell.alignment = center_align
+                cell.border = cell_border
+            current_row += 1
+            
+            # Punch rows for this day
+            for r_dict in day_punches:
+                row_vals = [
+                    r_dict.get("Record ID", ""),
+                    r_dict.get("Date", ""),
+                    day_name,
+                    r_dict.get("Employee", ""),
+                    r_dict.get("Scheduled Shift", ""),
+                    r_dict.get("Clock In", ""),
+                    r_dict.get("Clock Out", ""),
+                    r_dict.get("Net Hours", "0"),
+                    r_dict.get("Variance (Mins)", "0"),
+                    r_dict.get("Distance (m)", "0"),
+                    r_dict.get("Location Verification", ""),
+                    r_dict.get("Note", r_dict.get("Missing Punch Alert", "")),
+                    r_dict.get("Status", "")
+                ]
+                ws_details.append(row_vals)
+                for c_i in range(1, 14):
+                    cell = ws_details.cell(row=current_row, column=c_i)
+                    cell.font = data_font
+                    cell.border = cell_border
+                    if c_i in [8, 9, 10]:
+                        cell.alignment = right_align
+                    elif c_i in [2, 3, 6, 7]:
+                        cell.alignment = center_align
+                    else:
+                        cell.alignment = left_align
+                current_row += 1
 
+    # ----------------------------------------------------
+    # 5. WRITE SUMMARY SHEET ROWS
+    # ----------------------------------------------------
+    tot_hrs = 0.0
     for emp, s_data in emp_summary_map.items():
+        act_h = round(s_data["actual_hrs"], 2)
+        tot_hrs += act_h
         ws_summary.append([
             emp,
-            round(s_data["actual_hrs"], 2),
-            round(s_data["actual_hrs"], 2),
+            act_h,
+            act_h,
             s_data["var_mins"],
             s_data["late_status"],
             s_data["approval"]
         ])
+        for c_i in range(1, 7):
+            cell = ws_summary.cell(row=ws_summary.max_row, column=c_i)
+            cell.font = data_font
+            cell.border = cell_border
+            if c_i in [2, 3, 4]:
+                cell.alignment = right_align
+            else:
+                cell.alignment = left_align
+        
+    # Total Summary Row
+    ws_summary.append([
+        "TOTAL WEEKLY AUDITED HOURS",
+        round(tot_hrs, 2),
+        round(tot_hrs, 2),
+        "",
+        "",
+        ""
+    ])
+    tot_row_idx = ws_summary.max_row
+    for c_i in range(1, 7):
+        cell = ws_summary.cell(row=tot_row_idx, column=c_i)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.border = cell_border
+        if c_i in [2, 3]:
+            cell.alignment = right_align
+        else:
+            cell.alignment = left_align
 
+    # ----------------------------------------------------
+    # 6. AUTO-FIT COLUMN WIDTHS & STYLING
+    # ----------------------------------------------------
     for ws in [ws_summary, ws_details]:
-        for row in ws.iter_rows(min_row=2):
-            for cell in row:
-                cell.border = cell_border
         for col in ws.columns:
-            max_len = max(len(str(cell.value or '')) for cell in col)
+            max_len = 0
+            for cell in col:
+                val_str = str(cell.value or '')
+                # Skip merged title cells for width calculation
+                if cell.coordinate in ws.merged_cells:
+                    continue
+                max_len = max(max_len, len(val_str))
             col_letter = openpyxl.utils.get_column_letter(col[0].column)
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 14)
+            ws.column_dimensions[col_letter].width = max(max_len + 5, 14)
 
     output = io.BytesIO()
     wb.save(output)
