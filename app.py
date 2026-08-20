@@ -3524,39 +3524,8 @@ def render_employee_timeclock_tab(user_key):
         except:
             pass
 
-    lat_key = f"gps_lat_{user_key}_v5"
-    lon_key = f"gps_lon_{user_key}_v5"
-    
-    col_reset1, col_reset2 = st.columns([3, 1])
-    with col_reset2:
-        if st.button("🔄 Reset / Clear GPS", key=f"btn_reset_gps_url_{user_key}"):
-            try:
-                st.query_params.clear()
-            except:
-                try:
-                    st.experimental_set_query_params()
-                except:
-                    pass
-            if lat_key in st.session_state:
-                del st.session_state[lat_key]
-            if lon_key in st.session_state:
-                del st.session_state[lon_key]
-            st.rerun()
-            
-    if url_lat and lat_key not in st.session_state:
-        st.session_state[lat_key] = url_lat
-    if url_lon and lon_key not in st.session_state:
-        st.session_state[lon_key] = url_lon
-
-    col_gps1, col_gps2 = st.columns(2)
-    with col_gps1:
-        user_lat = st.text_input("📍 Phone GPS Latitude (Auto or Manual)", placeholder="e.g. -38.0583", key=lat_key)
-    with col_gps2:
-        user_lon = st.text_input("📍 Phone GPS Longitude (Auto or Manual)", placeholder="e.g. 145.4746", key=lon_key)
-
-    # Allow manual text input or auto URL GPS
-    final_lat = user_lat if user_lat else url_lat
-    final_lon = user_lon if user_lon else url_lon
+    final_lat = url_lat
+    final_lon = url_lon
 
     has_coords = bool(str(final_lat).strip() and str(final_lon).strip())
     dist_meters = calculate_haversine_distance(final_lat, final_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
@@ -3574,19 +3543,41 @@ def render_employee_timeclock_tab(user_key):
     else:
         st.success(f"🔓 **Unlocked**: You are at Brumby's Bakery Pakenham (Distance: `{dist_meters}m`).")
 
-    # Reset Today's Punch Helper for Testing
-    if today_punch:
-        with st.expander("🛠️ Reset Today's Clock-In Record for Testing", expanded=False):
-            st.write("Click below to clear today's test punch record and re-test clocking in with your live GPS location:")
-            if st.button("🔄 Reset Today's Clock-In Record", key=f"btn_reset_punch_{user_key}"):
-                if df_cards is not None and not df_cards.empty:
-                    target_rec_id = str(today_punch.get("Record ID", "")).strip()
-                    df_updated = df_cards[df_cards["Record ID"] != target_rec_id]
-                    if "Date" in df_updated.columns and "Employee" in df_updated.columns:
-                        df_updated = df_updated[~((df_updated["Date"].astype(str) == today_str) & (df_updated["Employee"].astype(str).str.lower() == emp_name.lower()))]
-                    save_timecard_records(df_updated)
-                    st.success("🔄 Cleared today's punch record! You can now test clocking in again.")
-                    st.rerun()
+    # Dynamic Silver (Out-of-Range / Locked) vs Gold (In-Range / Unlocked) Button Styling
+    if is_locked:
+        st.markdown("""
+        <style>
+        div[data-testid="stButton"] > button {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%) !important;
+            color: #e2e8f0 !important;
+            border: 2px solid #cbd5e0 !important;
+            font-weight: 800 !important;
+            font-size: 1.05rem !important;
+            padding: 12px 20px !important;
+            border-radius: 8px !important;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.3) !important;
+            cursor: not-allowed !important;
+            opacity: 0.75 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <style>
+        div[data-testid="stButton"] > button {
+            background: linear-gradient(135deg, #e5a93c 0%, #c0841d 100%) !important;
+            color: #000000 !important;
+            border: 2px solid #ffd700 !important;
+            font-weight: 900 !important;
+            font-size: 1.05rem !important;
+            padding: 12px 20px !important;
+            border-radius: 8px !important;
+            box-shadow: 0px 4px 15px rgba(229, 169, 60, 0.4) !important;
+            cursor: pointer !important;
+            opacity: 1.0 !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     b_col1, b_col2 = st.columns(2)
@@ -3594,8 +3585,11 @@ def render_employee_timeclock_tab(user_key):
     # Use Melbourne AEST local time (UTC + 10)
     melbourne_now = datetime.utcnow() + timedelta(hours=10)
 
+    btn_in_label = "🔒 CLOCK IN NOW (LOCKED)" if is_locked else "🟢 CLOCK IN NOW"
+    btn_out_label = "🔒 CLOCK OUT NOW (LOCKED)" if is_locked else "🔴 CLOCK OUT NOW"
+
     with b_col1:
-        if st.button("🟢 CLOCK IN NOW", key=f"btn_clock_in_{user_key}", use_container_width=True, disabled=is_locked):
+        if st.button(btn_in_label, key=f"btn_clock_in_{user_key}", use_container_width=True, disabled=is_locked):
             clock_in_time_str = melbourne_now.strftime("%I:%M %p")
             rec_id = f"TC_{today_str.replace('/', '')}_{emp_name.replace(' ', '')}"
             
@@ -3628,7 +3622,7 @@ def render_employee_timeclock_tab(user_key):
             st.rerun()
 
     with b_col2:
-        if st.button("🔴 CLOCK OUT NOW", key=f"btn_clock_out_{user_key}", use_container_width=True, disabled=is_locked):
+        if st.button(btn_out_label, key=f"btn_clock_out_{user_key}", use_container_width=True, disabled=is_locked):
             if not today_punch or not today_punch.get("Clock In"):
                 st.error("❌ You have not clocked in yet today!")
             else:
