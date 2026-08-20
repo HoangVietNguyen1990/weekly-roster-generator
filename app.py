@@ -2961,24 +2961,10 @@ def render_team_monthly_calendar_grid():
     cal = calendar.Calendar(firstweekday=6)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
-    default_unavail = pd.DataFrame([
-        {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
-        {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
-        {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
-        {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
-        {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
-        {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
-        {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
-        {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
-        {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
-        {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
-    ])
-
     unavail_df = st.session_state.get("manual_unavailability", None)
     if unavail_df is None or not isinstance(unavail_df, pd.DataFrame) or unavail_df.empty:
-        unavail_df = default_unavail.copy()
+        unavail_df = load_persisted_df("unavailability.csv")
         st.session_state.manual_unavailability = unavail_df
-        save_persisted_df(unavail_df, "unavailability.csv")
 
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
     day_col = find_column(unavail_df, ["day", "date", "weekday", "when", "day of week", "unavailable date"], "Day")
@@ -3003,12 +2989,6 @@ def render_team_monthly_calendar_grid():
             if e and e.lower() not in ["nan", "none", ""] and d and d.lower() not in ["nan", "none", ""]:
                 clean_rows.append({emp_col: e, day_col: d, win_col: w})
                 
-    if not clean_rows:
-        clean_rows = default_unavail.to_dict('records')
-        emp_col = "Employee"
-        day_col = "Day"
-        win_col = "Time Window"
-        
     clean_unavail_df = pd.DataFrame(clean_rows)
 
     # Build name_map for matching employee names
@@ -3095,9 +3075,12 @@ def render_team_monthly_calendar_grid():
         month_unavail_df = pd.DataFrame(active_rows).drop_duplicates()
         month_unavail_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(month_unavail_df))
         edited_month_df = st.data_editor(month_unavail_df, num_rows="dynamic", key=f"edit_unavail_month_{sel_month}_{sel_year}")
-        if edited_month_df is not None and not edited_month_df.empty:
-            st.session_state.manual_unavailability = standardize_unavailability_df(edited_month_df)
-            save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+        if edited_month_df is not None:
+            std_edited = standardize_unavailability_df(edited_month_df)
+            if not std_edited.equals(month_unavail_df):
+                st.session_state.manual_unavailability = std_edited
+                save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
+                st.rerun()
     else:
         st.info(f"🎉 No staff unavailability logged for {selected_month_str}. All employees are fully available!")
 
