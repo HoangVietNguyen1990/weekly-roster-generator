@@ -3331,8 +3331,8 @@ def render_employee_timeclock_tab(user_key):
     scheduled_shift = "7:00am-3:30pm"
     past_rosters = list_finalized_rosters()
     if past_rosters:
-        for r_name in past_rosters:
-            r_df, s_date = load_finalized_roster_df(r_name)
+        for r_item in past_rosters:
+            r_df = load_finalized_roster(r_item["csv_filename"])
             if r_df is not None and not r_df.empty and day_name in r_df.columns:
                 emp_col = find_column(r_df, ["name", "employee", "staff"])
                 if emp_col in r_df.columns:
@@ -3594,8 +3594,8 @@ def render_manager_timesheet_audit_dashboard():
                 
                 past_rosters = list_finalized_rosters()
                 if past_rosters:
-                    for r_name in past_rosters:
-                        r_df, s_date = load_finalized_roster_df(r_name)
+                    for r_item in past_rosters:
+                        r_df = load_finalized_roster(r_item["csv_filename"])
                         if r_df is not None and not r_df.empty:
                             l_date_obj = parse_date_robust(l_date_str)
                             if l_date_obj:
@@ -3610,7 +3610,7 @@ def render_manager_timesheet_audit_dashboard():
                                                 new_shift = f"{l_actual_in}-{old_end}"
                                                 r_df.at[r_idx, day_w_name] = new_shift
                                                 
-                                                save_persisted_df(r_df, os.path.join("finalized_rosters", r_name))
+                                                save_persisted_df(r_df, os.path.join("finalized_rosters", r_item["csv_filename"]))
                                                 st.success(f"⚡ Successfully corrected roster shift for **{l_emp_name}** on {day_w_name} to `{new_shift}`!")
                                                 st.rerun()
         else:
