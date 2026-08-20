@@ -650,6 +650,17 @@ def save_timecard_records(df_cards):
                     weeks_map[w_str] = []
                 weeks_map[w_str].append(row.to_dict())
                 
+        # Synchronize and clean stale weekly archives in data/timesheets/
+        if os.path.exists(TIMESHEETS_DIR):
+            for f in os.listdir(TIMESHEETS_DIR):
+                if f.startswith("timesheet_week_"):
+                    w_str = f.replace("timesheet_week_", "").replace(".json", "").replace(".csv", "")
+                    if w_str not in weeks_map:
+                        try:
+                            os.remove(os.path.join(TIMESHEETS_DIR, f))
+                        except:
+                            pass
+
         for w_str, week_rows in weeks_map.items():
             week_json_file = os.path.join(TIMESHEETS_DIR, f"timesheet_week_{w_str}.json")
             week_csv_file = os.path.join(TIMESHEETS_DIR, f"timesheet_week_{w_str}.csv")
@@ -3569,8 +3580,10 @@ def render_employee_timeclock_tab(user_key):
             st.write("Click below to clear today's test punch record and re-test clocking in with your live GPS location:")
             if st.button("🔄 Reset Today's Clock-In Record", key=f"btn_reset_punch_{user_key}"):
                 if df_cards is not None and not df_cards.empty:
-                    rec_id = f"TC_{today_str.replace('/', '')}_{emp_name.replace(' ', '')}"
-                    df_updated = df_cards[df_cards["Record ID"] != rec_id]
+                    target_rec_id = str(today_punch.get("Record ID", "")).strip()
+                    df_updated = df_cards[df_cards["Record ID"] != target_rec_id]
+                    if "Date" in df_updated.columns and "Employee" in df_updated.columns:
+                        df_updated = df_updated[~((df_updated["Date"].astype(str) == today_str) & (df_updated["Employee"].astype(str).str.lower() == emp_name.lower()))]
                     save_timecard_records(df_updated)
                     st.success("🔄 Cleared today's punch record! You can now test clocking in again.")
                     st.rerun()
