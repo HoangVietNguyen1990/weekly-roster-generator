@@ -3445,7 +3445,7 @@ def render_employee_timeclock_tab(user_key):
     st.markdown("---")
     st.markdown("#### 📍 Live Smartphone GPS Presence Verification")
     
-    # Auto-requesting HTML5 Geolocation JS Component for continuous tracking while app is on
+    # Auto-requesting HTML5 Geolocation JS Component with direct URL-sync to Streamlit
     geo_html = """
     <div style="background: #0c2b25; padding: 14px; border-radius: 10px; border: 1.5px solid #e5a93c; text-align: center; color: white; font-family: sans-serif;">
         <div id="geo_title" style="font-weight: 800; font-size: 1.05rem; color: #e5a93c; margin-bottom: 6px;">
@@ -3463,12 +3463,23 @@ def render_employee_timeclock_tab(user_key):
             var lat = position.coords.latitude.toFixed(6);
             var lon = position.coords.longitude.toFixed(6);
             var status = document.getElementById('geo_status');
-            status.innerHTML = "<span style='color:#48bb78; font-size:1.05rem; font-weight:800;'>✅ Live Phone Location Active: " + lat + ", " + lon + "</span><br><span style='font-size:0.8rem; color:#ecc94b;'>Enter or paste these coordinates into Latitude & Longitude boxes below.</span>";
+            status.innerHTML = "<span style='color:#48bb78; font-size:1.05rem; font-weight:800;'>✅ Live Phone Location Active: " + lat + ", " + lon + "</span>";
+            
+            try {
+                var currentUrl = new URL(window.parent.location.href);
+                var curLat = currentUrl.searchParams.get("user_lat");
+                var curLon = currentUrl.searchParams.get("user_lon");
+                if (curLat !== lat || curLon !== lon) {
+                    currentUrl.searchParams.set("user_lat", lat);
+                    currentUrl.searchParams.set("user_lon", lon);
+                    window.parent.location.href = currentUrl.toString();
+                }
+            } catch(e) {}
         }
 
         function handleError(error) {
             var status = document.getElementById('geo_status');
-            status.innerHTML = "<span style='color:#fc8181; font-weight:700;'>🔒 Location Access Needed: " + error.message + ". Please tap 'Allow While Using Site' in your browser settings (Safari/Chrome).</span>";
+            status.innerHTML = "<span style='color:#fc8181; font-weight:700;'>🔒 Location Access Needed: " + error.message + ". Please allow location access in your browser settings (Safari/Chrome).</span>";
         }
 
         function startTracking() {
@@ -3481,27 +3492,42 @@ def render_employee_timeclock_tab(user_key):
         }
 
         document.getElementById('get_geo_btn').addEventListener('click', startTracking);
-        // Auto-start location tracking as soon as tab loads
         startTracking();
     </script>
     """
-    st.components.v1.html(geo_html, height=155)
+    st.components.v1.html(geo_html, height=140)
+
+    url_lat = ""
+    url_lon = ""
+    try:
+        url_lat = str(st.query_params.get("user_lat", "")).strip()
+        url_lon = str(st.query_params.get("user_lon", "")).strip()
+    except:
+        try:
+            qp = st.experimental_get_query_params()
+            url_lat = str(qp.get("user_lat", [""])[0]).strip()
+            url_lon = str(qp.get("user_lon", [""])[0]).strip()
+        except:
+            pass
 
     col_gps1, col_gps2 = st.columns(2)
     with col_gps1:
-        user_lat = st.text_input("📍 Phone GPS Latitude", value="", placeholder="e.g. -38.085123", key=f"gps_lat_{user_key}")
+        user_lat = st.text_input("📍 Phone GPS Latitude", value=url_lat, placeholder="Auto-detected via smartphone GPS", key=f"gps_lat_{user_key}_v2")
     with col_gps2:
-        user_lon = st.text_input("📍 Phone GPS Longitude", value="", placeholder="e.g. 145.460123", key=f"gps_lon_{user_key}")
+        user_lon = st.text_input("📍 Phone GPS Longitude", value=url_lon, placeholder="Auto-detected via smartphone GPS", key=f"gps_lon_{user_key}_v2")
 
-    has_coords = bool(str(user_lat).strip() and str(user_lon).strip())
-    dist_meters = calculate_haversine_distance(user_lat, user_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
+    final_lat = user_lat if user_lat else url_lat
+    final_lon = user_lon if user_lon else url_lon
+
+    has_coords = bool(str(final_lat).strip() and str(final_lon).strip())
+    dist_meters = calculate_haversine_distance(final_lat, final_lon, BAKERY_LAT, BAKERY_LON) if has_coords else 0.0
     
     is_verified_at_bakery = (has_coords and dist_meters <= 50.0)
     is_locked = not is_verified_at_bakery
     loc_badge = f"✅ Verified at Bakery ({dist_meters}m)" if is_verified_at_bakery else (f"⚠️ Remote Clock-In ({dist_meters}m away)" if has_coords else "⚠️ GPS Coordinates Missing")
 
     if not has_coords:
-        st.error("🔒 **Clock In / Out Locked**: Tap **'TAP HERE TO CAPTURE MY REAL SMARTPHONE GPS LOCATION'** above or enter your phone's live GPS coordinates to verify your location.")
+        st.error("🔒 **Clock In / Out Locked**: Requesting live GPS coordinates from smartphone... Please allow location access in your browser.")
     elif is_locked:
         dist_km = round(dist_meters / 1000.0, 2)
         dist_label = f"{dist_km} km ({int(dist_meters)} meters)" if dist_meters >= 1000 else f"{int(dist_meters)} meters"
@@ -3526,8 +3552,8 @@ def render_employee_timeclock_tab(user_key):
                 "Clock Out": "",
                 "Net Hours": "0",
                 "Variance (Mins)": "0",
-                "GPS Lat": str(user_lat),
-                "GPS Lon": str(user_lon),
+                "GPS Lat": str(final_lat),
+                "GPS Lon": str(final_lon),
                 "Distance (m)": str(dist_meters),
                 "Location Verification": loc_badge,
                 "Note": "✅ Verified at Bakery",
