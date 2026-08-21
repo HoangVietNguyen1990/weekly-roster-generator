@@ -3033,11 +3033,6 @@ def render_employee_current_roster_tab(user_key):
             st.markdown("### 📋 Full Team Schedule")
             st.dataframe(roster_df, use_container_width=True)
 
-            st.markdown("### 📊 Current Week Hour Rate Breakdown")
-            emp_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(roster_df)
-            if not emp_hour_breakdown_df.empty:
-                st.dataframe(emp_hour_breakdown_df, use_container_width=True, hide_index=True)
-            
             # Download XLSX Button
             excel_bytes = build_roster_excel_bytes(roster_df, matched_start_date)
             dl_filename = f"Team_Roster_{matched_start_date.strftime('%d.%m.%Y')}.xlsx"
