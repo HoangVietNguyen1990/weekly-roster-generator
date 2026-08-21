@@ -501,8 +501,8 @@ TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
 
-BAKERY_LAT = -38.0583
-BAKERY_LON = 145.4746
+BAKERY_LAT = -38.063557
+BAKERY_LON = 145.455262
 
 def calculate_haversine_distance(lat1, lon1, lat2=BAKERY_LAT, lon2=BAKERY_LON):
     try:
@@ -3551,7 +3551,12 @@ def render_employee_timeclock_tab(user_key):
         <p style="margin: 4px 0 0 0; color: #d0e6df; font-size: 0.95rem;">Log your daily shift start and finish times directly from your smartphone.</p>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    is_owner_profile = (emp_name.lower() in ["viet", "jane"]) or (user_info.get("profile", {}).get("classification", "").lower() == "owner")
+    if is_owner_profile:
+        st.info(f"👑 **Store Owner Account ({emp_name})**: Store owners are exempt from mandatory shift clocking. Mobile timeclock functions are not required for owner accounts.")
+        return
+
     today_dt = datetime.utcnow() + timedelta(hours=10)
     today_str = today_dt.strftime("%d/%m/%Y")
     day_name = today_dt.strftime("%A")
@@ -3698,6 +3703,20 @@ def render_employee_timeclock_tab(user_key):
     else:
         st.success(f"🔓 **Unlocked**: You are at Brumby's Bakery Pakenham (Distance: `{dist_meters}m`).")
 
+    if is_locked:
+        with st.expander("🛠️ GPS Troubleshooting & Emergency Location Override"):
+            st.markdown("""
+            **Troubleshooting Steps for Staff:**
+            1. **Allow Location Permissions**: Ensure location access is enabled for Safari/Chrome in phone Settings.
+            2. **Refresh Location Signal**: Click the **"🔄 Refresh Live Phone GPS Signal"** button above.
+            3. **Indoor Wi-Fi / GPS Drift**: If indoor GPS signals drift beyond 50m, check the box below to bypass lock.
+            """)
+            override_gps = st.checkbox("🔓 Enable Emergency Location Override (Confirm physical presence at bakery)", key=f"cb_gps_override_{user_key}")
+            if override_gps:
+                is_locked = False
+                loc_badge = f"⚠️ Emergency Location Override ({int(dist_meters)}m)" if has_coords else "⚠️ Manual Emergency Location Override"
+                st.warning("⚠️ Emergency location override active. Clock-in button is unlocked and will be logged for Manager audit review.")
+
     # Dynamic Silver (Out-of-Range / Locked) vs Gold (In-Range / Unlocked) Button Styling
     if is_locked:
         st.markdown("""
@@ -3810,6 +3829,13 @@ def render_manager_timesheet_audit_dashboard():
     
     df_cards = load_persisted_timecards()
     
+    # Auto-clean any missing timecards for store owners (Viet & Jane)
+    if df_cards is not None and not df_cards.empty and "Employee" in df_cards.columns:
+        owner_missing_mask = df_cards["Employee"].astype(str).str.strip().str.lower().isin(["viet", "jane"]) & (df_cards["Status"] == "Missing")
+        if owner_missing_mask.any():
+            df_cards = df_cards[~owner_missing_mask].reset_index(drop=True)
+            save_timecard_records(df_cards)
+
     # 1. Scan finalized rosters to inject missing clockings for scheduled shifts
     past_rosters = list_finalized_rosters()
     if past_rosters:
@@ -3829,7 +3855,13 @@ def render_manager_timesheet_audit_dashboard():
                                 emp_name = str(r_row.get(emp_col, "")).strip()
                                 shift_val = str(r_row.get(day_name, "")).strip()
                                 
-                                if emp_name and shift_val and shift_val.lower() not in ["off", "nan", "unavailable"]:
+                                is_owner = emp_name.lower() in ["viet", "jane"]
+                                for u_k, u_v in user_profiles.items():
+                                    if u_v.get("employee_name", "").strip().lower() == emp_name.lower():
+                                        if u_v.get("profile", {}).get("classification", "").lower() == "owner":
+                                            is_owner = True
+
+                                if not is_owner and emp_name and shift_val and shift_val.lower() not in ["off", "nan", "unavailable"]:
                                     rec_id = f"TC_{shift_date_str.replace('/', '')}_{emp_name.replace(' ', '')}"
                                     
                                     card_exists = False
