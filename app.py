@@ -2808,7 +2808,7 @@ is_manager = (st.session_state.user_role == "Manager")
 
 if is_manager:
     tab_home, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
-        "🏠 Home / Executive Dashboard",
+        "📅 Roster Inside",
         "⚡ Weekly Roster Generator",
         "👥 Staff Members", 
         "🚫 Unavailability", 
@@ -4550,7 +4550,7 @@ if is_manager:
     with tab_home:
         st.markdown("""
         <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 20px; border-radius: 16px; border: 2px solid #e5a93c; box-shadow: 0 8px 30px rgba(0,0,0,0.4); margin-bottom: 25px;">
-            <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">🏠 Executive Admin Command Center</h2>
+            <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">📅 Roster Inside — Admin Command Center</h2>
             <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Select published weekly rosters to view, edit shifts, review real-time payroll breakdowns, and analyze historical financial trends.</p>
         </div>
         """, unsafe_allow_html=True)
