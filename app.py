@@ -1935,14 +1935,13 @@ def calculate_weekly_hour_rate_breakdown(roster_df):
                 parsed = parse_shift_range(shift_val)
                 if parsed:
                     start_t, end_t, duration = parsed
-                    paid_hrs = duration - 0.5 if duration >= 5.0 else duration
+                    # Full shift hours calculated without deducting 30min unpaid meal break
                     shifts_count += 1
-                    ratio = (paid_hrs / duration) if duration > 0 else 1.0
 
                     if day == "Saturday":
-                        sat_hrs += paid_hrs
+                        sat_hrs += duration
                     elif day == "Sunday":
-                        sun_hrs += paid_hrs
+                        sun_hrs += duration
                     else:
                         # Mon-Fri
                         # Early: before 7:00am
@@ -1954,11 +1953,11 @@ def calculate_weekly_hour_rate_breakdown(roster_df):
                         ord_end = min(end_t, 18.0)
                         ord_raw = max(0.0, ord_end - ord_start) if ord_end > ord_start else 0.0
 
-                        early_hrs += early_raw * ratio
-                        late_hrs += late_raw * ratio
-                        ord_hrs += ord_raw * ratio
+                        early_hrs += early_raw
+                        late_hrs += late_raw
+                        ord_hrs += ord_raw
 
-        laundry_allowance = min(6.25, shifts_count * 1.25)
+        laundry_allowance = round(shifts_count * 1.28, 2)
 
         records.append({
             "staff name": emp_raw_name,
