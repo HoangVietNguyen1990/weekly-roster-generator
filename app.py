@@ -1272,6 +1272,42 @@ def build_roster_excel_bytes(edited_final_df, start_date):
         else:
             ws.column_dimensions[col_letter].width = max(max_len + 4, 16)
 
+    # Dedicated 3rd Sheet Tab: Hour Rate Breakdown
+    ws3 = wb.create_sheet(title="Hour Rate Breakdown")
+    hb_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
+    if not hb_df.empty:
+        last_col_letter = openpyxl.utils.get_column_letter(len(hb_df.columns))
+        ws3.merge_cells(f"A1:{last_col_letter}1")
+        t3 = ws3.cell(row=1, column=1)
+        t3.value = "BRUMBY'S PAKENHAM - CURRENT WEEK HOUR RATE BREAKDOWN"
+        t3.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+        t3.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+        t3.alignment = Alignment(horizontal="center", vertical="center")
+
+        for col_idx, col_name in enumerate(hb_df.columns, 1):
+            c3 = ws3.cell(row=3, column=col_idx)
+            c3.value = col_name
+            c3.fill = PatternFill(start_color="203764", end_color="203764", fill_type="solid")
+            c3.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+            c3.alignment = Alignment(horizontal="center", vertical="center")
+            c3.border = thin_border
+
+        for r_idx, row_data in enumerate(hb_df.itertuples(index=False), start=4):
+            is_summary = (r_idx == len(hb_df) + 3)
+            for c_idx, val in enumerate(row_data, start=1):
+                c = ws3.cell(row=r_idx, column=c_idx)
+                c.value = val
+                c.alignment = Alignment(horizontal="center", vertical="center") if c_idx > 1 else Alignment(horizontal="left", vertical="center")
+                c.font = Font(name="Calibri", size=10, bold=is_summary)
+                c.border = thin_border
+                if is_summary:
+                    c.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+
+        for col_idx, col_name in enumerate(hb_df.columns, 1):
+            col_letter = openpyxl.utils.get_column_letter(col_idx)
+            max_l = max(len(str(ws3.cell(row=r, column=col_idx).value or '')) for r in range(3, len(hb_df) + 4))
+            ws3.column_dimensions[col_letter].width = max(max_l + 5, 18)
+
     excel_buffer = io.BytesIO()
     wb.save(excel_buffer)
     return excel_buffer.getvalue()
@@ -1868,6 +1904,93 @@ def calculate_roster_wages(edited_df):
         "daily_gross": {d: round(daily_gross_totals[d], 2) for d in days_of_week},
         "breakdown_df": breakdown_df
     }
+
+def calculate_weekly_hour_rate_breakdown(roster_df):
+    if roster_df is None or roster_df.empty:
+        return pd.DataFrame(columns=[
+            "staff name", "early hour", "late hour", "ordinary hour", "saturday", "sunday", "laundry allowance"
+        ])
+
+    clean_df = strip_daily_gross_row(roster_df)
+    emp_col = find_column(clean_df, ["employee", "name", "staff"], "Employee")
+    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    records = []
+
+    for _, row in clean_df.iterrows():
+        emp_raw_name = str(row.get(emp_col, "")).strip()
+        if not emp_raw_name or emp_raw_name.lower() in ["none", "nan", "total", "summary"] or "💰" in emp_raw_name or "predicted" in emp_raw_name.lower():
+            continue
+
+        early_hrs = 0.0
+        late_hrs = 0.0
+        ord_hrs = 0.0
+        sat_hrs = 0.0
+        sun_hrs = 0.0
+        shifts_count = 0
+
+        for day in days_of_week:
+            if day in row:
+                shift_val = str(row[day]).strip()
+                parsed = parse_shift_range(shift_val)
+                if parsed:
+                    start_t, end_t, duration = parsed
+                    paid_hrs = duration - 0.5 if duration >= 5.0 else duration
+                    shifts_count += 1
+                    ratio = (paid_hrs / duration) if duration > 0 else 1.0
+
+                    if day == "Saturday":
+                        sat_hrs += paid_hrs
+                    elif day == "Sunday":
+                        sun_hrs += paid_hrs
+                    else:
+                        # Mon-Fri
+                        # Early: before 7:00am
+                        early_raw = max(0.0, min(end_t, 7.0) - start_t)
+                        # Late: after 6:00pm (18.0)
+                        late_raw = max(0.0, end_t - max(start_t, 18.0))
+                        # Ordinary: between 7:00am and 6:00pm
+                        ord_start = max(start_t, 7.0)
+                        ord_end = min(end_t, 18.0)
+                        ord_raw = max(0.0, ord_end - ord_start) if ord_end > ord_start else 0.0
+
+                        early_hrs += early_raw * ratio
+                        late_hrs += late_raw * ratio
+                        ord_hrs += ord_raw * ratio
+
+        laundry_allowance = min(6.25, shifts_count * 1.25)
+
+        records.append({
+            "staff name": emp_raw_name,
+            "early hour": round(early_hrs, 2),
+            "late hour": round(late_hrs, 2),
+            "ordinary hour": round(ord_hrs, 2),
+            "saturday": round(sat_hrs, 2),
+            "sunday": round(sun_hrs, 2),
+            "laundry allowance": f"${laundry_allowance:.2f}"
+        })
+
+    df_result = pd.DataFrame(records)
+    if not df_result.empty:
+        tot_early = sum(r["early hour"] for r in records)
+        tot_late = sum(r["late hour"] for r in records)
+        tot_ord = sum(r["ordinary hour"] for r in records)
+        tot_sat = sum(r["saturday"] for r in records)
+        tot_sun = sum(r["sunday"] for r in records)
+        tot_laundry = sum(float(r["laundry allowance"].replace("$", "")) for r in records)
+
+        summary_row = {
+            "staff name": "💰 TOTAL SUMMARY",
+            "early hour": round(tot_early, 2),
+            "late hour": round(tot_late, 2),
+            "ordinary hour": round(tot_ord, 2),
+            "saturday": round(tot_sat, 2),
+            "sunday": round(tot_sun, 2),
+            "laundry allowance": f"${tot_laundry:.2f}"
+        }
+        df_result = pd.concat([df_result, pd.DataFrame([summary_row])], ignore_index=True)
+
+    return df_result
 
 def build_payroll_historical_trend():
     past_rosters = list_finalized_rosters()
@@ -2785,6 +2908,11 @@ def render_employee_current_roster_tab(user_key):
             # Full Schedule Display
             st.markdown("### 📋 Full Team Schedule")
             st.dataframe(roster_df, use_container_width=True)
+
+            st.markdown("### 📊 Current Week Hour Rate Breakdown")
+            emp_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(roster_df)
+            if not emp_hour_breakdown_df.empty:
+                st.dataframe(emp_hour_breakdown_df, use_container_width=True, hide_index=True)
             
             # Download XLSX Button
             excel_bytes = build_roster_excel_bytes(roster_df, matched_start_date)
@@ -4832,6 +4960,11 @@ if is_manager:
             st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
             if not wages_summary_gen["breakdown_df"].empty:
                 st.dataframe(wages_summary_gen["breakdown_df"], use_container_width=True, hide_index=True)
+
+            st.markdown("#### 📊 Current Week Hour Rate Breakdown")
+            hour_rate_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
+            if not hour_rate_df.empty:
+                st.dataframe(hour_rate_df, use_container_width=True, hide_index=True)
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
