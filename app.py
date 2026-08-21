@@ -160,38 +160,68 @@ st.markdown("""
         text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
     }
 
-    /* TACTILE 3D BUTTONS STYLING (ALL BUTTONS & FORM SUBMIT BUTTONS) */
+    /* UNIFIED HIGH-CONTRAST 3D BUTTON STYLING FOR ALL BUTTONS ACROSS THE ENTIRE APP */
+    button,
     .stButton > button,
     .stFormSubmitButton > button,
+    button[data-testid="stBaseButton-secondary"],
+    button[data-testid="stBaseButton-primary"],
     button[data-testid="baseButton-secondary"],
-    button[data-testid="baseButton-primary"] {
+    button[data-testid="baseButton-primary"],
+    section[data-testid="stSidebar"] button,
+    div[data-testid="stSidebar"] button,
+    div[data-testid="stSidebar"] .stButton > button,
+    button[kind="secondary"],
+    button[kind="primary"],
+    button[kind="header"] {
         background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
         border: 2px solid #ffe8be !important;
         border-radius: 14px !important;
         color: #081d19 !important;
         font-weight: 900 !important;
-        font-size: 1.05rem !important;
-        padding: 12px 24px !important;
+        font-size: 1.02rem !important;
+        padding: 10px 22px !important;
         box-shadow: 0 5px 0 #734c0e, 0 8px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
         transition: all 0.15s ease-in-out !important;
         cursor: pointer !important;
         text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
     }
+    
+    /* ALL BUTTON TEXT & SPAN OVERRIDE TO DEEP EMERALD BLACK */
+    button *,
+    .stButton > button *,
+    .stFormSubmitButton > button *,
+    button[data-testid="stBaseButton-secondary"] *,
+    button[data-testid="stBaseButton-primary"] *,
+    button[data-testid="baseButton-secondary"] *,
+    button[data-testid="baseButton-primary"] *,
+    section[data-testid="stSidebar"] button *,
+    div[data-testid="stSidebar"] button * {
+        color: #081d19 !important;
+        font-weight: 900 !important;
+    }
+
+    button:hover,
     .stButton > button:hover,
-    .stFormSubmitButton > button:hover {
+    .stFormSubmitButton > button:hover,
+    button[data-testid="stBaseButton-secondary"]:hover,
+    button[data-testid="stBaseButton-primary"]:hover,
+    section[data-testid="stSidebar"] button:hover,
+    div[data-testid="stSidebar"] button:hover {
         background: linear-gradient(180deg, #fff0d4 0%, #f0b548 45%, #c78822 100%) !important;
         box-shadow: 0 6px 0 #734c0e, 0 12px 24px rgba(229, 169, 60, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
         transform: translateY(-2px) !important;
     }
+
+    button:active,
     .stButton > button:active,
-    .stFormSubmitButton > button:active {
+    .stFormSubmitButton > button:active,
+    button[data-testid="stBaseButton-secondary"]:active,
+    button[data-testid="stBaseButton-primary"]:active,
+    section[data-testid="stSidebar"] button:active,
+    div[data-testid="stSidebar"] button:active {
         box-shadow: 0 2px 0 #734c0e, 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 0, 0, 0.2) !important;
         transform: translateY(3px) !important;
-    }
-    .stButton > button *,
-    .stFormSubmitButton > button * {
-        color: #081d19 !important;
-        font-weight: 900 !important;
     }
 
     /* TACTILE 3D EXPANDER BUTTON STYLING */
