@@ -4852,8 +4852,10 @@ if is_manager:
                 selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
                 emp_col = df_for_editor.columns[0]
                 day_cols = [emp_col, selected_day] if selected_day in df_for_editor.columns else list(df_for_editor.columns)
+                target_df = df_for_editor[day_cols]
+                editor_input = highlight_unavailability_dataframe(target_df) if show_unavail else target_df
                 edited_display_df = st.data_editor(
-                    df_for_editor[day_cols],
+                    editor_input,
                     num_rows="dynamic",
                     key="edit_generated_roster_single",
                     height=roster_table_height,
@@ -4901,23 +4903,15 @@ if is_manager:
                     </div>
                     """, unsafe_allow_html=True)
             else:
+                editor_input = highlight_unavailability_dataframe(df_for_editor) if show_unavail else df_for_editor
                 edited_display_df = st.data_editor(
-                    df_for_editor,
+                    editor_input,
                     num_rows="dynamic",
                     key="edit_generated_roster",
                     height=roster_table_height,
                     use_container_width=True
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
-
-            if show_unavail:
-                with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Admin Reference)", expanded=True):
-                    st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
-                    st.dataframe(
-                        highlight_unavailability_dataframe(strip_daily_gross_row(st.session_state.final_roster_df)),
-                        use_container_width=True,
-                        height=max(300, (len(strip_daily_gross_row(st.session_state.final_roster_df)) + 1) * 38 + 25)
-                    )
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
