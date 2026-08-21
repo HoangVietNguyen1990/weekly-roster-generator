@@ -4702,6 +4702,11 @@ if is_manager:
                 st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
                 if not wages_summary["breakdown_df"].empty:
                     st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
+
+                st.markdown("#### 📊 Current Week Hour Rate Breakdown")
+                home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
+                if not home_hour_breakdown_df.empty:
+                    st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
         else:
             st.info("ℹ️ No finalized rosters displayed yet.")
             if st.button("🔄 Auto-Scan & Restore Published Master Rosters", key="btn_load_past_home_1", use_container_width=True):
