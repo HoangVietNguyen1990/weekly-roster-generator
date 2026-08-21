@@ -361,35 +361,40 @@ st.markdown("""
         background: linear-gradient(135deg, #f7d594 0%, #e5a93c 100%) !important;
     }
 
-    /* General Action Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
-        color: #0e2b26;
-        border: none;
-        padding: 12px 28px;
-        border-radius: 10px;
-        font-weight: 800;
-        font-size: 1.05rem;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 14px rgba(229, 169, 60, 0.35);
+    /* EXPLICIT LOGOUT BUTTON STYLING OVERRIDE FOR HEADER & SIDEBAR */
+    button[key*="logout"],
+    button[key="btn_logout"],
+    button[key="btn_logout_header"],
+    div[data-testid="stSidebar"] button[key="btn_logout"] {
+        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+        border: 2px solid #ffe8be !important;
+        border-radius: 12px !important;
+        color: #081d19 !important;
+        font-weight: 900 !important;
+        box-shadow: 0 4px 0 #734c0e, 0 6px 16px rgba(0, 0, 0, 0.4) !important;
+    }
+    button[key*="logout"] *,
+    button[key="btn_logout"] *,
+    button[key="btn_logout_header"] *,
+    div[data-testid="stSidebar"] button[key="btn_logout"] * {
+        color: #081d19 !important;
+        font-weight: 900 !important;
     }
 
     /* Download Button Specific Accent */
-    .stDownloadButton>button {
-        background: linear-gradient(135deg, #2e7d6e 0%, #1b5349 100%);
+    .stDownloadButton>button,
+    button[data-testid="stDownloadButton"] {
+        background: linear-gradient(180deg, #3dbd98 0%, #1f8567 45%, #10523f 100%) !important;
+        border: 2px solid #5ce4bc !important;
         color: #ffffff !important;
-        border: 1px solid #e5a93c;
-        padding: 14px 32px;
-        border-radius: 12px;
-        font-weight: 800;
-        font-size: 1.1rem;
-        transition: all 0.3s ease;
+        border-radius: 12px !important;
+        font-weight: 900 !important;
+        box-shadow: 0 5px 0 #083327, 0 8px 20px rgba(31, 133, 103, 0.4) !important;
     }
-    .stDownloadButton>button:hover {
-        background: linear-gradient(135deg, #e5a93c 0%, #d48827 100%);
-        color: #0e2b26 !important;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 18px rgba(229, 169, 60, 0.4);
+    .stDownloadButton>button *,
+    button[data-testid="stDownloadButton"] * {
+        color: #ffffff !important;
+        font-weight: 900 !important;
     }
 
     /* Sidebar Styling High Contrast */
@@ -3998,20 +4003,6 @@ def render_employee_timeclock_tab(user_key):
         st.error(f"🔒 **Clock In / Out Locked**: You are currently **{dist_label}** away from Brumby's Bakery Pakenham. You must be within **50 meters** of the bakery to clock in/out.")
     else:
         st.success(f"🔓 **Unlocked**: You are at Brumby's Bakery Pakenham (Distance: `{dist_meters}m`).")
-
-    if is_locked:
-        with st.expander("🛠️ GPS Troubleshooting & Emergency Location Override"):
-            st.markdown("""
-            **Troubleshooting Steps for Staff:**
-            1. **Allow Location Permissions**: Ensure location access is enabled for Safari/Chrome in phone Settings.
-            2. **Refresh Location Signal**: Click the **"🔄 Refresh Live Phone GPS Signal"** button above.
-            3. **Indoor Wi-Fi / GPS Drift**: If indoor GPS signals drift beyond 50m, check the box below to bypass lock.
-            """)
-            override_gps = st.checkbox("🔓 Enable Emergency Location Override (Confirm physical presence at bakery)", key=f"cb_gps_override_{user_key}")
-            if override_gps:
-                is_locked = False
-                loc_badge = f"⚠️ Emergency Location Override ({int(dist_meters)}m)" if has_coords else "⚠️ Manual Emergency Location Override"
-                st.warning("⚠️ Emergency location override active. Clock-in button is unlocked and will be logged for Manager audit review.")
 
     # Dynamic Silver (Out-of-Range / Locked) vs Gold (In-Range / Unlocked) Button Styling
     if is_locked:
