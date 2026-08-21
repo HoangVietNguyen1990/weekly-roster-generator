@@ -4910,15 +4910,6 @@ if is_manager:
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
 
-            if show_unavail:
-                with st.expander("🎨 Color-Highlighted Unavailability Visual Map (Crimson Red Heatmap)", expanded=True):
-                    st.write("Visual color-coded heatmap assisting admin shift assignments (Crimson Red = Unavailable Constraint, Dark Emerald = Assigned Shift):")
-                    st.dataframe(
-                        highlight_unavailability_dataframe(strip_daily_gross_row(st.session_state.final_roster_df)),
-                        use_container_width=True,
-                        height=max(300, (len(strip_daily_gross_row(st.session_state.final_roster_df)) + 1) * 38 + 25)
-                    )
-
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
             
