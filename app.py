@@ -4956,11 +4956,6 @@ if is_manager:
             if not wages_summary_gen["breakdown_df"].empty:
                 st.dataframe(wages_summary_gen["breakdown_df"], use_container_width=True, hide_index=True)
 
-            st.markdown("#### 📊 Current Week Hour Rate Breakdown")
-            hour_rate_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
-            if not hour_rate_df.empty:
-                st.dataframe(hour_rate_df, use_container_width=True, hide_index=True)
-
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
             col_fin1, col_fin2 = st.columns([1.2, 1])
