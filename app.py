@@ -3625,6 +3625,9 @@ def render_employee_timeclock_tab(user_key):
         <div id="geo_status" style="font-weight: 600; color: #a0aec0; font-size: 0.9rem;">
             ⏳ Requesting browser location permission...
         </div>
+        <a id="sync_link" target="_top" href="#" style="display:none; background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%); color: #ffffff !important; border: 1.5px solid #68d391; padding: 10px 16px; font-weight: 800; font-size: 0.95rem; border-radius: 8px; text-decoration: none; margin-top: 10px; box-shadow: 0 4px 12px rgba(72,187,120,0.4); text-align: center;">
+            ⚡ TAP HERE TO UNLOCK CLOCK-IN
+        </a>
         <button id="get_geo_btn" style="background: linear-gradient(135deg, #11362f 0%, #1f574d 100%); color: #e5a93c; border: 1.5px solid #e5a93c; padding: 8px 16px; font-weight: 700; font-size: 0.85rem; border-radius: 6px; cursor: pointer; margin-top: 8px; width: 100%;">
             🔄 Refresh Live Phone GPS Signal
         </button>
@@ -3636,16 +3639,29 @@ def render_employee_timeclock_tab(user_key):
             var status = document.getElementById('geo_status');
             status.innerHTML = "<span style='color:#48bb78; font-size:1.05rem; font-weight:800;'>✅ Live Phone Location Active: " + lat + ", " + lon + "</span>";
             
+            var syncBtn = document.getElementById('sync_link');
             try {
-                var currentUrl = new URL(window.parent.location.href);
-                var curLat = currentUrl.searchParams.get("user_lat");
-                var curLon = currentUrl.searchParams.get("user_lon");
-                if (curLat !== lat || curLon !== lon) {
-                    currentUrl.searchParams.set("user_lat", lat);
-                    currentUrl.searchParams.set("user_lon", lon);
-                    window.parent.location.href = currentUrl.toString();
+                var baseRef = document.referrer || window.location.href;
+                var parentUrl = new URL(baseRef);
+                parentUrl.searchParams.set("user_lat", lat);
+                parentUrl.searchParams.set("user_lon", lon);
+                if (syncBtn) {
+                    syncBtn.href = parentUrl.toString();
+                    syncBtn.style.display = "inline-block";
+                    syncBtn.innerHTML = "⚡ TAP HERE TO UNLOCK LOCATION (" + lat + ", " + lon + ")";
                 }
-            } catch(e) {}
+                if (window.top && window.top.location) {
+                    var curLat = new URLSearchParams(window.top.location.search).get("user_lat");
+                    if (curLat !== lat) {
+                        window.top.location.href = parentUrl.toString();
+                    }
+                }
+            } catch(e) {
+                if (syncBtn) {
+                    syncBtn.href = "?user_lat=" + lat + "&user_lon=" + lon;
+                    syncBtn.style.display = "inline-block";
+                }
+            }
         }
 
         function handleError(error) {
@@ -3656,7 +3672,6 @@ def render_employee_timeclock_tab(user_key):
         function startTracking() {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(updateLocation, function(err) {
-                    // Fallback to standard accuracy if high accuracy times out (desktop/indoor Wi-Fi)
                     navigator.geolocation.getCurrentPosition(updateLocation, handleError, {enableHighAccuracy: false, timeout: 15000});
                 }, {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000});
                 navigator.geolocation.watchPosition(updateLocation, function(err){}, {enableHighAccuracy: false, maximumAge: 60000});
@@ -3669,7 +3684,7 @@ def render_employee_timeclock_tab(user_key):
         startTracking();
     </script>
     """
-    st.components.v1.html(geo_html, height=140)
+    st.components.v1.html(geo_html, height=180)
 
     url_lat = ""
     url_lon = ""
@@ -3683,6 +3698,10 @@ def render_employee_timeclock_tab(user_key):
             url_lon = str(qp.get("user_lon", [""])[0]).strip()
         except:
             pass
+
+    if not url_lat and f"saved_lat_{user_key}" in st.session_state:
+        url_lat = str(st.session_state.get(f"saved_lat_{user_key}", "")).strip()
+        url_lon = str(st.session_state.get(f"saved_lon_{user_key}", "")).strip()
 
     final_lat = url_lat
     final_lon = url_lon
