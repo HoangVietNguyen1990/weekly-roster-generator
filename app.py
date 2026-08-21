@@ -4699,40 +4699,42 @@ if is_manager:
                 """
                 st.markdown(summary_cards_html, unsafe_allow_html=True)
                 
-                st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
-                if not wages_summary["breakdown_df"].empty:
-                    st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
+                sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+                    "👥 Staff Earnings & Super Breakdown",
+                    "📊 Current Week Hour Rate Breakdown",
+                    "📈 Historical Payroll Progress & Trends"
+                ])
+                
+                with sub_tab1:
+                    st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
+                    if not wages_summary["breakdown_df"].empty:
+                        st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
 
-                st.markdown("#### 📊 Current Week Hour Rate Breakdown")
-                home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
-                if not home_hour_breakdown_df.empty:
-                    st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
+                with sub_tab2:
+                    st.markdown("#### 📊 Current Week Hour Rate Breakdown")
+                    home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
+                    if not home_hour_breakdown_df.empty:
+                        st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
+
+                with sub_tab3:
+                    st.markdown("#### 📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)")
+                    trend_df = build_payroll_historical_trend()
+                    if not trend_df.empty and len(trend_df) >= 1:
+                        st.markdown("Historical trend analysis of **Gross Payroll**, **Est. PAYG Tax**, **Net Take-Home**, and **Super (12.5% SG)** across all finalized weekly rosters (chronologically ordered):")
+                        chart_df = trend_df.copy()
+                        chart_df["Date"] = pd.to_datetime(chart_df["date"])
+                        chart_df = chart_df.sort_values("Date").set_index("Date").drop(columns=["date", "Roster Week"], errors="ignore")
+                        st.line_chart(chart_df, use_container_width=True)
+                        display_df = trend_df.drop(columns=["date"], errors="ignore")
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("ℹ️ Click below to load and analyze historical published rosters.")
+                        if st.button("🔄 Load Historical Roster Data & Line Graph", key="btn_load_past_home_2", use_container_width=True):
+                            auto_import_reference_rosters()
+                            st.rerun()
         else:
             st.info("ℹ️ No finalized rosters displayed yet.")
             if st.button("🔄 Auto-Scan & Restore Published Master Rosters", key="btn_load_past_home_1", use_container_width=True):
-                auto_import_reference_rosters()
-                st.rerun()
-
-        # --- HISTORICAL PROGRESS LINE GRAPH ---
-        st.markdown("<br><hr>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 1px solid rgba(229, 169, 60, 0.4); margin-bottom: 15px;">
-            📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)
-        </div>
-        """, unsafe_allow_html=True)
-        
-        trend_df = build_payroll_historical_trend()
-        if not trend_df.empty and len(trend_df) >= 1:
-            st.markdown("Historical trend analysis of **Gross Payroll**, **Est. PAYG Tax**, **Net Take-Home**, and **Super (12.5% SG)** across all finalized weekly rosters (chronologically ordered):")
-            chart_df = trend_df.copy()
-            chart_df["Date"] = pd.to_datetime(chart_df["date"])
-            chart_df = chart_df.sort_values("Date").set_index("Date").drop(columns=["date", "Roster Week"], errors="ignore")
-            st.line_chart(chart_df, use_container_width=True)
-            display_df = trend_df.drop(columns=["date"], errors="ignore")
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("ℹ️ Click below to load and analyze historical published rosters.")
-            if st.button("🔄 Load Historical Roster Data & Line Graph", key="btn_load_past_home_2", use_container_width=True):
                 auto_import_reference_rosters()
                 st.rerun()
 
