@@ -500,6 +500,7 @@ os.makedirs(FINALIZED_DIR, exist_ok=True)
 TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
+ANNOUNCEMENTS_FILE = os.path.join(DATA_DIR, "announcements.json")
 
 BAKERY_LAT = -38.063557
 BAKERY_LON = 145.455262
@@ -1045,6 +1046,112 @@ This is an automated notification sent from the Brumby's Bakery Portal to keep m
         return True, f"Notification sent to {', '.join(recipient_list)}"
     except Exception as e:
         return False, f"SMTP Notification Error: {e}"
+
+def load_announcements():
+    default_announcements = [
+        {
+            "id": "ANN_1001",
+            "title": "Welcome to Brumby's Bakery Pakenham Portal",
+            "content": "Welcome team! Please review your weekly scheduled shifts, award entitlements, and use the mobile timeclock when on shift.",
+            "author": "Viet (Store Owner)",
+            "date": datetime.now().strftime("%d/%m/%Y"),
+            "priority": "Normal"
+        }
+    ]
+    if os.path.exists(ANNOUNCEMENTS_FILE):
+        try:
+            with open(ANNOUNCEMENTS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+        except:
+            pass
+    return default_announcements
+
+def save_announcements(announcements):
+    try:
+        with open(ANNOUNCEMENTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(announcements, f, indent=2, ensure_ascii=False)
+        return True
+    except:
+        return False
+
+def send_announcement_broadcast_smtp(title, content, author="Store Management"):
+    cfg = load_smtp_config()
+    sender_email = cfg.get("sender_email")
+    sender_password = cfg.get("sender_password")
+    smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
+    smtp_port = int(cfg.get("smtp_port", 587))
+    portal_url = cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app")
+
+    if not sender_email or not sender_password:
+        return False, "SMTP Email credentials not configured."
+
+    recipient_emails = set()
+    for u_key, u_data in user_profiles.items():
+        em = u_data.get("profile", {}).get("email", "").strip()
+        if em and "@" in em:
+            recipient_emails.add(em)
+
+    notif_recips = cfg.get("notification_recipients", "")
+    if notif_recips:
+        for r_addr in notif_recips.split(","):
+            r_clean = r_addr.strip()
+            if r_clean and "@" in r_clean:
+                recipient_emails.add(r_clean)
+
+    if not recipient_emails:
+        return False, "No employee recipient email addresses found."
+
+    html_body = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 20px; margin: 0;">
+        <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 2px solid #e5a93c; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+            <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 20px; text-align: center; color: #ffffff;">
+                <h2 style="color: #e5a93c; margin: 0; font-size: 1.5rem;">📢 Store Announcement Broadcast</h2>
+                <p style="margin: 6px 0 0 0; color: #d0e6df; font-size: 0.95rem;">Brumby's Bakery Pakenham Roster & Attendance Portal</p>
+            </div>
+            <div style="padding: 24px; color: #2d3748; font-size: 1rem; line-height: 1.6;">
+                <h3 style="color: #0e2b26; margin-top: 0;">{title}</h3>
+                <p style="background: #f7fafc; border-left: 4px solid #e5a93c; padding: 12px 16px; margin: 15px 0; border-radius: 4px; font-size: 0.98rem; color: #2d3748;">
+                    {content}
+                </p>
+                <p style="font-size: 0.85rem; color: #718096; margin-top: 20px;">
+                    <b>Posted By:</b> {author}<br>
+                    <b>Date:</b> {datetime.now().strftime("%d/%m/%Y %I:%M %p")}
+                </p>
+                <div style="text-align: center; margin-top: 25px;">
+                    <a href="{portal_url}" style="background: linear-gradient(135deg, #e5a93c 0%, #c0841d 100%); color: #000000; text-decoration: none; padding: 12px 24px; font-weight: 800; border-radius: 8px; display: inline-block;">
+                        🌐 Open Roster Portal
+                    </a>
+                </div>
+            </div>
+            <div style="background: #edf2f7; padding: 12px; text-align: center; font-size: 0.8rem; color: #718096;">
+                Brumby's Bakery Pakenham • General Retail Industry Award 2020 Compliance
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    try:
+        server = smtplib.SMTP(smtp_server, smtp_port, timeout=10)
+        server.starttls()
+        server.login(sender_email, sender_password)
+
+        sent_count = 0
+        for recip in recipient_emails:
+            msg = MIMEText(html_body, "html", "utf-8")
+            msg["Subject"] = f"📢 [Brumby's Bakery] Store Announcement: {title}"
+            msg["From"] = f"Brumby's Bakery Pakenham <{sender_email}>"
+            msg["To"] = recip
+            server.sendmail(sender_email, [recip], msg.as_string())
+            sent_count += 1
+
+        server.quit()
+        return True, f"Successfully broadcast announcement email to {sent_count} recipient(s)!"
+    except Exception as e:
+        return False, f"Failed to send email broadcast: {str(e)}"
 
 def load_persisted_df(filename, default_df=None):
     path = os.path.join(DATA_DIR, filename)
@@ -2807,7 +2914,8 @@ if st.session_state.manual_fixed is not None:
 is_manager = (st.session_state.user_role == "Manager")
 
 if is_manager:
-    tab_home, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
+    tab_dash, tab_roster, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
+        "🏠 Home / Dashboard",
         "📅 Roster Inside",
         "⚡ Weekly Roster Generator",
         "👥 Staff Members", 
@@ -2903,6 +3011,23 @@ def render_employee_current_roster_tab(user_key):
                             <div style="color: #f7d594; font-weight: 700; font-size: 0.95rem;">👋 Hello {emp_name}, you have no shifts scheduled for this week.</div>
                         </div>
                         """, unsafe_allow_html=True)
+
+            # Store Announcements Display for Employee Portal
+            announcements = load_announcements()
+            if announcements:
+                ann = announcements[0]
+                prio = ann.get("priority", "Normal")
+                badge_bg = "#e53e3e" if prio == "Urgent" else ("#dd6b20" if prio == "Important" else "#319795")
+                st.markdown(f"""
+                <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #e5a93c; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 1.1rem; color: #f7d594;">📢 Store Announcement: {ann.get('title', '')}</span>
+                        <span style="background: {badge_bg}; color: white; padding: 2px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 800;">{prio}</span>
+                    </div>
+                    <div style="color: #ffffff; font-size: 0.95rem; margin-bottom: 8px;">{ann.get('content', '')}</div>
+                    <div style="color: #a0aec0; font-size: 0.8rem;">✍️ Posted by <b>{ann.get('author', 'Store Owner')}</b> on {ann.get('date', '')}</div>
+                </div>
+                """, unsafe_allow_html=True)
 
             # Full Schedule Display
             st.markdown("### 📋 Full Team Schedule")
@@ -4545,9 +4670,183 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     res_df = sort_dataframe_by_team_and_age(res_df)
     return res_df
 
+def render_home_dashboard():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 22px; border-radius: 16px; border: 2px solid #e5a93c; box-shadow: 0 8px 30px rgba(0,0,0,0.4); margin-bottom: 25px;">
+        <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.85rem; font-weight: 800;">🏠 Executive Home & Store Dashboard</h2>
+        <p style="color: #ffffff !important; font-size: 1.02rem; margin-bottom: 0;">Brumby's Bakery Pakenham • Live Store Notifications, Team Announcements & Operational KPI Hub</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    melbourne_now = datetime.utcnow() + timedelta(hours=10)
+    today_str = melbourne_now.strftime("%d/%m/%Y")
+    
+    # 1. Executive Operations & KPI Cards Bar
+    df_cards = load_persisted_timecards()
+    working_count = 0
+    late_count = 0
+    if df_cards is not None and not df_cards.empty and "Status" in df_cards.columns:
+        if "Date" in df_cards.columns:
+            working_count = len(df_cards[(df_cards["Status"] == "Working") & (df_cards["Date"] == today_str)])
+            if "Note" in df_cards.columns:
+                late_count = len(df_cards[df_cards["Note"].str.contains("Late Clocking", na=False) & (df_cards["Date"] == today_str)])
+
+    past_rosters = list_finalized_rosters()
+    active_rosters_count = len(past_rosters)
+    active_emp_count = len(user_profiles)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.markdown(f"""
+        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
+            <div style="color: #e5a93c; font-size: 0.8rem; font-weight: 800;">🗓️ TODAY'S DATE</div>
+            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{today_str}</div>
+            <div style="color: #a0aec0; font-size: 0.78rem;">Melbourne AEST</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k2:
+        st.markdown(f"""
+        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
+            <div style="color: #48bb78; font-size: 0.8rem; font-weight: 800;">🟢 ON DUTY TODAY</div>
+            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{working_count} Staff</div>
+            <div style="color: #a0aec0; font-size: 0.78rem;">Clocked In</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k3:
+        st.markdown(f"""
+        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
+            <div style="color: #f7d594; font-size: 0.8rem; font-weight: 800;">📋 ACTIVE ROSTERS</div>
+            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{active_rosters_count} Weeks</div>
+            <div style="color: #a0aec0; font-size: 0.78rem;">Published</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with k4:
+        st.markdown(f"""
+        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
+            <div style="color: #76eec6; font-size: 0.8rem; font-weight: 800;">👥 TOTAL TEAM</div>
+            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{active_emp_count} Members</div>
+            <div style="color: #a0aec0; font-size: 0.78rem;">Active Profiles</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 2. Main Dashboard Layout (2 Columns: Left = Store Announcements & Communication, Right = Notifications & Info)
+    c_dash1, c_dash2 = st.columns([1.2, 1])
+
+    with c_dash1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 10px 10px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 1.5px solid #e5a93c; border-bottom: none;">
+            📢 Store Announcements & Team Bulletin Board
+        </div>
+        """, unsafe_allow_html=True)
+        
+        announcements = load_announcements()
+        
+        if announcements:
+            for idx, ann in enumerate(announcements):
+                prio = ann.get("priority", "Normal")
+                badge_bg = "#e53e3e" if prio == "Urgent" else ("#dd6b20" if prio == "Important" else "#319795")
+                st.markdown(f"""
+                <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #1f5c50; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 1.05rem; color: #f7d594;">{ann.get('title', '')}</span>
+                        <span style="background: {badge_bg}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">{prio}</span>
+                    </div>
+                    <div style="color: #e2e8f0; font-size: 0.93rem; margin-bottom: 8px;">{ann.get('content', '')}</div>
+                    <div style="color: #a0aec0; font-size: 0.78rem;">✍️ Posted by <b>{ann.get('author', 'Store Manager')}</b> on {ann.get('date', '')}</div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("ℹ️ No active store announcements.")
+
+        with st.expander("➕ Post & Broadcast New Store Announcement", expanded=False):
+            with st.form("form_new_announcement"):
+                ann_title = st.text_input("Announcement Title:", placeholder="e.g. Easter Trading Hours & Shift Updates")
+                ann_content = st.text_area("Announcement Message:", placeholder="Type store message for staff...")
+                c_ann1, c_ann2 = st.columns(2)
+                with c_ann1:
+                    ann_prio = st.selectbox("Priority:", ["Normal", "Important", "Urgent"])
+                with c_ann2:
+                    ann_author = st.text_input("Author Name:", value="Viet (Store Owner)")
+                
+                broadcast_email = st.checkbox("✉️ Automatically Broadcast via Email to All Staff", value=True)
+                
+                btn_post_ann = st.form_submit_button("🚀 Publish Announcement", use_container_width=True)
+                if btn_post_ann:
+                    if ann_title.strip() and ann_content.strip():
+                        new_id = f"ANN_{len(announcements)+1001}"
+                        new_entry = {
+                            "id": new_id,
+                            "title": ann_title.strip(),
+                            "content": ann_content.strip(),
+                            "author": ann_author.strip(),
+                            "date": datetime.now().strftime("%d/%m/%Y"),
+                            "priority": ann_prio
+                        }
+                        announcements.insert(0, new_entry)
+                        save_announcements(announcements)
+                        
+                        if broadcast_email:
+                            with st.spinner("Broadcasting announcement via email to all active staff..."):
+                                ok, msg_out = send_announcement_broadcast_smtp(ann_title.strip(), ann_content.strip(), ann_author.strip())
+                                if ok:
+                                    st.success(f"🎉 Announcement published & email broadcast complete! ({msg_out})")
+                                else:
+                                    st.warning(f"⚠️ Announcement published to board, but email broadcast failed: {msg_out}")
+                        else:
+                            st.success("🎉 Store announcement successfully published to board!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Please provide both Title and Message for the announcement.")
+
+    with c_dash2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 10px 10px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 1.5px solid #e5a93c; border-bottom: none;">
+            🔔 Notifications & System Alerts
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("""
+        <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #1f5c50; border-radius: 0 0 10px 10px; padding: 14px; margin-bottom: 15px;">
+        """, unsafe_allow_html=True)
+
+        if late_count > 0:
+            st.warning(f"⚠️ **Attendance Alert**: {late_count} staff late clock-in punch(es) today requiring audit review.")
+        else:
+            st.success("✅ **Attendance Status**: All shift punches today are on time & verified.")
+
+        unavail_df = load_persisted_df("unavailability.csv")
+        u_count = len(unavail_df) if unavail_df is not None else 0
+        st.info(f"📩 **Unavailability Records**: {u_count} staff availability constraints logged in database.")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 10px 10px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 1.5px solid #e5a93c; border-bottom: none;">
+            ℹ️ Store Profile & Award Compliance
+        </div>
+        <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #1f5c50; border-radius: 0 0 10px 10px; padding: 14px;">
+            <div style="font-weight: 800; color: #f7d594; font-size: 1.0rem;">🏪 Brumby's Bakery Pakenham</div>
+            <div style="color: #cbd5e0; font-size: 0.88rem; margin: 4px 0 8px 0;">
+                📍 <b>GPS Location:</b> <code>-38.063557, 145.455262</code><br>
+                📜 <b>Award Compliance:</b> General Retail Industry Award 2020 (MA000004)<br>
+                🧺 <b>Laundry Allowance:</b> $1.28 / shift worked<br>
+                🏦 <b>ATO Super Guarantee:</b> 12.5% SG
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
 if is_manager:
-    # --- TAB 1: HOME / EXECUTIVE DASHBOARD ---
-    with tab_home:
+    # --- TAB 1: HOME / DASHBOARD ---
+    with tab_dash:
+        render_home_dashboard()
+
+    # --- TAB 2: ROSTER INSIDE ---
+    with tab_roster:
         st.markdown("""
         <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 20px; border-radius: 16px; border: 2px solid #e5a93c; box-shadow: 0 8px 30px rgba(0,0,0,0.4); margin-bottom: 25px;">
             <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">📅 Roster Inside — Admin Command Center</h2>
