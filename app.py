@@ -3915,6 +3915,25 @@ def render_employee_timeclock_tab(user_key):
         </button>
     </div>
     <script>
+        function getParentBaseUrl() {
+            var href = "";
+            try {
+                if (window.top && window.top.location && window.top.location.href) {
+                    href = window.top.location.href;
+                }
+            } catch(e) {
+                // Cross-origin exception caught cleanly on Android Chrome / Samsung Internet
+            }
+            if (!href) {
+                href = document.referrer || window.location.href;
+            }
+            try {
+                return new URL(href);
+            } catch(e) {
+                return new URL(window.location.href);
+            }
+        }
+
         function updateLocation(position) {
             var lat = position.coords.latitude.toFixed(6);
             var lon = position.coords.longitude.toFixed(6);
@@ -3922,16 +3941,17 @@ def render_employee_timeclock_tab(user_key):
             status.innerHTML = "<span style='color:#48bb78; font-size:1.05rem; font-weight:800;'>✅ Live Phone Location Active: " + lat + ", " + lon + "</span>";
             
             var syncBtn = document.getElementById('sync_link');
+            var parentUrl = getParentBaseUrl();
+            parentUrl.searchParams.set("user_lat", lat);
+            parentUrl.searchParams.set("user_lon", lon);
+            
+            if (syncBtn) {
+                syncBtn.href = parentUrl.toString();
+                syncBtn.style.display = "inline-block";
+                syncBtn.innerHTML = "⚡ TAP HERE TO UNLOCK LOCATION (" + lat + ", " + lon + ")";
+            }
+
             try {
-                var baseRef = document.referrer || window.location.href;
-                var parentUrl = new URL(baseRef);
-                parentUrl.searchParams.set("user_lat", lat);
-                parentUrl.searchParams.set("user_lon", lon);
-                if (syncBtn) {
-                    syncBtn.href = parentUrl.toString();
-                    syncBtn.style.display = "inline-block";
-                    syncBtn.innerHTML = "⚡ TAP HERE TO UNLOCK LOCATION (" + lat + ", " + lon + ")";
-                }
                 if (window.top && window.top.location) {
                     var curLat = new URLSearchParams(window.top.location.search).get("user_lat");
                     if (curLat !== lat) {
@@ -3939,24 +3959,29 @@ def render_employee_timeclock_tab(user_key):
                     }
                 }
             } catch(e) {
-                if (syncBtn) {
-                    syncBtn.href = "?user_lat=" + lat + "&user_lon=" + lon;
-                    syncBtn.style.display = "inline-block";
-                }
+                // Safe fallback for Samsung Android iframe security limits
             }
         }
 
         function handleError(error) {
             var status = document.getElementById('geo_status');
-            status.innerHTML = "<span style='color:#fc8181; font-weight:700;'>🔒 Location Access Needed: " + error.message + ". Please allow location access in your browser settings (Safari/Chrome).</span>";
+            var msg = error.message || "Position unavailable";
+            status.innerHTML = "<span style='color:#fc8181; font-weight:700;'>🔒 Location Access Needed: " + msg + ". Please allow location access in your browser settings (Safari/Chrome/Samsung Internet).</span>";
         }
 
         function startTracking() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(updateLocation, function(err) {
-                    navigator.geolocation.getCurrentPosition(updateLocation, handleError, {enableHighAccuracy: false, timeout: 15000});
-                }, {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000});
-                navigator.geolocation.watchPosition(updateLocation, function(err){}, {enableHighAccuracy: false, maximumAge: 60000});
+                var optionsHigh = {enableHighAccuracy: true, timeout: 15000, maximumAge: 30000};
+                var optionsLow = {enableHighAccuracy: false, timeout: 15000, maximumAge: 60000};
+
+                navigator.geolocation.getCurrentPosition(
+                    updateLocation, 
+                    function(err) {
+                        navigator.geolocation.getCurrentPosition(updateLocation, handleError, optionsLow);
+                    }, 
+                    optionsHigh
+                );
+                navigator.geolocation.watchPosition(updateLocation, function(err){}, optionsLow);
             } else {
                 document.getElementById('geo_status').innerText = "❌ Browser does not support HTML5 Geolocation.";
             }
