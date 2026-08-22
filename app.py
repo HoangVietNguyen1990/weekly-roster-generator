@@ -2232,6 +2232,22 @@ if not st.session_state.authenticated:
             else:
                 st.error("🔒 Invalid username or password. Please check your credentials.")
                 
+        # Store Phone Timeclock Kiosk Launcher
+        st.markdown("<hr style='border-color: rgba(229, 169, 60, 0.4); margin: 18px 0;'>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 10px;">
+            <span style="color: #e5a93c; font-weight: 800; font-size: 1rem;">🏪 SHARED STORE PHONE KIOSK MODE</span><br>
+            <span style="color: #c8e6e0; font-size: 0.85rem;">Set this device as the shared store terminal at Brumby's Bakery:</span>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("⏱️ Launch Store Timeclock Kiosk Terminal", use_container_width=True, key="btn_launch_kiosk"):
+            st.session_state.authenticated = True
+            st.session_state.logged_in_user = "store.kiosk"
+            st.session_state.user_role = "Kiosk"
+            st.session_state.is_kiosk_mode = True
+            st.session_state.is_demo = False
+            st.rerun()
+
         # Quick One-Click Demo Mode Login Buttons
         st.markdown("<br><hr style='border-color: rgba(229, 169, 60, 0.3);'>", unsafe_allow_html=True)
         st.markdown("""
@@ -2396,13 +2412,20 @@ if role_title == "Manager":
                     st.error(msg)
 
 def logout_user():
-    for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
+    for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "is_kiosk_mode", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
         st.session_state.pop(k, None)
     st.session_state.authenticated = False
     st.rerun()
 
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     logout_user()
+
+if not st.session_state.get("is_kiosk_mode", False):
+    if st.sidebar.button("🏪 Switch to Store Kiosk Mode", key="btn_sb_switch_kiosk", use_container_width=True):
+        st.session_state.logged_in_user = "store.kiosk"
+        st.session_state.user_role = "Kiosk"
+        st.session_state.is_kiosk_mode = True
+        st.rerun()
 
 if st.session_state.get("is_demo", False):
     st.markdown("""
@@ -2946,9 +2969,13 @@ if st.session_state.manual_fixed is not None:
     st.session_state.manual_fixed = sort_dataframe_by_team_and_age(st.session_state.manual_fixed)
 
 # --- ROLE-BASED TAB NAVIGATION ---
+is_kiosk = (st.session_state.user_role == "Kiosk" or st.session_state.get("is_kiosk_mode", False))
 is_manager = (st.session_state.user_role == "Manager")
 
-if is_manager:
+if is_kiosk:
+    render_store_kiosk_timeclock()
+    st.stop()
+elif is_manager:
     tab_dash, tab_roster, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
         "🏠 Home / Dashboard",
         "📅 Roster Inside",
@@ -3822,6 +3849,190 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     wb.save(output)
     output.seek(0)
     return output.getvalue()
+
+def render_store_kiosk_timeclock():
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 22px 26px; border-radius: 16px; color: #ffffff !important; border: 2.5px solid #e5a93c; margin-bottom: 24px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
+        <h2 style="margin: 0; color: #e5a93c; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Bakery Pakenham — Shared Store Timeclock</h2>
+        <p style="margin: 6px 0 0 0; color: #d0e6df; font-size: 1.05rem; font-weight: 600;">Store Terminal Mode • Select your name to Clock In or Clock Out</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    today_dt = datetime.utcnow() + timedelta(hours=10)
+    today_str = today_dt.strftime("%d/%m/%Y")
+    day_name = today_dt.strftime("%A")
+
+    st.markdown(f"""
+    <div style="background: #0c2b25; padding: 14px 20px; border-radius: 12px; border: 1.5px solid #1f5c50; text-align: center; margin-bottom: 20px;">
+        <div style="font-size: 2.2rem; font-weight: 900; color: #e5a93c; letter-spacing: 1px;">{today_dt.strftime('%I:%M:%S %p')}</div>
+        <div style="font-size: 0.95rem; color: #a0aec0; font-weight: 700; margin-top: 2px;">🗓️ {day_name}, {today_str} (Melbourne AEST)</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if "kiosk_success_msg" in st.session_state and st.session_state.kiosk_success_msg:
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #1c4532 0%, #22543d 100%); border: 2px solid #48bb78; color: #ffffff; padding: 18px 24px; border-radius: 14px; text-align: center; font-size: 1.2rem; font-weight: 800; margin-bottom: 24px; box-shadow: 0 6px 20px rgba(72,187,120,0.4);">
+            {st.session_state.kiosk_success_msg}
+        </div>
+        """, unsafe_allow_html=True)
+        st.session_state.kiosk_success_msg = None
+
+    df_emp = load_persisted_df("employees.csv")
+    emp_list = []
+    if df_emp is not None and not df_emp.empty:
+        n_col = find_column(df_emp, ["name", "employee", "staff"], "NAME")
+        if n_col in df_emp.columns:
+            for val in df_emp[n_col].dropna().tolist():
+                name_str = str(val).strip()
+                if name_str and name_str.lower() not in ["none", "nan", "total", "summary", ""] and "demo" not in name_str.lower():
+                    if name_str not in emp_list:
+                        emp_list.append(name_str)
+
+    for u_k, u_v in user_profiles.items():
+        if u_k.startswith("demo.") or "demo" in u_k.lower():
+            continue
+        ename = u_v.get("employee_name", u_k).strip()
+        if ename and ename.lower() not in ["viet", "jane"] and ename not in emp_list:
+            emp_list.append(ename)
+
+    emp_list = sorted(list(set(emp_list)))
+    
+    st.markdown("#### 👤 Select Your Name to Punch In / Out")
+    selected_emp = st.selectbox(
+        "Choose Employee:",
+        options=["-- Select Your Name --"] + emp_list,
+        key="kiosk_selected_emp"
+    )
+
+    if not selected_emp or selected_emp == "-- Select Your Name --":
+        st.info("👇 Please select your name from the dropdown menu above to view status and clock in/out.")
+        return
+
+    df_cards = load_persisted_timecards()
+    today_punch = None
+    if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
+        for idx, r in df_cards.iterrows():
+            if str(r.get("Date", "")).strip() == today_str and str(r.get("Employee", "")).strip().lower() == selected_emp.strip().lower():
+                today_punch = r.to_dict()
+                break
+
+    scheduled_shift = "7:00am-3:30pm"
+    past_rosters = list_finalized_rosters()
+    if past_rosters:
+        for r_item in past_rosters:
+            r_df = load_finalized_roster(r_item["csv_filename"])
+            if r_df is not None and not r_df.empty and day_name in r_df.columns:
+                emp_col = find_column(r_df, ["name", "employee", "staff"])
+                if emp_col in r_df.columns:
+                    for _, r in r_df.iterrows():
+                        if find_matching_employee(selected_emp, {str(r.get(emp_col, "")).strip().lower(): str(r.get(emp_col, "")).strip()}):
+                            val = str(r.get(day_name, "")).strip()
+                            if val and val.lower() not in ["off", "nan", "unavailable"]:
+                                scheduled_shift = val
+                                break
+
+    c_in = today_punch.get("Clock In", "") if today_punch else ""
+    c_out = today_punch.get("Clock Out", "") if today_punch else ""
+
+    st.markdown(f"""
+    <div style="background: #081d19; padding: 20px; border-radius: 14px; border: 1.5px solid #1f5c50; margin-bottom: 20px;">
+        <h3 style="color: #e5a93c; margin: 0 0 10px 0;">👤 Staff Member: {selected_emp}</h3>
+        <p style="color: #d0e6df; margin: 4px 0; font-size: 1rem;"><b>Scheduled Shift Today:</b> <code>{scheduled_shift}</code></p>
+    """, unsafe_allow_html=True)
+
+    if c_in and not c_out:
+        st.markdown(f"<p style='color: #48bb78; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>🟢 Status: WORKING NOW (Clocked IN at {c_in})</p></div>", unsafe_allow_html=True)
+    elif c_in and c_out:
+        st.markdown(f"<p style='color: #4299e1; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>✅ Status: SHIFT COMPLETED ({c_in} - {c_out})</p></div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<p style='color: #fc8181; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>🔴 Status: CLOCKED OUT</p></div>", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_in, col_out = st.columns(2)
+
+    melbourne_now = datetime.utcnow() + timedelta(hours=10)
+
+    with col_in:
+        is_in_disabled = bool(c_in and not c_out)
+        btn_in = st.button("🟢 CLOCK IN NOW", key=f"kiosk_btn_in_{selected_emp}", use_container_width=True, disabled=is_in_disabled)
+        if btn_in:
+            clock_in_time_str = melbourne_now.strftime("%I:%M %p")
+            rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
+            loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
+            
+            new_rec = {
+                "Record ID": rec_id,
+                "Date": today_str,
+                "Employee": selected_emp,
+                "Scheduled Shift": scheduled_shift,
+                "Clock In": clock_in_time_str,
+                "Clock Out": "",
+                "Net Hours": "0",
+                "Variance (Mins)": "0",
+                "GPS Lat": "",
+                "GPS Lon": "",
+                "Distance (m)": "0.0",
+                "Location Verification": loc_badge,
+                "Note": "✅ Store Terminal Punch",
+                "Late Correction Status": "Normal",
+                "Status": "Working"
+            }
+            
+            if df_cards is None or df_cards.empty:
+                df_updated = pd.DataFrame([new_rec])
+            else:
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
+                
+            save_timecard_records(df_updated)
+            st.session_state.kiosk_success_msg = f"✅ Welcome {selected_emp}! Successfully Clocked IN at {clock_in_time_str} via Store Terminal."
+            st.session_state.kiosk_selected_emp = "-- Select Your Name --"
+            st.rerun()
+
+    with col_out:
+        is_out_disabled = bool(not c_in or c_out)
+        btn_out = st.button("🔴 CLOCK OUT NOW", key=f"kiosk_btn_out_{selected_emp}", use_container_width=True, disabled=is_out_disabled)
+        if btn_out:
+            clock_out_time_str = melbourne_now.strftime("%I:%M %p")
+            clock_in_str = today_punch.get("Clock In", "") if today_punch else ""
+            
+            c_in_dec = parse_time_to_decimal(clock_in_str)
+            c_out_dec = parse_time_to_decimal(clock_out_time_str)
+            net_h = round(c_out_dec - c_in_dec, 2) if c_out_dec > c_in_dec else 0.0
+            
+            if today_punch:
+                today_punch["Clock Out"] = clock_out_time_str
+                today_punch["Net Hours"] = str(net_h)
+                today_punch["Status"] = "Completed"
+                rec_id = today_punch.get("Record ID")
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([today_punch])], ignore_index=True)
+            else:
+                rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
+                loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
+                new_rec = {
+                    "Record ID": rec_id,
+                    "Date": today_str,
+                    "Employee": selected_emp,
+                    "Scheduled Shift": scheduled_shift,
+                    "Clock In": clock_out_time_str,
+                    "Clock Out": clock_out_time_str,
+                    "Net Hours": "0",
+                    "Variance (Mins)": "0",
+                    "GPS Lat": "",
+                    "GPS Lon": "",
+                    "Distance (m)": "0.0",
+                    "Location Verification": loc_badge,
+                    "Note": "✅ Store Terminal Punch",
+                    "Late Correction Status": "Normal",
+                    "Status": "Completed"
+                }
+                df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
+
+            save_timecard_records(df_updated)
+            st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs)."
+            st.session_state.kiosk_selected_emp = "-- Select Your Name --"
+            st.rerun()
 
 def render_employee_timeclock_tab(user_key):
     user_info = user_profiles.get(user_key, {})
