@@ -3013,6 +3013,13 @@ def render_store_kiosk_timeclock():
 
     emp_list = sorted(list(set(emp_list)))
     
+    if "reset_kiosk_emp" not in st.session_state:
+        st.session_state.reset_kiosk_emp = False
+
+    if st.session_state.reset_kiosk_emp:
+        st.session_state["kiosk_selected_emp"] = "-- Select Your Name --"
+        st.session_state.reset_kiosk_emp = False
+
     st.markdown("#### 👤 Select Your Name to Punch In / Out")
     selected_emp = st.selectbox(
         "Choose Employee:",
@@ -3102,7 +3109,7 @@ def render_store_kiosk_timeclock():
                 
             save_timecard_records(df_updated)
             st.session_state.kiosk_success_msg = f"✅ Welcome {selected_emp}! Successfully Clocked IN at {clock_in_time_str} via Store Terminal."
-            st.session_state.kiosk_selected_emp = "-- Select Your Name --"
+            st.session_state.reset_kiosk_emp = True
             st.rerun()
 
     with col_out:
@@ -3147,7 +3154,7 @@ def render_store_kiosk_timeclock():
 
             save_timecard_records(df_updated)
             st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs)."
-            st.session_state.kiosk_selected_emp = "-- Select Your Name --"
+            st.session_state.reset_kiosk_emp = True
             st.rerun()
 
 # --- ROLE-BASED TAB NAVIGATION ---
