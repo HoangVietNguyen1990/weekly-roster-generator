@@ -2290,11 +2290,11 @@ st.sidebar.title("🍞 Bakery Portal Controls")
 
 curr_user_key = st.session_state.logged_in_user
 curr_user_info = user_profiles.get(curr_user_key, {})
-display_name = curr_user_info.get("employee_name", curr_user_key)
-role_title = curr_user_info.get("role", "Employee")
+display_name = "🏪 Store Timeclock Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("employee_name", curr_user_key)
+role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("role", "Employee")
 
 st.sidebar.markdown(f"""
-<div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1px solid #e5a93c; margin-bottom: 15px;">
+<div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
     <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
     <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
     <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
@@ -2331,27 +2331,28 @@ def render_change_password_form(user_key, is_admin=False):
                     save_user_profiles(user_profiles)
                     st.success(f"✅ Password for {emp_name} updated successfully!")
 
-# Sidebar Change Password Expander
-with st.sidebar.expander("🔑 Change My Password", expanded=False):
-    with st.form(key=f"form_sidebar_pw_{curr_user_key}"):
-        sb_curr_pw = st.text_input("Current Password", type="password", key=f"sb_cp_curr_{curr_user_key}")
-        sb_new_pw = st.text_input("New Password", type="password", key=f"sb_cp_new_{curr_user_key}")
-        sb_conf_pw = st.text_input("Confirm New Password", type="password", key=f"sb_cp_conf_{curr_user_key}")
-        
-        sb_submit_pw = st.form_submit_button("🔒 Update Password")
-        
-        if sb_submit_pw:
-            actual_pw = curr_user_info.get("password", "")
-            if sb_curr_pw != actual_pw:
-                st.error("❌ Incorrect current password.")
-            elif not sb_new_pw.strip():
-                st.error("❌ New password cannot be empty.")
-            elif sb_new_pw != sb_conf_pw:
-                st.error("❌ New passwords do not match.")
-            else:
-                user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
-                save_user_profiles(user_profiles)
-                st.success("✅ Your password has been updated successfully!")
+# Sidebar Change Password Expander (Hidden in Store Kiosk Mode)
+if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk":
+    with st.sidebar.expander("🔑 Change My Password", expanded=False):
+        with st.form(key=f"form_sidebar_pw_{curr_user_key}"):
+            sb_curr_pw = st.text_input("Current Password", type="password", key=f"sb_cp_curr_{curr_user_key}")
+            sb_new_pw = st.text_input("New Password", type="password", key=f"sb_cp_new_{curr_user_key}")
+            sb_conf_pw = st.text_input("Confirm New Password", type="password", key=f"sb_cp_conf_{curr_user_key}")
+            
+            sb_submit_pw = st.form_submit_button("🔒 Update Password")
+            
+            if sb_submit_pw:
+                actual_pw = curr_user_info.get("password", "")
+                if sb_curr_pw != actual_pw:
+                    st.error("❌ Incorrect current password.")
+                elif not sb_new_pw.strip():
+                    st.error("❌ New password cannot be empty.")
+                elif sb_new_pw != sb_conf_pw:
+                    st.error("❌ New passwords do not match.")
+                else:
+                    user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
+                    save_user_profiles(user_profiles)
+                    st.success("✅ Your password has been updated successfully!")
 
 if role_title == "Manager":
     with st.sidebar.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
