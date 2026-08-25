@@ -5110,14 +5110,17 @@ if is_manager:
             # Calculate zoom factor and dynamic CSS container scaling
             zoom_pct = int(roster_zoom_val.replace("%", ""))
             zoom_factor = zoom_pct / 100.0
+            compensated_width = round(100.0 / zoom_factor, 2)
             
-            # Viewport container scaling bypasses browser minimum font size limits for clean 50% zoom out
+            # CSS scaling with width compensation to fill 100% screen width without double-collapsing height
             st.markdown(f"""
             <style>
                 div[data-testid="stDataEditor"] {{
                     zoom: {zoom_factor} !important;
+                    width: {compensated_width}% !important;
                     -moz-transform: scale({zoom_factor}) !important;
                     -moz-transform-origin: 0 0 !important;
+                    -moz-width: {compensated_width}% !important;
                 }}
             </style>
             """, unsafe_allow_html=True)
@@ -5146,10 +5149,9 @@ if is_manager:
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Compute dynamic height based on row count and zoom scale
+            # Compute unscaled base height so CSS zoom handles height scaling cleanly without double compression
             num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
-            base_row_height = max(20, int(38 * zoom_factor))
-            roster_table_height = max(int(280 * zoom_factor), (num_roster_rows + 1) * base_row_height + 25)
+            roster_table_height = max(380, (num_roster_rows + 1) * 38 + 25)
 
             if roster_view_mode == "📅 Single Day Focus":
                 selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
