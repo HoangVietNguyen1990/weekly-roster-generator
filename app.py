@@ -5090,13 +5090,41 @@ if is_manager:
             with col_tbl_h2:
                 show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
             
-            # Mobile View Mode Control (Default: Full 7-Day Table on Laptop)
-            roster_view_mode = st.radio(
-                "📱 Mobile Layout Mode:",
-                ["📊 Full 7-Day Table", "📅 Single Day Focus", "🎴 Mobile Staff Cards"],
-                key="roster_view_mode",
-                horizontal=True
-            )
+            # Mobile View Mode & Zoom Level Controls Side-by-Side
+            col_mode, col_zoom = st.columns([1.8, 1.2])
+            with col_mode:
+                roster_view_mode = st.radio(
+                    "📱 Mobile Layout Mode:",
+                    ["📊 Full 7-Day Table", "📅 Single Day Focus", "🎴 Mobile Staff Cards"],
+                    key="roster_view_mode",
+                    horizontal=True
+                )
+            with col_zoom:
+                roster_zoom_val = st.select_slider(
+                    "🔍 Table Zoom Level:",
+                    options=["50%", "75%", "90%", "100%", "115%"],
+                    value="100%",
+                    key="roster_zoom_slider"
+                )
+
+            # Calculate zoom factor and dynamic CSS font/height scaling
+            zoom_pct = int(roster_zoom_val.replace("%", ""))
+            zoom_factor = zoom_pct / 100.0
+            font_size_px = round(14 * zoom_factor, 1)
+            header_font_size_px = round(15 * zoom_factor, 1)
+            
+            st.markdown(f"""
+            <style>
+                div[data-testid="stDataEditor"] {{
+                    font-size: {font_size_px}px !important;
+                    --gdg-font-size: {font_size_px}px !important;
+                }}
+                div[data-testid="stDataEditor"] th, 
+                div[data-testid="stDataEditor"] div[role="columnheader"] {{
+                    font-size: {header_font_size_px}px !important;
+                }}
+            </style>
+            """, unsafe_allow_html=True)
 
             # Apply or remove unavailability badges based on checkbox state
             if show_unavail:
@@ -5122,9 +5150,10 @@ if is_manager:
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Compute dynamic height based on row count to display the entire team without internal scrolling
+            # Compute dynamic height based on row count and zoom scale
             num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
-            roster_table_height = max(350, (num_roster_rows + 1) * 38 + 25)
+            base_row_height = max(20, int(38 * zoom_factor))
+            roster_table_height = max(int(280 * zoom_factor), (num_roster_rows + 1) * base_row_height + 25)
 
             if roster_view_mode == "📅 Single Day Focus":
                 selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
