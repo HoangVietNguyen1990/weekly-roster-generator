@@ -5102,7 +5102,7 @@ if is_manager:
             with col_zoom:
                 roster_zoom_val = st.select_slider(
                     "🔍 Table Zoom Level:",
-                    options=["50%", "75%", "90%", "100%", "115%"],
+                    options=["60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%"],
                     value="100%",
                     key="roster_zoom_slider"
                 )
