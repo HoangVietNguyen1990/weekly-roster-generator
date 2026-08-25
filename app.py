@@ -21,6 +21,27 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
+    /* HIDE TOP STREAMLIT HEADER, TOOLBAR (Fork, GitHub, 3-Dots Menu) & FOOTER */
+    header[data-testid="stHeader"],
+    [data-testid="stHeader"],
+    .stAppHeader,
+    #MainMenu,
+    footer,
+    [data-testid="stFooter"],
+    [data-testid="stToolbar"],
+    div[data-testid="stDecoration"] {
+        visibility: hidden !important;
+        display: none !important;
+        height: 0px !important;
+    }
+
+    /* REDUCE TOP CONTAINER PADDING FOR CLEAN FULL-SCREEN LAYOUT */
+    .main .block-container,
+    div[data-testid="stMainBlockContainer"],
+    section.main > div {
+        padding-top: 0.8rem !important;
+    }
+
     /* Main App Background - Deep Emerald & Forest Teal Gradient */
     .stApp {
         background: linear-gradient(135deg, #0e2b26 0%, #16443c 50%, #1f574d 100%);
