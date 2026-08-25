@@ -838,7 +838,7 @@ def load_smtp_config():
     default_config = {
         "smtp_server": "smtp.gmail.com",
         "smtp_port": 587,
-        "sender_email": "",
+        "sender_email": "Brumby.pakenham@gmail.com",
         "sender_password": "",
         "portal_url": "https://weekly-roster-generator.streamlit.app",
         "sender_name": "Bakery Manager",
@@ -848,7 +848,7 @@ def load_smtp_config():
     # SANITIZE & REDACT credentials if running in DEMO mode
     if st.session_state.get("is_demo", False):
         demo_config = default_config.copy()
-        demo_config["sender_email"] = "brumby.pakenham@gmail.com"
+        demo_config["sender_email"] = "Brumby.pakenham@gmail.com"
         demo_config["sender_password"] = "abcd efgh ijkl mnop"
         demo_config["sender_name"] = "Demo Bakery Manager"
         demo_config["notification_recipients"] = "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
@@ -2363,7 +2363,7 @@ if role_title == "Manager":
             cfg_sname = st.text_input("Sender Display Name", value=smtp_cfg.get("sender_name", "Bakery Manager"))
             
             st.markdown("##### 📮 SMTP Server Credentials")
-            cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", ""), placeholder="e.g. manager@brumbys.com.au")
+            cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", "Brumby.pakenham@gmail.com"), placeholder="e.g. Brumby.pakenham@gmail.com")
             cfg_spass = st.text_input("Sender App Password", value=smtp_cfg.get("sender_password", ""), type="password")
             cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
             cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
