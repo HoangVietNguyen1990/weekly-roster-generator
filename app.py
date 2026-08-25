@@ -5027,7 +5027,17 @@ if is_manager:
                         if btn_xero_bot:
                             with st.spinner("🤖 Connecting to browser and populating Xero Pay Run..."):
                                 try:
-                                    from xero_autofill import run_xero_playwright_autofill
+                                    if BASE_DIR not in sys.path:
+                                        sys.path.insert(0, BASE_DIR)
+                                    try:
+                                        from xero_autofill import run_xero_playwright_autofill
+                                    except ImportError:
+                                        import importlib.util
+                                        spec = importlib.util.spec_from_file_location("xero_autofill", os.path.join(BASE_DIR, "xero_autofill.py"))
+                                        xero_mod = importlib.util.module_from_spec(spec)
+                                        spec.loader.exec_module(xero_mod)
+                                        run_xero_playwright_autofill = xero_mod.run_xero_playwright_autofill
+
                                     success, res_msg = run_xero_playwright_autofill(home_hour_breakdown_df, target_url=xero_url, headless=False)
                                     if success:
                                         st.success(res_msg)
