@@ -5107,21 +5107,17 @@ if is_manager:
                     key="roster_zoom_slider"
                 )
 
-            # Calculate zoom factor and dynamic CSS font/height scaling
+            # Calculate zoom factor and dynamic CSS container scaling
             zoom_pct = int(roster_zoom_val.replace("%", ""))
             zoom_factor = zoom_pct / 100.0
-            font_size_px = round(14 * zoom_factor, 1)
-            header_font_size_px = round(15 * zoom_factor, 1)
             
+            # Viewport container scaling bypasses browser minimum font size limits for clean 50% zoom out
             st.markdown(f"""
             <style>
                 div[data-testid="stDataEditor"] {{
-                    font-size: {font_size_px}px !important;
-                    --gdg-font-size: {font_size_px}px !important;
-                }}
-                div[data-testid="stDataEditor"] th, 
-                div[data-testid="stDataEditor"] div[role="columnheader"] {{
-                    font-size: {header_font_size_px}px !important;
+                    zoom: {zoom_factor} !important;
+                    -moz-transform: scale({zoom_factor}) !important;
+                    -moz-transform-origin: 0 0 !important;
                 }}
             </style>
             """, unsafe_allow_html=True)
