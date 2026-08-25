@@ -5107,30 +5107,6 @@ if is_manager:
                     key="roster_zoom_slider"
                 )
 
-            # Calculate zoom factor and dynamic CSS container scaling
-            zoom_pct = int(roster_zoom_val.replace("%", ""))
-            zoom_factor = zoom_pct / 100.0
-            compensated_width = round(100.0 / zoom_factor, 2)
-            
-            # CSS scaling with width compensation to fill 100% screen width without double-collapsing height
-            st.markdown(f"""
-            <style>
-                div[data-testid="stDataEditor"] {{
-                    zoom: {zoom_factor} !important;
-                    width: {compensated_width}% !important;
-                    -moz-transform: scale({zoom_factor}) !important;
-                    -moz-transform-origin: 0 0 !important;
-                    -moz-width: {compensated_width}% !important;
-                }}
-            </style>
-            """, unsafe_allow_html=True)
-
-            # Apply or remove unavailability badges based on checkbox state
-            if show_unavail:
-                st.session_state.final_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
-            else:
-                st.session_state.final_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
-
             # Strip out any existing summary row first to get pure staff dataframe
             st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
             st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
@@ -5142,16 +5118,48 @@ if is_manager:
             # Attach bottom summary row for visual display in data_editor
             df_for_editor = attach_daily_gross_row(st.session_state.final_roster_df, daily_gross_map)
 
-            if show_unavail:
-                st.markdown("""
-                <div style="background: rgba(184, 40, 40, 0.15); border: 1px solid rgba(255, 77, 77, 0.5); border-radius: 8px; padding: 10px 16px; margin-bottom: 12px; font-size: 0.92rem; color: #ffe6e6;">
-                    💡 <b>Admin Editing Assist:</b> Staff unavailability constraints are marked with <b>🚫 Unavailable (Window)</b> in the editor below and highlighted in crimson red in the visual map.
-                </div>
-                """, unsafe_allow_html=True)
+            # Calculate zoom factor and dynamic column width / height scaling
+            zoom_pct = int(roster_zoom_val.replace("%", ""))
+            zoom_factor = zoom_pct / 100.0
             
-            # Compute unscaled base height so CSS zoom handles height scaling cleanly without double compression
+            # Calculate pixel widths for Employee and Monday..Sunday columns
+            emp_col_width = int(170 * zoom_factor)
+            day_col_width = int(135 * zoom_factor)
+            
+            # Dynamic Column Configuration for Zoom Sizing
+            dynamic_col_config = {}
+            if df_for_editor is not None and not df_for_editor.empty:
+                first_col = df_for_editor.columns[0]
+                dynamic_col_config[first_col] = st.column_config.Column(
+                    label=first_col,
+                    width=emp_col_width
+                )
+                for c in df_for_editor.columns[1:]:
+                    dynamic_col_config[c] = st.column_config.Column(
+                        label=c,
+                        width=day_col_width
+                    )
+
+            # Compute dynamic zoom-scaled table height
             num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
-            roster_table_height = max(380, (num_roster_rows + 1) * 38 + 25)
+            roster_table_height = max(int(250 * zoom_factor), int((num_roster_rows + 1) * (38 * zoom_factor) + 30))
+            
+            # CSS font & canvas variable scaling
+            font_size_px = max(9, round(14 * zoom_factor, 1))
+            header_font_size_px = max(10, round(15 * zoom_factor, 1))
+            
+            st.markdown(f"""
+            <style>
+                div[data-testid="stDataEditor"] {{
+                    font-size: {font_size_px}px !important;
+                    --gdg-font-size: {font_size_px}px !important;
+                }}
+                div[data-testid="stDataEditor"] th, 
+                div[data-testid="stDataEditor"] div[role="columnheader"] {{
+                    font-size: {header_font_size_px}px !important;
+                }}
+            </style>
+            """, unsafe_allow_html=True)
 
             if roster_view_mode == "📅 Single Day Focus":
                 selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
@@ -5162,7 +5170,8 @@ if is_manager:
                     num_rows="dynamic",
                     key="edit_generated_roster_single",
                     height=roster_table_height,
-                    use_container_width=True
+                    column_config=dynamic_col_config,
+                    use_container_width=(zoom_pct == 100)
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
                 
@@ -5211,7 +5220,8 @@ if is_manager:
                     num_rows="dynamic",
                     key="edit_generated_roster",
                     height=roster_table_height,
-                    use_container_width=True
+                    column_config=dynamic_col_config,
+                    use_container_width=(zoom_pct == 100)
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
 
