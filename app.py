@@ -4218,6 +4218,9 @@ def render_manager_timesheet_audit_dashboard():
 
     if df_cards is not None and not df_cards.empty:
         display_df = df_cards.copy()
+        if "Employee" in display_df.columns:
+            display_df = display_df.sort_values(by="Employee", ascending=False, key=lambda col: col.astype(str).str.lower()).reset_index(drop=True)
+            
         if "Select" not in display_df.columns:
             display_df.insert(0, "Select", False)
         else:
