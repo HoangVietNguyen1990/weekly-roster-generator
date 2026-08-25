@@ -4062,28 +4062,39 @@ def render_manager_timesheet_audit_dashboard():
     
     df_cards = load_persisted_timecards()
     
-    # Auto-clean any missing timecards for store owners (Viet & Jane)
-    if df_cards is not None and not df_cards.empty and "Employee" in df_cards.columns:
-        owner_missing_mask = df_cards["Employee"].astype(str).str.strip().str.lower().isin(["viet", "jane"]) & (df_cards["Status"] == "Missing")
-        if owner_missing_mask.any():
-            df_cards = df_cards[~owner_missing_mask].reset_index(drop=True)
-            save_timecard_records(df_cards)
+    # Clean auto-generated "Missing" records for past historical dates (older than today)
+    if df_cards is not None and not df_cards.empty:
+        today_dt = datetime.now().date()
+        valid_rows = []
+        for idx, r in df_cards.iterrows():
+            status = str(r.get("Status", "")).strip()
+            c_in = str(r.get("Clock In", "")).strip()
+            d_str = str(r.get("Date", "")).strip()
+            d_obj = parse_date_robust(d_str)
+            # Retain actual punches (with Clock In), or today's missing punches. Drop historical unpunched missing records.
+            if c_in or status != "Missing" or (d_obj and d_obj == today_dt):
+                valid_rows.append(r)
+        
+        df_cards = pd.DataFrame(valid_rows).reset_index(drop=True) if valid_rows else pd.DataFrame()
+        save_timecard_records(df_cards)
 
-    # 1. Scan finalized rosters to inject missing clockings for scheduled shifts
+    # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
+    today_dt = datetime.now().date()
     past_rosters = list_finalized_rosters()
     if past_rosters:
         for r_item in past_rosters:
             r_df = load_finalized_roster(r_item["csv_filename"])
             start_dt = r_item.get("start_date")
             if r_df is not None and not r_df.empty and start_dt:
-                emp_col = find_column(r_df, ["name", "employee", "staff"])
-                if emp_col in r_df.columns:
-                    days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                    for d_idx, day_name in enumerate(days_list):
-                        shift_date = start_dt + timedelta(days=d_idx)
-                        shift_date_str = shift_date.strftime("%d/%m/%Y")
+                if start_dt <= today_dt <= start_dt + timedelta(days=6):
+                    emp_col = find_column(r_df, ["name", "employee", "staff"])
+                    if emp_col in r_df.columns:
+                        days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                        d_idx = today_dt.weekday()
+                        day_name = days_list[d_idx]
+                        shift_date_str = today_dt.strftime("%d/%m/%Y")
                         
-                        if shift_date <= datetime.now().date() and day_name in r_df.columns:
+                        if day_name in r_df.columns:
                             for _, r_row in r_df.iterrows():
                                 emp_name = str(r_row.get(emp_col, "")).strip()
                                 shift_val = str(r_row.get(day_name, "")).strip()
