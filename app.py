@@ -5007,6 +5007,34 @@ if is_manager:
                     home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
                     if not home_hour_breakdown_df.empty:
                         st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.markdown("""
+                        <div style="background: rgba(8, 29, 25, 0.95); border: 2px solid #e5a93c; border-radius: 12px; padding: 14px 20px; margin-top: 10px;">
+                            <h4 style="color: #e5a93c; margin: 0 0 6px 0;">⚡ Xero Payroll Automated Input Panel</h4>
+                            <p style="color: #d0e6df; font-size: 0.95rem; margin: 0 0 10px 0;">Automatically populate this breakdown into your Xero Pay Run web page. <b>Rule Enforced:</b> If an employee name in the bakery app does not match Xero's web table, their input is safely skipped.</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        xero_c1, xero_c2 = st.columns([1.5, 1])
+                        with xero_c1:
+                            xero_url = st.text_input("Xero Pay Run Target URL", value="https://payroll.xero.com/PayRun/PayRun/Details/74565804?CID=!cSWq8", key="xero_target_url_input")
+                            btn_xero_bot = st.button("🚀 Launch Auto-Input Bot to Xero", key="btn_run_xero_bot", use_container_width=True)
+                        with xero_c2:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            st.markdown("[🔗 Open Xero Pay Run Page](https://payroll.xero.com/PayRun/PayRun/Details/74565804?CID=!cSWq8)")
+
+                        if btn_xero_bot:
+                            with st.spinner("🤖 Connecting to browser and populating Xero Pay Run..."):
+                                try:
+                                    from xero_autofill import run_xero_playwright_autofill
+                                    success, res_msg = run_xero_playwright_autofill(home_hour_breakdown_df, target_url=xero_url, headless=False)
+                                    if success:
+                                        st.success(res_msg)
+                                    else:
+                                        st.warning(res_msg)
+                                except Exception as ex:
+                                    st.error(f"Xero Bot Launch Error: {ex}")
 
                 with sub_tab3:
                     st.markdown("#### 📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)")
