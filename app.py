@@ -1564,6 +1564,7 @@ def find_all_old_roster_files():
     
     known_candidates = [
         os.path.join(BASE_DIR, "Team Roster 10.08.2026.xlsx"),
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Team_Roster_24.08.2026 (1).xlsx"),
         os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 27.07.2026 Pakenham payroll_.xlsx"),
         os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 20.07.2026 Pakenham payroll_.xlsx"),
         os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 13.07.2026 Pakenham payroll_.xlsx"),
@@ -1666,8 +1667,9 @@ def list_finalized_rosters():
             end_dt = dt + timedelta(days=6)
             label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
         except:
+            dt = None
             label = f"Roster {raw_date}"
-        results.append({"csv_filename": f, "date_str": raw_date, "label": label})
+        results.append({"csv_filename": f, "date_str": raw_date, "start_date": dt, "label": label})
     return results
 
 def clean_roster_unavailability_display(df):
@@ -3043,7 +3045,16 @@ def render_store_kiosk_timeclock():
     scheduled_shift = "7:00am-3:30pm"
     past_rosters = list_finalized_rosters()
     if past_rosters:
-        for r_item in past_rosters:
+        target_dt = parse_date_robust(today_str)
+        matching_rosters = []
+        if target_dt:
+            for r_item in past_rosters:
+                s_dt = r_item.get("start_date")
+                if s_dt and (s_dt <= target_dt <= s_dt + timedelta(days=6)):
+                    matching_rosters.append(r_item)
+                    
+        rosters_to_scan = matching_rosters if matching_rosters else past_rosters
+        for r_item in rosters_to_scan:
             r_df = load_finalized_roster(r_item["csv_filename"])
             if r_df is not None and not r_df.empty and day_name in r_df.columns:
                 emp_col = find_column(r_df, ["name", "employee", "staff"])
@@ -3054,6 +3065,8 @@ def render_store_kiosk_timeclock():
                             if val and val.lower() not in ["off", "nan", "unavailable"]:
                                 scheduled_shift = val
                                 break
+            if scheduled_shift != "7:00am-3:30pm":
+                break
 
     c_in = today_punch.get("Clock In", "") if today_punch else ""
     c_out = today_punch.get("Clock Out", "") if today_punch else ""
