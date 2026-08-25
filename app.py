@@ -2115,6 +2115,7 @@ def calculate_weekly_hour_rate_breakdown(roster_df):
 
     df_result = pd.DataFrame(records)
     if not df_result.empty:
+        df_result = df_result.sort_values(by="staff name", ascending=True, key=lambda col: col.astype(str).str.lower()).reset_index(drop=True)
         tot_early = sum(r["early hour"] for r in records)
         tot_late = sum(r["late hour"] for r in records)
         tot_ord = sum(r["ordinary hour"] for r in records)
@@ -4218,9 +4219,6 @@ def render_manager_timesheet_audit_dashboard():
 
     if df_cards is not None and not df_cards.empty:
         display_df = df_cards.copy()
-        if "Employee" in display_df.columns:
-            display_df = display_df.sort_values(by="Employee", ascending=False, key=lambda col: col.astype(str).str.lower()).reset_index(drop=True)
-            
         if "Select" not in display_df.columns:
             display_df.insert(0, "Select", False)
         else:
