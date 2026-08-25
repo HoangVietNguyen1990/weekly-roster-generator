@@ -2158,6 +2158,114 @@ def calculate_weekly_hour_rate_breakdown(roster_df):
 
     return df_result
 
+def generate_xero_autofill_js(breakdown_df):
+    if breakdown_df is None or breakdown_df.empty:
+        return "// No breakdown data available."
+    data_records = []
+    for _, row in breakdown_df.iterrows():
+        emp_name = str(row.get("staff name", "")).strip()
+        if not emp_name or "TOTAL" in emp_name.upper() or "SUMMARY" in emp_name.upper():
+            continue
+        data_records.append({
+            "name": emp_name,
+            "early": float(row.get("early hour", 0.0) or 0.0),
+            "late": float(row.get("late hour", 0.0) or 0.0),
+            "ordinary": float(row.get("ordinary hour", 0.0) or 0.0),
+            "saturday": float(row.get("saturday", 0.0) or 0.0),
+            "sunday": float(row.get("sunday", 0.0) or 0.0),
+            "laundry": str(row.get("laundry allowance", "$0.00")).replace("$", "").strip()
+        })
+    json_str = json.dumps(data_records, indent=2)
+    return f"""javascript:(function(){{
+    const staffData = {json_str};
+    let matchedCount = 0, skippedCount = 0;
+    const allRows = document.querySelectorAll('tr, div[class*="employee"], div[class*="payrun-row"], div[class*="row"]');
+    staffData.forEach(item => {{
+        const targetName = item.name.toLowerCase();
+        let foundRow = null;
+        for (let r of allRows) {{
+            const text = (r.innerText || r.textContent || "").toLowerCase();
+            if (text.includes(targetName) || targetName.split(' ').every(part => text.includes(part))) {{
+                foundRow = r; break;
+            }}
+        }}
+        if (!foundRow) {{ skippedCount++; return; }}
+        matchedCount++;
+        const inputs = Array.from(foundRow.querySelectorAll('input[type="text"], input[type="number"], input:not([type="hidden"])'));
+        inputs.forEach(input => {{
+            const combinedContext = `${{input.getAttribute('aria-label')||''}} ${{input.getAttribute('placeholder')||''}} ${{input.getAttribute('name')||''}} ${{input.parentElement ? input.parentElement.innerText : ''}}`.toLowerCase();
+            function setVal(v) {{ if (!v || v === "0.00") return; input.value = v; input.dispatchEvent(new Event('input', {{ bubbles: true }})); input.dispatchEvent(new Event('change', {{ bubbles: true }})); }}
+            if (combinedContext.includes('sat')) setVal(item.saturday);
+            else if (combinedContext.includes('sun')) setVal(item.sunday);
+            else if (combinedContext.includes('early') || combinedContext.includes('night')) setVal(item.early);
+            else if (combinedContext.includes('late') || combinedContext.includes('evening')) setVal(item.late);
+            else if (combinedContext.includes('ord') || combinedContext.includes('base') || combinedContext.includes('hours')) setVal(item.ordinary);
+            else if (combinedContext.includes('laundry')) setVal(item.laundry);
+        }});
+    }});
+    alert(`🥐 Brumby's Bakery Xero Auto-Fill Complete!\\n\\n✅ Matched: ${{matchedCount}} staff\\n⚠️ Skipped (Not found on page): ${{skippedCount}} staff`);
+}})();"""
+
+def run_xero_playwright_autofill(breakdown_df, target_url="https://payroll.xero.com/PayRun/PayRun/Details/74565804?CID=!cSWq8", headless=False):
+    if breakdown_df is None or breakdown_df.empty:
+        return False, "No data available in Current Week Hour Rate Breakdown."
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return False, "Playwright is not installed in this environment. Run `pip install playwright` to enable local automated browser bot."
+
+    staff_records = []
+    for _, row in breakdown_df.iterrows():
+        emp_name = str(row.get("staff name", "")).strip()
+        if not emp_name or "TOTAL" in emp_name.upper() or "SUMMARY" in emp_name.upper():
+            continue
+        staff_records.append({
+            "name": emp_name,
+            "early": float(row.get("early hour", 0.0) or 0.0),
+            "late": float(row.get("late hour", 0.0) or 0.0),
+            "ordinary": float(row.get("ordinary hour", 0.0) or 0.0),
+            "saturday": float(row.get("saturday", 0.0) or 0.0),
+            "sunday": float(row.get("sunday", 0.0) or 0.0),
+            "laundry": str(row.get("laundry allowance", "$0.00")).replace("$", "").strip()
+        })
+
+    matched_list, skipped_list = [], []
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=headless, args=["--start-maximized"])
+            context = browser.new_context(viewport={"width": 1400, "height": 900})
+            page = context.new_page()
+            page.goto(target_url, timeout=60000)
+            page.wait_for_load_state("networkidle")
+            if "login" in page.url.lower():
+                page.wait_for_url("**/PayRun/**", timeout=120000)
+            page.wait_for_selector("table, div[class*='payrun']", timeout=30000)
+            rows = page.query_selector_all("tr, div[class*='row']")
+
+            for item in staff_records:
+                target_name = item["name"].strip().lower()
+                found_row = None
+                for r in rows:
+                    row_text = (r.inner_text() or "").lower()
+                    if target_name in row_text or all(part in row_text for part in target_name.split()):
+                        found_row = r; break
+                if not found_row:
+                    skipped_list.append(item["name"]); continue
+                matched_list.append(item["name"])
+                inputs = found_row.query_selector_all("input[type='text'], input[type='number'], input:not([type='hidden'])")
+                for inp in inputs:
+                    context_text = f"{inp.get_attribute('aria-label') or ''} {inp.get_attribute('placeholder') or ''} {inp.get_attribute('name') or ''}".lower()
+                    if "sat" in context_text and item["saturday"] > 0: inp.fill(str(item["saturday"]))
+                    elif "sun" in context_text and item["sunday"] > 0: inp.fill(str(item["sunday"]))
+                    elif ("early" in context_text or "night" in context_text) and item["early"] > 0: inp.fill(str(item["early"]))
+                    elif ("late" in context_text or "evening" in context_text) and item["late"] > 0: inp.fill(str(item["late"]))
+                    elif ("ord" in context_text or "base" in context_text or "hours" in context_text) and item["ordinary"] > 0: inp.fill(str(item["ordinary"]))
+                    elif ("laundry" in context_text or "allowance" in context_text) and float(item["laundry"] or 0) > 0: inp.fill(str(item["laundry"]))
+            browser.close()
+            return True, f"✅ Xero Auto-Input Complete!\n\nMatched ({len(matched_list)}): {', '.join(matched_list)}\nSkipped ({len(skipped_list)}): {', '.join(skipped_list) if skipped_list else 'None'}"
+    except Exception as e:
+        return False, f"Xero Automation Error: {str(e)}"
+
 def build_payroll_historical_trend():
     past_rosters = list_finalized_rosters()
     if not past_rosters:
@@ -5028,17 +5136,6 @@ if is_manager:
                         if btn_xero_bot:
                             with st.spinner("🤖 Connecting to browser and populating Xero Pay Run..."):
                                 try:
-                                    if BASE_DIR not in sys.path:
-                                        sys.path.insert(0, BASE_DIR)
-                                    try:
-                                        from xero_autofill import run_xero_playwright_autofill
-                                    except ImportError:
-                                        import importlib.util
-                                        spec = importlib.util.spec_from_file_location("xero_autofill", os.path.join(BASE_DIR, "xero_autofill.py"))
-                                        xero_mod = importlib.util.module_from_spec(spec)
-                                        spec.loader.exec_module(xero_mod)
-                                        run_xero_playwright_autofill = xero_mod.run_xero_playwright_autofill
-
                                     success, res_msg = run_xero_playwright_autofill(home_hour_breakdown_df, target_url=xero_url, headless=False)
                                     if success:
                                         st.success(res_msg)
@@ -5046,6 +5143,11 @@ if is_manager:
                                         st.warning(res_msg)
                                 except Exception as ex:
                                     st.error(f"Xero Bot Launch Error: {ex}")
+
+                        with st.expander("⚡ 1-Click Browser Auto-Fill Script (For Web / Cloud Deployment)"):
+                            st.markdown("Copy the script code below, open your Xero Pay Run page in your web browser (`F12` -> `Console`), and paste it to auto-fill all staff hours in 1 second:")
+                            js_autofill_code = generate_xero_autofill_js(home_hour_breakdown_df)
+                            st.code(js_autofill_code, language="javascript")
 
                 with sub_tab3:
                     st.markdown("#### 📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)")
