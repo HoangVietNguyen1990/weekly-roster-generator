@@ -1443,7 +1443,8 @@ def build_roster_excel_bytes(edited_final_df, start_date):
         last_col_letter = openpyxl.utils.get_column_letter(len(hb_df.columns))
         ws3.merge_cells(f"A1:{last_col_letter}1")
         t3 = ws3.cell(row=1, column=1)
-        t3.value = "BRUMBY'S PAKENHAM - CURRENT WEEK HOUR RATE BREAKDOWN"
+        date_label_str = start_date.strftime("%d.%m.%Y") if hasattr(start_date, 'strftime') else str(start_date)
+        t3.value = f"BRUMBY'S PAKENHAM - HOUR RATE BREAKDOWN ({date_label_str})"
         t3.fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
         t3.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
         t3.alignment = Alignment(horizontal="center", vertical="center")
@@ -2158,6 +2159,43 @@ def calculate_weekly_hour_rate_breakdown(roster_df):
 
     return df_result
 
+def generate_xero_timesheet_csv(breakdown_df):
+    """
+    Generates a Xero Payroll Timesheet CSV format ready for 1-click import into Xero Pay Run.
+    """
+    if breakdown_df is None or breakdown_df.empty:
+        return ""
+    
+    rows = []
+    for _, r in breakdown_df.iterrows():
+        emp = str(r.get("staff name", "")).strip()
+        if not emp or "TOTAL" in emp.upper() or "SUMMARY" in emp.upper():
+            continue
+        
+        ord_h = float(r.get("ordinary hour", 0.0) or 0.0)
+        sat_h = float(r.get("saturday", 0.0) or 0.0)
+        sun_h = float(r.get("sunday", 0.0) or 0.0)
+        early_h = float(r.get("early hour", 0.0) or 0.0)
+        late_h = float(r.get("late hour", 0.0) or 0.0)
+        laundry_str = str(r.get("laundry allowance", "$0.00")).replace("$", "").strip()
+        laundry_val = float(laundry_str) if laundry_str else 0.0
+
+        if ord_h > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Ordinary Hours", "Hours": ord_h})
+        if sat_h > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Saturday Penalty", "Hours": sat_h})
+        if sun_h > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Sunday Penalty", "Hours": sun_h})
+        if early_h > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Early Morning Shift", "Hours": early_h})
+        if late_h > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Late Shift", "Hours": late_h})
+        if laundry_val > 0:
+            rows.append({"Employee Name": emp, "Earnings Rate": "Laundry Allowance", "Hours": laundry_val})
+
+    df_xero = pd.DataFrame(rows)
+    return df_xero.to_csv(index=False)
+
 def generate_xero_autofill_js(breakdown_df):
     if breakdown_df is None or breakdown_df.empty:
         return "// No breakdown data available."
@@ -2178,8 +2216,19 @@ def generate_xero_autofill_js(breakdown_df):
     json_str = json.dumps(data_records, indent=2)
     return f"""javascript:(function(){{
     const staffData = {json_str};
+    console.log("🥐 Brumby's Bakery - Xero Payroll Auto-Fill Triggered");
+    
+    // Check if on Xero Pay Run Overview summary vs Detailed Payslip/Timesheet input page
+    const inputsOnPage = document.querySelectorAll('input[type="text"], input[type="number"], input:not([type="hidden"])');
+    
+    if (inputsOnPage.length === 0) {{
+        alert("ℹ️ You are currently on the Xero Pay Run Overview Summary table.\\n\\n💡 Summary tables display read-only totals.\\n\\n👉 Recommendation:\\n1. Use the '📥 Download Xero Timesheet CSV' button in your Bakery App for 1-click Pay Run import!\\n2. Or click into an individual employee's payslip edit screen in Xero, then run this auto-fill button.");
+        return;
+    }}
+
     let matchedCount = 0, skippedCount = 0;
-    const allRows = document.querySelectorAll('tr, div[class*="employee"], div[class*="payrun-row"], div[class*="row"]');
+    const allRows = document.querySelectorAll('tr, div[class*="employee"], div[class*="payrun-row"], div[class*="row"], div[class*="modal"]');
+    
     staffData.forEach(item => {{
         const targetName = item.name.toLowerCase();
         let foundRow = null;
@@ -5101,18 +5150,18 @@ if is_manager:
                 st.markdown(summary_cards_html, unsafe_allow_html=True)
                 
                 sub_tab1, sub_tab2, sub_tab3 = st.tabs([
-                    "👥 Staff Earnings & Super Breakdown",
-                    "📊 Current Week Hour Rate Breakdown",
+                    f"👥 Staff Earnings & Super Breakdown",
+                    f"📊 Hour Rate Breakdown ({selected_label})",
                     "📈 Historical Payroll Progress & Trends"
                 ])
                 
                 with sub_tab1:
-                    st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
+                    st.markdown(f"#### 👥 Staff Earnings & Super Breakdown Table ({selected_label})")
                     if not wages_summary["breakdown_df"].empty:
                         st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
 
                 with sub_tab2:
-                    st.markdown("#### 📊 Current Week Hour Rate Breakdown")
+                    st.markdown(f"#### 📊 Hour Rate Breakdown for Selected Roster Week: `{selected_label}`")
                     home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
                     if not home_hour_breakdown_df.empty:
                         st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
@@ -5132,6 +5181,16 @@ if is_manager:
                         with xero_c2:
                             st.markdown("<br>", unsafe_allow_html=True)
                             st.markdown("[🔗 Open Xero Pay Run Page](https://payroll.xero.com/PayRun/PayRun/Details/74565804?CID=!cSWq8)")
+                            xero_csv_data = generate_xero_timesheet_csv(home_hour_breakdown_df)
+                            if xero_csv_data:
+                                st.download_button(
+                                    label="📥 Download Xero Timesheet CSV",
+                                    data=xero_csv_data,
+                                    file_name=f"Xero_Payroll_Import_{selected_info['date_str']}.csv",
+                                    mime="text/csv",
+                                    key="btn_download_xero_csv",
+                                    use_container_width=True
+                                )
 
                         if btn_xero_bot:
                             with st.spinner("🤖 Connecting to browser and populating Xero Pay Run..."):
@@ -5427,6 +5486,12 @@ if is_manager:
             st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
             if not wages_summary_gen["breakdown_df"].empty:
                 st.dataframe(wages_summary_gen["breakdown_df"], use_container_width=True, hide_index=True)
+
+            gen_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
+            if not gen_hour_breakdown_df.empty:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("#### 📊 Hour Rate Breakdown Table (Generated Roster)")
+                st.dataframe(gen_hour_breakdown_df, use_container_width=True, hide_index=True)
 
             # Finalize & Export Section
             st.markdown("<br>", unsafe_allow_html=True)
