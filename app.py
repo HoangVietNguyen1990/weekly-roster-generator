@@ -3800,12 +3800,23 @@ def render_team_monthly_calendar_grid():
     import calendar
     from datetime import date
     
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 14px 22px; border-radius: 14px 14px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-        📅 Bakery Team Monthly Calendar & Unavailability Grid
-    </div>
-    """, unsafe_allow_html=True)
-    
+    c_head1, c_head2 = st.columns([2.5, 1])
+    with c_head1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 14px 22px; border-radius: 14px; color: #ffffff !important; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.3px; border: 2px solid #e5a93c;">
+            📅 Bakery Team Monthly Calendar & Unavailability Grid
+        </div>
+        """, unsafe_allow_html=True)
+    with c_head2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔄 Sync & Reload Database", key="btn_force_reload_unavail", use_container_width=True):
+            for k in list(st.session_state.keys()):
+                if "unavail" in k.lower() and k != "chk_show_unavailability":
+                    del st.session_state[k]
+            st.session_state.manual_unavailability = standardize_unavailability_df(load_persisted_df("unavailability.csv"))
+            st.success("✅ Session state cleared and database reloaded!")
+            st.rerun()
+        
     # Month / Year Selection Controls
     col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
     with col_nav2:
