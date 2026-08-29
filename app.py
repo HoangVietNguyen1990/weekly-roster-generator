@@ -1244,6 +1244,11 @@ def load_persisted_df(filename, default_df=None):
                 
     return default_df
 
+def clear_unavailability_widget_cache():
+    for k in list(st.session_state.keys()):
+        if k.startswith("edit_unavail_month_"):
+            del st.session_state[k]
+
 def save_persisted_df(df, filename):
     if st.session_state.get("is_demo", False):
         st.toast("🧪 Sandbox Mode: Database updates held in memory only.", icon="🧪")
@@ -1251,6 +1256,8 @@ def save_persisted_df(df, filename):
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
+        if filename == "unavailability.csv":
+            clear_unavailability_widget_cache()
     except:
         pass
 
@@ -3943,6 +3950,12 @@ def render_team_monthly_calendar_grid():
     else:
         month_unavail_df = pd.DataFrame(columns=["Employee", "Day", "Time Window"])
 
+    current_unavail_sig = str(len(month_unavail_df)) + "_" + str(hash(tuple(month_unavail_df.astype(str).values.flatten())))
+    if st.session_state.get(f"unavail_sig_{sel_month}_{sel_year}") != current_unavail_sig:
+        if f"edit_unavail_month_{sel_month}_{sel_year}" in st.session_state:
+            del st.session_state[f"edit_unavail_month_{sel_month}_{sel_year}"]
+        st.session_state[f"unavail_sig_{sel_month}_{sel_year}"] = current_unavail_sig
+
     edited_month_df = st.data_editor(month_unavail_df, num_rows="dynamic", key=f"edit_unavail_month_{sel_month}_{sel_year}")
     if edited_month_df is not None:
         std_edited = standardize_unavailability_df(edited_month_df)
@@ -3970,6 +3983,7 @@ def render_team_monthly_calendar_grid():
             combined_df = sort_dataframe_by_team_and_age(standardize_unavailability_df(combined_df))
             st.session_state.manual_unavailability = combined_df
             save_persisted_df(combined_df, "unavailability.csv")
+            st.session_state[f"unavail_sig_{sel_month}_{sel_year}"] = str(len(std_edited)) + "_" + str(hash(tuple(std_edited.astype(str).values.flatten())))
             st.rerun()
 
 def build_weekly_timesheet_excel_bytes(selected_week_str):
