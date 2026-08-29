@@ -1215,9 +1215,7 @@ def load_persisted_df(filename, default_df=None):
     if os.path.exists(path):
         try:
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
-            if df is not None and not df.empty:
-                if filename == "unavailability.csv" and default_df is not None and isinstance(default_df, pd.DataFrame):
-                    df = pd.concat([default_df, df], ignore_index=True).drop_duplicates(subset=["Employee", "Day", "Time Window"], keep='last')
+            if df is not None:
                 return df
         except:
             pass
@@ -3090,7 +3088,6 @@ default_unavail = pd.DataFrame([
     {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
     {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
     {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
-    {"Employee": "Aimi", "Day": "Wednesday", "Time Window": "All Day (Uni)"},
     {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
     {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
     {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
