@@ -3833,15 +3833,15 @@ def render_team_monthly_calendar_grid():
     sel_year = int(parts[1])
     sel_month = month_names.index(sel_month_name) + 1
     
-    # Render 7 day headers (Sun to Sat)
-    days_hdr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    # Render 7 day headers (Mon to Sun - matching Monday-Sunday bakery roster week format)
+    days_hdr = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     cols_hdr = st.columns(7)
     for i, h in enumerate(days_hdr):
         with cols_hdr[i]:
             st.markdown(f'<div style="text-align: center; font-weight: 800; color: #e5a93c; background: #0c2b25; padding: 8px; border-radius: 8px; font-size: 0.95rem;">{h}</div>', unsafe_allow_html=True)
             
-    # Set calendar to Sunday-first (firstweekday=6)
-    cal = calendar.Calendar(firstweekday=6)
+    # Set calendar to Monday-first (firstweekday=0)
+    cal = calendar.Calendar(firstweekday=0)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
     # Always load fresh data from disk so calendar grid & breakdown table are 100% in sync with file
