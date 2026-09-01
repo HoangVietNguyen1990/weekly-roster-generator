@@ -799,14 +799,6 @@ DEFAULT_PROFILES = {
   "shaelyn": {
     "username": "shaelyn", "password": "TempPass123!", "role": "Employee", "employee_name": "Shaelyn",
     "profile": { "full_name": "Shaelyn", "dob": "01/08/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "01/08/2026", "employment_level": "Service Staff" }
-  },
-  "demo.employee": {
-    "username": "demo.employee", "password": "DemoPass123!", "role": "Employee", "employee_name": "Demo Employee (Test Account)",
-    "profile": { "full_name": "Demo Employee", "address": "123 Test Street", "home_phone": "0390000000", "mobile": "0400000000", "email": "demo.employee@example.com", "dob": "2005-05-15", "gender": "Female", "tfn": "123456789", "store": "Brumby's Pakenham", "classification": "Casual", "commencement_date": "2024-01-01", "employment_level": "Junior Team Member", "super_fund": "AustralianSuper", "super_policy": "AS123456", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "ANZ Bank", "bank_branch": "Pakenham", "bank_bsb": "013000", "bank_account": "12345678", "account_name": "Demo Employee" }
-  },
-  "demo.manager": {
-    "username": "demo.manager", "password": "DemoPass123!", "role": "Manager", "employee_name": "Demo Manager (Test Account)",
-    "profile": { "full_name": "Demo Manager", "address": "456 Test Ave", "home_phone": "0391111111", "mobile": "0411111111", "email": "demo.manager@example.com", "dob": "1990-08-20", "gender": "Male", "tfn": "987654321", "store": "Brumby's Pakenham", "classification": "Full-Time", "commencement_date": "2023-01-01", "employment_level": "Bakery Manager", "super_fund": "Hostplus", "super_policy": "HP987654", "super_address": "", "super_contact": "", "super_abn": "", "bank_name": "Commonwealth Bank", "bank_branch": "Pakenham", "bank_bsb": "063000", "bank_account": "87654321", "account_name": "Demo Manager" }
   }
 }
 
@@ -821,14 +813,13 @@ def load_user_profiles():
             
     if not profiles or "admin" not in profiles:
         profiles = copy.deepcopy(DEFAULT_PROFILES)
-        if not st.session_state.get("is_demo", False):
-            try:
-                with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
-                    json.dump(profiles, f, indent=2)
-            except:
-                pass
+        try:
+            with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
+                json.dump(profiles, f, indent=2)
+        except:
+            pass
                 
-    # Always ensure default demo accounts exist
+    # Always ensure default accounts exist
     for d_key, d_val in DEFAULT_PROFILES.items():
         if d_key not in profiles:
             profiles[d_key] = copy.deepcopy(d_val)
@@ -836,17 +827,9 @@ def load_user_profiles():
     return profiles
 
 def get_active_user_profiles():
-    if st.session_state.get("is_demo", False) or (st.session_state.get("logged_in_user") or "").startswith("demo."):
-        if "demo_user_profiles" not in st.session_state:
-            st.session_state.demo_user_profiles = copy.deepcopy(load_user_profiles())
-        return st.session_state.demo_user_profiles
     return load_user_profiles()
 
 def save_user_profiles(profiles):
-    if st.session_state.get("is_demo", False) or (st.session_state.get("logged_in_user") or "").startswith("demo."):
-        st.session_state.demo_user_profiles = copy.deepcopy(profiles)
-        st.toast("🧪 Sandbox Mode: Account profile updates held in memory only.", icon="🧪")
-        return
     try:
         with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
             json.dump(profiles, f, indent=2)
@@ -866,15 +849,6 @@ def load_smtp_config():
         "sender_name": "Bakery Manager",
         "notification_recipients": "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
     }
-
-    # SANITIZE & REDACT credentials if running in DEMO mode
-    if st.session_state.get("is_demo", False):
-        demo_config = default_config.copy()
-        demo_config["sender_email"] = "Brumby.pakenham@gmail.com"
-        demo_config["sender_password"] = "abcd efgh ijkl mnop"
-        demo_config["sender_name"] = "Demo Bakery Manager"
-        demo_config["notification_recipients"] = "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"
-        return demo_config
 
     cfg = default_config.copy()
     if os.path.exists(SMTP_CONFIG_FILE):
@@ -973,9 +947,6 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, portal_url="", sender_name=""):
-    if st.session_state.get("is_demo", False):
-        return True, f"🧪 Sandbox Mode: Welcome email previewed for {recipient_email} (live credentials protected)."
-
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
     smtp_port = int(cfg.get("smtp_port", 587))
@@ -1016,9 +987,6 @@ def send_welcome_email_smtp(recipient_email, emp_name, username, temp_password, 
         return False, f"SMTP Error: {e}"
 
 def send_test_email_smtp(recipient_email):
-    if st.session_state.get("is_demo", False):
-        return True, "🧪 Sandbox Mode: Test email simulated successfully (live credentials protected)."
-
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
     smtp_port = int(cfg.get("smtp_port", 587))
@@ -1052,8 +1020,6 @@ def send_test_email_smtp(recipient_email):
         return False, f"❌ Connection Error: {e}"
 
 def send_availability_notification_email_smtp(emp_name, action_type, details_str):
-    if st.session_state.get("is_demo", False):
-        return True, "🧪 Sandbox Mode: Notification simulated successfully (live credentials protected)."
 
     cfg = load_smtp_config()
     smtp_server = cfg.get("smtp_server", "smtp.gmail.com")
@@ -1250,9 +1216,6 @@ def clear_unavailability_widget_cache():
             del st.session_state[k]
 
 def save_persisted_df(df, filename):
-    if st.session_state.get("is_demo", False):
-        st.toast("🧪 Sandbox Mode: Database updates held in memory only.", icon="🧪")
-        return
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
@@ -1497,10 +1460,6 @@ def save_finalized_roster(df, start_date):
     
     excel_bytes = build_roster_excel_bytes(df, start_date)
     
-    if st.session_state.get("is_demo", False):
-        st.toast("🧪 Sandbox Mode: Finalized roster saved in session memory only.", icon="🧪")
-        return date_str, xlsx_filename, excel_bytes
-        
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
     
@@ -1839,9 +1798,6 @@ def load_finalized_roster(csv_filename):
     return None
 
 def delete_finalized_roster(date_str):
-    if st.session_state.get("is_demo", False):
-        st.toast("🧪 Sandbox Mode: Deletion previewed, disk files preserved.", icon="🧪")
-        return True
     if not os.path.exists(FINALIZED_DIR):
         return False
     deleted = False
@@ -2411,7 +2367,7 @@ if not st.session_state.authenticated:
                     st.session_state.authenticated = True
                     st.session_state.logged_in_user = login_user_clean
                     st.session_state.user_role = account.get("role", "Employee")
-                    st.session_state.is_demo = account.get("is_demo", False) or "demo." in login_user_clean
+                    st.session_state.is_demo = False
                     st.success(f"Welcome back, {account.get('employee_name', login_user_clean)}!")
                     st.rerun()
                 else:
@@ -2435,43 +2391,12 @@ if not st.session_state.authenticated:
             st.session_state.is_demo = False
             st.rerun()
 
-        # Quick One-Click Demo Mode Login Buttons
-        st.markdown("<br><hr style='border-color: rgba(229, 169, 60, 0.3);'>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="text-align: center; margin-bottom: 12px;">
-            <span style="color: #e5a93c; font-weight: 800; font-size: 0.95rem;">🧪 ONE-CLICK DEMO / QUICK TEST MODE</span><br>
-            <span style="color: #c8e6e0; font-size: 0.85rem;">Test all portal features safely without database side-effects:</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col_demo1, col_demo2 = st.columns(2)
-        with col_demo1:
-            if st.button("👤 Demo Employee Mode", use_container_width=True, key="btn_demo_emp"):
-                st.session_state.authenticated = True
-                st.session_state.logged_in_user = "demo.employee"
-                st.session_state.user_role = "Employee"
-                st.session_state.is_demo = True
-                st.success("🧪 Logging in as Demo Employee (Sandbox Mode)...")
-                st.rerun()
-                
-        with col_demo2:
-            if st.button("👑 Demo Manager Mode", use_container_width=True, key="btn_demo_mgr"):
-                st.session_state.authenticated = True
-                st.session_state.logged_in_user = "demo.manager"
-                st.session_state.user_role = "Manager"
-                st.session_state.is_demo = True
-                st.success("🧪 Logging in as Demo Manager (Sandbox Mode)...")
-                st.rerun()
-
         st.markdown("""
         </div>
         """, unsafe_allow_html=True)
     st.stop()
 
 # --- SIDEBAR CONFIGURATION (AUTHENTICATED) ---
-if st.session_state.is_demo:
-    st.sidebar.warning("⚠️ **SANDBOX TEST MODE**\nChanges made here will not be permanently saved.")
-
 st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
 st.sidebar.title("🍞 Bakery Portal Controls")
 
@@ -2614,14 +2539,6 @@ if not st.session_state.get("is_kiosk_mode", False):
         st.session_state.user_role = "Kiosk"
         st.session_state.is_kiosk_mode = True
         st.rerun()
-
-if st.session_state.get("is_demo", False):
-    st.markdown("""
-    <div style="background: rgba(229, 169, 60, 0.2); border: 2px solid #e5a93c; padding: 12px 18px; border-radius: 14px; margin-bottom: 20px;">
-        <span style="color: #f7d594; font-weight: 800; font-size: 1.05rem;">🧪 DEMO & SANDBOX TEST MODE ACTIVE</span>
-        <span style="color: #ffffff; margin-left: 10px; font-size: 0.95rem;">You are using a test demo account. All features, forms, calculations, and tables are fully interactive, but permanent updates to database files are safely disabled.</span>
-    </div>
-    """, unsafe_allow_html=True)
 
 col_head1, col_head2 = st.columns([3.5, 1])
 with col_head1:
