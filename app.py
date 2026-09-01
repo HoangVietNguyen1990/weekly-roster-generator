@@ -2610,7 +2610,30 @@ if not is_owner_or_mgr:
     </style>
     """, unsafe_allow_html=True)
 else:
-    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY
+    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - ENSURE TOGGLE ARROW (>) IS BRIGHT GOLD & HIGHLY VISIBLE
+    st.markdown("""
+    <style>
+        /* MANAGER SIDEBAR TOGGLE ARROW BUTTON (>) STYLING */
+        button[data-testid="stSidebarCollapseButton"],
+        button[data-testid="collapsedControl"],
+        div[data-testid="collapsedControl"],
+        div[data-testid="collapsedControl"] button,
+        header[data-testid="stHeader"] button,
+        [data-testid="stHeader"] svg,
+        button[kind="header"] {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: #081d19 !important;
+            fill: #081d19 !important;
+            background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+            border: 2px solid #ffe8be !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 10px rgba(229, 169, 60, 0.4) !important;
+            z-index: 999999 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
     st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
     st.sidebar.title("🍞 Bakery Portal Controls")
 
