@@ -937,7 +937,7 @@ DEFAULT_PROFILES = {
     "profile": { "full_name": "Jack", "dob": "28/04/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "27/07/2026", "employment_level": "Service Staff" }
   },
   "jane": {
-    "username": "jane", "password": "TempPass123!", "role": "Employee", "employee_name": "Jane",
+    "username": "jane", "password": "TempPass123!", "role": "Manager", "employee_name": "Jane",
     "profile": { "full_name": "Jane", "store": "Brumby's Pakenham", "classification": "owner", "employment_level": "Service Staff" }
   },
   "amy": {
@@ -945,7 +945,7 @@ DEFAULT_PROFILES = {
     "profile": { "full_name": "Amy", "dob": "27/02/2010", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "25/05/2026", "employment_level": "Service Staff" }
   },
   "viet": {
-    "username": "viet", "password": "TempPass123!", "role": "Employee", "employee_name": "Viet",
+    "username": "viet", "password": "TempPass123!", "role": "Manager", "employee_name": "Viet",
     "profile": { "full_name": "Viet", "store": "Brumby's Pakenham", "classification": "owner", "employment_level": "baker" }
   },
   "esther.amataiti": {
@@ -2580,7 +2580,17 @@ st.sidebar.title("🍞 Bakery Portal Controls")
 curr_user_key = st.session_state.logged_in_user
 curr_user_info = user_profiles.get(curr_user_key, {})
 display_name = "🏪 Store Timeclock Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("employee_name", curr_user_key)
-role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("role", "Employee")
+
+is_owner_or_mgr = (
+    curr_user_info.get("role") == "Manager" or 
+    curr_user_info.get("profile", {}).get("classification", "").lower() == "owner" or 
+    curr_user_key in ["admin", "viet", "jane"]
+)
+
+if is_owner_or_mgr and not st.session_state.get("is_kiosk_mode", False):
+    st.session_state.user_role = "Manager"
+
+role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else ("Manager" if is_owner_or_mgr else curr_user_info.get("role", "Employee"))
 
 st.sidebar.markdown(f"""
 <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
@@ -3464,7 +3474,7 @@ def render_store_kiosk_timeclock():
 
 # --- ROLE-BASED TAB NAVIGATION ---
 is_kiosk = (st.session_state.user_role == "Kiosk" or st.session_state.get("is_kiosk_mode", False))
-is_manager = (st.session_state.user_role == "Manager")
+is_manager = (st.session_state.user_role == "Manager" or role_title == "Manager" or is_owner_or_mgr)
 
 if is_kiosk:
     render_store_kiosk_timeclock()
