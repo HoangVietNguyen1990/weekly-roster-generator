@@ -186,15 +186,12 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* HIDE STREAMLIT TOP HEADER BAR COMPLETELY WHILE ALLOWING FIXED TOGGLE BUTTON */
+    /* STREAMLIT HEADER CLEANUP - HIDE DECORATION & FOOTER WITHOUT HIDING SIDEBAR TOGGLE */
     header[data-testid="stHeader"],
     [data-testid="stHeader"],
     .stAppHeader {
         background: transparent !important;
         box-shadow: none !important;
-        height: 0px !important;
-        min-height: 0px !important;
-        pointer-events: none !important;
     }
     #MainMenu,
     footer,
@@ -2615,12 +2612,17 @@ else:
     # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - POSITION TOGGLE ARROW (>) AT VERTICAL MIDDLE OF LEFT SIDE
     st.markdown("""
     <style>
-        /* POSITION MANAGER SIDEBAR TOGGLE ARROW (>) AT THE VERTICAL MIDDLE OF LEFT SCREEN EDGE */
-        button[data-testid="stSidebarCollapseButton"],
+        /* COMPREHENSIVE MANAGER SIDEBAR TOGGLE ARROW (>) TARGETING AT VERTICAL MIDDLE OF LEFT EDGE */
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapseButton"],
         button[data-testid="collapsedControl"],
+        button[data-testid="stSidebarCollapseButton"],
         div[data-testid="collapsedControl"],
         div[data-testid="collapsedControl"] button,
-        header[data-testid="stHeader"] button,
+        button[aria-label="Expand sidebar"],
+        button[aria-label="Collapse sidebar"],
+        button[aria-label="Open sidebar"],
+        button[aria-label="Close sidebar"],
         button[kind="header"] {
             position: fixed !important;
             top: 50% !important;
@@ -2635,13 +2637,14 @@ else:
             background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
             border: 2px solid #ffe8be !important;
             border-left: none !important;
-            border-radius: 0px 12px 12px 0px !important;
-            padding: 14px 10px !important;
-            box-shadow: 4px 0 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
-            z-index: 999999 !important;
+            border-radius: 0px 14px 14px 0px !important;
+            padding: 16px 12px !important;
+            box-shadow: 4px 0 22px rgba(0, 0, 0, 0.7), 0 0 16px rgba(229, 169, 60, 0.6) !important;
+            z-index: 9999999 !important;
             cursor: pointer !important;
         }
-        button[data-testid="stSidebarCollapseButton"] *,
+        [data-testid="collapsedControl"] *,
+        [data-testid="stSidebarCollapseButton"] *,
         button[data-testid="collapsedControl"] *,
         div[data-testid="collapsedControl"] * {
             color: #081d19 !important;
@@ -5147,6 +5150,74 @@ def render_home_dashboard():
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    # 4. Manager System & Email Settings Control Panel
+    st.markdown("<br>", unsafe_allow_html=True)
+    with st.expander("⚙️ Store System & Email Settings (SMTP, Cloud Sync & Credentials)", expanded=False):
+        c_set1, c_set2 = st.columns(2)
+        with c_set1:
+            st.markdown("#### 📧 Email Settings (SMTP & Portal Link)")
+            smtp_cfg = load_smtp_config()
+            with st.form(key="form_dash_smtp_config"):
+                cfg_url = st.text_input("Streamlit Cloud URL", value=smtp_cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app"))
+                cfg_sname = st.text_input("Sender Display Name", value=smtp_cfg.get("sender_name", "Bakery Manager"))
+                cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", "Brumby.pakenham@gmail.com"))
+                cfg_spass = st.text_input("Sender App Password", value=smtp_cfg.get("sender_password", ""), type="password")
+                cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
+                cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
+                cfg_recipients = st.text_input("Notification Emails (comma-separated)", value=smtp_cfg.get("notification_recipients", "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"))
+                
+                c_d_save, c_d_test = st.columns([1.2, 1])
+                with c_d_save:
+                    btn_save_d = st.form_submit_button("💾 Save Settings")
+                with c_d_test:
+                    btn_test_d = st.form_submit_button("🧪 Test Email")
+
+                if btn_save_d:
+                    saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
+                    new_cfg = {
+                        "portal_url": cfg_url.strip(),
+                        "sender_name": cfg_sname.strip(),
+                        "sender_email": cfg_semail.strip(),
+                        "sender_password": saved_pass,
+                        "smtp_server": cfg_host.strip(),
+                        "smtp_port": int(cfg_port),
+                        "notification_recipients": cfg_recipients.strip()
+                    }
+                    save_smtp_config(new_cfg)
+                    st.success("✅ Email settings saved successfully!")
+
+                if btn_test_d:
+                    saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
+                    new_cfg = {
+                        "portal_url": cfg_url.strip(),
+                        "sender_name": cfg_sname.strip(),
+                        "sender_email": cfg_semail.strip(),
+                        "sender_password": saved_pass,
+                        "smtp_server": cfg_host.strip(),
+                        "smtp_port": int(cfg_port),
+                        "notification_recipients": cfg_recipients.strip()
+                    }
+                    save_smtp_config(new_cfg)
+                    ok, msg = send_test_email_smtp(cfg_semail.strip())
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
+        with c_set2:
+            st.markdown("#### 🔥 Firebase Cloud Sync & Security")
+            if is_firebase_active():
+                st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
+            else:
+                st.warning("🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.")
+                
+            if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_dash"):
+                ok, msg = migrate_all_local_files_to_firebase()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
 
 if is_manager:
     # --- TAB 1: HOME / DASHBOARD ---
