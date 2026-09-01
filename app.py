@@ -2653,7 +2653,8 @@ if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.
                     save_user_profiles(user_profiles)
                     st.success("✅ Your password has been updated successfully!")
 
-if role_title == "Manager":
+# Sidebar Email Settings & Firebase Cloud Sync Expanders (Hidden in Store Kiosk Mode)
+if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk":
     with st.sidebar.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
         smtp_cfg = load_smtp_config()
         with st.form(key="form_smtp_config"):
