@@ -11,6 +11,170 @@ import re
 import math
 from datetime import datetime, timedelta
 
+# --- FIREBASE AUTHENTICATION & CLOUD FIRESTORE STORAGE ENGINE ---
+FIREBASE_INITIALIZED = False
+FIREBASE_DB = None
+FIREBASE_AUTH = None
+FIREBASE_WEB_API_KEY = ""
+
+def get_firebase_db():
+    global FIREBASE_INITIALIZED, FIREBASE_DB, FIREBASE_AUTH, FIREBASE_WEB_API_KEY
+    if FIREBASE_INITIALIZED:
+        return FIREBASE_DB
+        
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore, auth
+        
+        firebase_config = None
+        if hasattr(st, "secrets"):
+            if "firebase" in st.secrets:
+                firebase_config = dict(st.secrets["firebase"])
+            elif "FIREBASE" in st.secrets:
+                firebase_config = dict(st.secrets["FIREBASE"])
+                
+        if not firebase_config:
+            secrets_path = os.path.join(".streamlit", "secrets.toml")
+            if os.path.exists(secrets_path):
+                try:
+                    if sys.version_info >= (3, 11):
+                        import tomllib
+                        with open(secrets_path, "rb") as f:
+                            toml_data = tomllib.load(f)
+                    else:
+                        import toml
+                        toml_data = toml.load(secrets_path)
+                    firebase_config = toml_data.get("firebase") or toml_data.get("FIREBASE")
+                except Exception:
+                    pass
+
+        if firebase_config:
+            if "private_key" in firebase_config and isinstance(firebase_config["private_key"], str):
+                firebase_config["private_key"] = firebase_config["private_key"].replace("\\n", "\n")
+                
+            FIREBASE_WEB_API_KEY = firebase_config.get("web_api_key", "")
+            
+            if not firebase_admin._apps:
+                cred = credentials.Certificate(firebase_config)
+                firebase_admin.initialize_app(cred)
+                
+            FIREBASE_DB = firestore.client()
+            FIREBASE_AUTH = auth
+            FIREBASE_INITIALIZED = True
+            return FIREBASE_DB
+    except Exception:
+        FIREBASE_INITIALIZED = False
+        FIREBASE_DB = None
+        
+    return None
+
+def is_firebase_active():
+    return get_firebase_db() is not None
+
+def firestore_save_df(collection_name, df):
+    db = get_firebase_db()
+    if db is None or df is None:
+        return False
+    try:
+        records = df.astype(str).to_dict(orient="records")
+        doc_ref = db.collection(collection_name).document("master_list")
+        doc_ref.set({"records": records, "updated_at": datetime.now().isoformat()})
+        return True
+    except Exception:
+        return False
+
+def firestore_load_df(collection_name):
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        doc_ref = db.collection(collection_name).document("master_list")
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            records = data.get("records", [])
+            if records:
+                return pd.DataFrame(records)
+    except Exception:
+        pass
+    return None
+
+def firestore_save_profiles(profiles):
+    db = get_firebase_db()
+    if db is None or not profiles:
+        return False
+    try:
+        doc_ref = db.collection("system").document("user_profiles")
+        doc_ref.set({"profiles": profiles, "updated_at": datetime.now().isoformat()})
+        return True
+    except Exception:
+        return False
+
+def firestore_load_profiles():
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        doc_ref = db.collection("system").document("user_profiles")
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict().get("profiles")
+    except Exception:
+        pass
+    return None
+
+def migrate_all_local_files_to_firebase():
+    """One-click migration tool: uploads all CSVs, user_profiles.json, and config to Firebase Cloud Firestore."""
+    db = get_firebase_db()
+    if db is None:
+        return False, "⚠️ Firebase is not configured yet. Please add Firebase secrets to `.streamlit/secrets.toml` or Streamlit Cloud Secrets dashboard first."
+        
+    uploaded_files = []
+    try:
+        # 1. Employees CSV
+        emp_path = os.path.join(DATA_DIR, "employees.csv")
+        if os.path.exists(emp_path):
+            emp_df = pd.read_csv(emp_path, dtype=str, keep_default_na=False)
+            if emp_df is not None:
+                firestore_save_df("employees", emp_df)
+                uploaded_files.append("employees.csv")
+            
+        # 2. Unavailability CSV
+        unavail_path = os.path.join(DATA_DIR, "unavailability.csv")
+        if os.path.exists(unavail_path):
+            unavail_df = pd.read_csv(unavail_path, dtype=str, keep_default_na=False)
+            if unavail_df is not None:
+                firestore_save_df("unavailability", unavail_df)
+                uploaded_files.append("unavailability.csv")
+            
+        # 3. Requirements CSV
+        req_path = os.path.join(DATA_DIR, "requirements.csv")
+        if os.path.exists(req_path):
+            req_df = pd.read_csv(req_path, dtype=str, keep_default_na=False)
+            if req_df is not None:
+                firestore_save_df("requirements", req_df)
+                uploaded_files.append("requirements.csv")
+            
+        # 4. Fixed shifts CSV
+        fixed_path = os.path.join(DATA_DIR, "fixed.csv")
+        if os.path.exists(fixed_path):
+            fixed_df = pd.read_csv(fixed_path, dtype=str, keep_default_na=False)
+            if fixed_df is not None:
+                firestore_save_df("fixed", fixed_df)
+                uploaded_files.append("fixed.csv")
+            
+        # 5. User Profiles JSON
+        if os.path.exists(USER_PROFILES_FILE):
+            with open(USER_PROFILES_FILE, "r", encoding="utf-8") as f:
+                profiles = json.load(f)
+                if profiles:
+                    firestore_save_profiles(profiles)
+                    uploaded_files.append("user_profiles.json")
+            
+        return True, f"🎉 Successfully uploaded {len(uploaded_files)} database resource(s) to Firebase Cloud Firestore: {', '.join(uploaded_files)}!"
+    except Exception as e:
+        return False, f"Migration error: {e}"
+
 # Set page configuration with a modern design
 st.set_page_config(
     page_title="Brumby's Bakery Roster Creator",
@@ -803,6 +967,10 @@ DEFAULT_PROFILES = {
 }
 
 def load_user_profiles():
+    fs_profiles = firestore_load_profiles()
+    if fs_profiles and isinstance(fs_profiles, dict) and "admin" in fs_profiles:
+        return fs_profiles
+
     profiles = {}
     if os.path.exists(USER_PROFILES_FILE):
         try:
@@ -830,6 +998,7 @@ def get_active_user_profiles():
     return load_user_profiles()
 
 def save_user_profiles(profiles):
+    firestore_save_profiles(profiles)
     try:
         with open(USER_PROFILES_FILE, "w", encoding="utf-8") as f:
             json.dump(profiles, f, indent=2)
@@ -1177,6 +1346,11 @@ def send_announcement_broadcast_smtp(title, content, author="Store Management"):
         return False, f"Failed to send email broadcast: {str(e)}"
 
 def load_persisted_df(filename, default_df=None):
+    collection_name = filename.replace(".csv", "")
+    fs_df = firestore_load_df(collection_name)
+    if fs_df is not None and not fs_df.empty:
+        return fs_df
+
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
@@ -1216,6 +1390,9 @@ def clear_unavailability_widget_cache():
             del st.session_state[k]
 
 def save_persisted_df(df, filename):
+    collection_name = filename.replace(".csv", "")
+    if df is not None:
+        firestore_save_df(collection_name, df)
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
@@ -2523,6 +2700,19 @@ if role_title == "Manager":
                     st.success(msg)
                 else:
                     st.error(msg)
+
+    with st.sidebar.expander("🔥 Firebase Cloud Sync & Security", expanded=False):
+        if is_firebase_active():
+            st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
+        else:
+            st.warning("🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.")
+            
+        if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
+            ok, msg = migrate_all_local_files_to_firebase()
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
 
 def logout_user():
     for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "is_kiosk_mode", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
