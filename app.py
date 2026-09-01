@@ -18,6 +18,36 @@ FIREBASE_AUTH = None
 FIREBASE_WEB_API_KEY = ""
 FIREBASE_LAST_ERROR = ""
 
+def repair_pem_private_key(pk_str):
+    if not pk_str:
+        return ""
+    s = str(pk_str).strip().strip("'\"")
+    s = s.replace("\\n", "\n").replace("\r", "")
+    
+    if "BEGIN PRIVATE KEY" in s and "END PRIVATE KEY" in s:
+        header = "-----BEGIN PRIVATE KEY-----"
+        footer = "-----END PRIVATE KEY-----"
+        body = s.split(header)[-1].split(footer)[0].strip()
+    elif "BEGIN RSA PRIVATE KEY" in s and "END RSA PRIVATE KEY" in s:
+        header = "-----BEGIN RSA PRIVATE KEY-----"
+        footer = "-----END RSA PRIVATE KEY-----"
+        body = s.split(header)[-1].split(footer)[0].strip()
+    else:
+        header = "-----BEGIN PRIVATE KEY-----"
+        footer = "-----END PRIVATE KEY-----"
+        body = re.sub(r'-----.*?-----', '', s).strip()
+
+    body_clean = "".join(body.split())
+    if not body_clean:
+        return s
+        
+    missing_padding = len(body_clean) % 4
+    if missing_padding:
+        body_clean += '=' * (4 - missing_padding)
+        
+    lines = [body_clean[i:i+64] for i in range(0, len(body_clean), 64)]
+    return header + "\n" + "\n".join(lines) + "\n" + footer + "\n"
+
 def get_firebase_db():
     global FIREBASE_INITIALIZED, FIREBASE_DB, FIREBASE_AUTH, FIREBASE_WEB_API_KEY, FIREBASE_LAST_ERROR
     if FIREBASE_INITIALIZED:
@@ -64,10 +94,11 @@ def get_firebase_db():
         # Clean private key string with multi-candidate Certificate compatibility repair
         if not firebase_admin._apps:
             raw_pk = str(firebase_config.get("private_key", "")).strip()
+            repaired_pk = repair_pem_private_key(raw_pk)
             pk_candidates = [
+                repaired_pk,
                 raw_pk.replace("\\n", "\n"),
-                raw_pk,
-                "-----BEGIN PRIVATE KEY-----\n" + raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replace("\\n", "\n").strip() + "\n-----END PRIVATE KEY-----\n"
+                raw_pk
             ]
             
             init_success = False
