@@ -16,9 +16,10 @@ FIREBASE_INITIALIZED = False
 FIREBASE_DB = None
 FIREBASE_AUTH = None
 FIREBASE_WEB_API_KEY = ""
+FIREBASE_LAST_ERROR = ""
 
 def get_firebase_db():
-    global FIREBASE_INITIALIZED, FIREBASE_DB, FIREBASE_AUTH, FIREBASE_WEB_API_KEY
+    global FIREBASE_INITIALIZED, FIREBASE_DB, FIREBASE_AUTH, FIREBASE_WEB_API_KEY, FIREBASE_LAST_ERROR
     if FIREBASE_INITIALIZED:
         return FIREBASE_DB
         
@@ -28,10 +29,15 @@ def get_firebase_db():
         
         firebase_config = None
         if hasattr(st, "secrets"):
-            if "firebase" in st.secrets:
-                firebase_config = dict(st.secrets["firebase"])
-            elif "FIREBASE" in st.secrets:
-                firebase_config = dict(st.secrets["FIREBASE"])
+            try:
+                if "firebase" in st.secrets:
+                    firebase_config = {k: str(v) if not isinstance(v, (dict, list, bool, int, float)) else v for k, v in st.secrets["firebase"].items()}
+                elif "FIREBASE" in st.secrets:
+                    firebase_config = {k: str(v) if not isinstance(v, (dict, list, bool, int, float)) else v for k, v in st.secrets["FIREBASE"].items()}
+                elif "project_id" in st.secrets and "private_key" in st.secrets:
+                    firebase_config = {k: str(v) if not isinstance(v, (dict, list, bool, int, float)) else v for k, v in st.secrets.items()}
+            except Exception as e_sec:
+                FIREBASE_LAST_ERROR = f"Error reading st.secrets: {e_sec}"
                 
         if not firebase_config:
             secrets_path = os.path.join(".streamlit", "secrets.toml")
@@ -44,29 +50,61 @@ def get_firebase_db():
                     else:
                         import toml
                         toml_data = toml.load(secrets_path)
-                    firebase_config = toml_data.get("firebase") or toml_data.get("FIREBASE")
-                except Exception:
-                    pass
+                    raw_cfg = toml_data.get("firebase") or toml_data.get("FIREBASE") or toml_data
+                    if raw_cfg and ("project_id" in raw_cfg or "private_key" in raw_cfg):
+                        firebase_config = dict(raw_cfg)
+                except Exception as e_file:
+                    FIREBASE_LAST_ERROR = f"Error reading secrets.toml: {e_file}"
 
-        if firebase_config:
-            if "private_key" in firebase_config and isinstance(firebase_config["private_key"], str):
-                firebase_config["private_key"] = firebase_config["private_key"].replace("\\n", "\n")
-                
-            FIREBASE_WEB_API_KEY = firebase_config.get("web_api_key", "")
+        if not firebase_config:
+            if not FIREBASE_LAST_ERROR:
+                FIREBASE_LAST_ERROR = "No [firebase] section or project_id found in st.secrets or .streamlit/secrets.toml."
+            return None
+
+        # Clean private key string with multi-candidate Certificate compatibility repair
+        if not firebase_admin._apps:
+            raw_pk = str(firebase_config.get("private_key", "")).strip()
+            pk_candidates = [
+                raw_pk.replace("\\n", "\n"),
+                raw_pk,
+                "-----BEGIN PRIVATE KEY-----\n" + raw_pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "").replace("\\n", "\n").strip() + "\n-----END PRIVATE KEY-----\n"
+            ]
             
-            if not firebase_admin._apps:
-                cred = credentials.Certificate(firebase_config)
-                firebase_admin.initialize_app(cred)
-                
-            FIREBASE_DB = firestore.client()
-            FIREBASE_AUTH = auth
-            FIREBASE_INITIALIZED = True
-            return FIREBASE_DB
-    except Exception:
+            init_success = False
+            last_cert_err = ""
+            for cand in pk_candidates:
+                if not cand:
+                    continue
+                try:
+                    test_cfg = copy.deepcopy(firebase_config)
+                    test_cfg["private_key"] = cand
+                    cred = credentials.Certificate(test_cfg)
+                    firebase_admin.initialize_app(cred)
+                    init_success = True
+                    break
+                except Exception as ex_cert:
+                    last_cert_err = str(ex_cert)
+                    
+            if not init_success and not firebase_admin._apps:
+                FIREBASE_LAST_ERROR = f"Firebase Certificate init failed: {last_cert_err}"
+                return None
+            
+        FIREBASE_WEB_API_KEY = str(firebase_config.get("web_api_key", ""))
+        FIREBASE_DB = firestore.client()
+        FIREBASE_AUTH = auth
+        FIREBASE_INITIALIZED = True
+        FIREBASE_LAST_ERROR = ""
+        return FIREBASE_DB
+    except Exception as e:
         FIREBASE_INITIALIZED = False
         FIREBASE_DB = None
+        FIREBASE_LAST_ERROR = str(e)
         
     return None
+
+def get_firebase_error():
+    global FIREBASE_LAST_ERROR
+    return FIREBASE_LAST_ERROR
 
 def is_firebase_active():
     return get_firebase_db() is not None
@@ -127,7 +165,8 @@ def migrate_all_local_files_to_firebase():
     """One-click migration tool: uploads all CSVs, user_profiles.json, and config to Firebase Cloud Firestore."""
     db = get_firebase_db()
     if db is None:
-        return False, "⚠️ Firebase is not configured yet. Please add Firebase secrets to `.streamlit/secrets.toml` or Streamlit Cloud Secrets dashboard first."
+        err = get_firebase_error()
+        return False, f"⚠️ Firebase is not connected yet. Details: {err}"
         
     uploaded_files = []
     try:
@@ -2746,7 +2785,7 @@ else:
         if is_firebase_active():
             st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
         else:
-            st.warning("🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.")
+            st.warning(f"🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.\n\n`Status: {get_firebase_error()}`")
             
         if st.sidebar.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
             ok, msg = migrate_all_local_files_to_firebase()
@@ -5210,7 +5249,50 @@ def render_home_dashboard():
             if is_firebase_active():
                 st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
             else:
-                st.warning("🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.")
+                st.warning("🟡 **Local Backup Mode Active**\nYour local PC app has `.streamlit/secrets.toml`. To enable Firebase on Streamlit Cloud (`weekly-roster-generator.streamlit.app`), copy the secrets snippet below into your **Streamlit Cloud Dashboard -> Settings -> Secrets**:")
+                
+                toml_secret_snippet = '''[firebase]
+type = "service_account"
+project_id = "app-database-b486e"
+private_key_id = "6d58fb705e94a0542cfc87ad2108ed25ff60e5ed"
+private_key = """-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDrq+O6ZvgmETLA
+D+Ykb0zeSQjeaDXFsUljIWzkxH4I19rE2pnnU+56TUK39gr9Jc7cmyT7f3IkCEWK
+KlLmP6fjuuPVMgxY7rcWaq5UyDMyqYVSQV8R2ZwLqG4WqeTXtpOISOZnID+3HeJD
+moknv2T31nIopMimfT1z68qlv4GyyGPeNQ1BZbYKoORxUCtvCUQEX1bJ7iBPQyJh
+GREkQoR+8ZxjxrC1giRr/SK7zx1BKl0r5A7a0rSsNBTwTd6ZMlrFL32CUHDg9Q0S
+voBOopLtNJWA3kT+1taNguKr3+rNlAMWicsPZsJzy3+h/Eh7GlwcrS1A0gip1f8R
+zI/meqaPAgMBAAECggEAQpVp3bxB1998Cy9ywlB/0z2nN88Rgi04or1K2sd5JF53
+/K4WVXktI3i4pOjq6eLIsyNSK4wyX2PG4eZbTZomgPzIae+d9XJcYAT8BBAcBvBG
+LpsxlQV6RQDtOZH+icOXoyWVkwVVexMCXj9HCOfWSv9XeYw09HTl695ufq3AoxXX
+4gyEV3i2ouSPEnDmJ9kP2oN/5C4b7wL0rKJJuuatZ89X7G9bzLMzmcnItwD/WeLX
+r77pT29XcFtGwAto3NaWmt2iMJp/StEobaOAtvAMi4f9ghxrL1k25COAWiDv/k07
+3+p7x75ZKPB7X8RMOGJ8z6GBOqCHOchIGBQQQKBgQD+B33apA/sBxrO/nIQ
+tR+DEMiSG3l6OnG8z3iDl49zpWYKPkbaNrdeYmeE0ZqDIApzguD6IzYpmzbvYM/U
+XXy921+yeOw+Syj1PQx3MbkIpF10AOFqGR+6ykla2VBkZTsouzsBnUKKY+jdzlIV
+7peIsl9ExMXK1rSi1s6vCveNxwKBgQDtf/BZN3ORjeeAXT6LpUuzTCOJrVJqD77R
+sWK/B6IxqmqO8SMJCrlLI6smjxjOoLwfmcSEnn6jvGRpJptkwv1LQ+XYOSoFDVtz
+RKKg8VKRlySKmldCJvfIWJ8r8NlhlgLFRSdcFHuyWRWeHjfwyJapzDcAJxPK3z+j
+1KVV5cBA+QKBgQDFeQlq59LAxp0egEonlsVSW7+vZNBAJiK4hgfHNBB98/uoxtTJ
+WXOeWZzjcRVODaBSP1Go4ap/GXvRBk9JZQtNg7WWxc3Qdxj122lPV0Xh4/QJ841H
+rxQtXoc7qmeGQ/ODLFkoXhmV/yjNFFBXYExIJXFNwjGIBvQRCi9Nf5cFjQKBgFfF
+XHHcSF2Wb+PEkgTRxbQxg0CySS7hOsgMIk4u6AYq0M6a1zPUPr5CJFJPt/9E78FN
+9o58dJjWWtVxayRF244hPaQ3HAxZ714eE2wfQ0CC9wIyH+VWuWPVPJ3kmLGz2rpE
+4FLrTvuOaKrSyCG4P9XonrrztiDXeJF3WNLx4achAoGAJwJo3TrHCMqHDHOad9tm
+zoigOAgZ8phi4vIlq7tmW+j+bVKR8Hc0W8F4lBKD5pzgFIz54qREz5nP3WSNh/78
+93MWYKpJKdJddOAbO4m73+Gaj32OEztHhQ6qcB0c0UgtfgHCShFFEqU/ea6ad5wF
+uSCRdHpr+IyEXIfp8gYqm4U=
+-----END PRIVATE KEY-----"""
+client_email = "firebase-adminsdk-fbsvc@app-database-b486e.iam.gserviceaccount.com"
+client_id = "118401674360276258498"
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40app-database-b486e.iam.gserviceaccount.com"
+universe_domain = "googleapis.com"
+'''
+                with st.expander("📋 Click here to view & copy Streamlit Cloud Secrets TOML Block"):
+                    st.code(toml_secret_snippet, language="toml")
                 
             if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_dash"):
                 ok, msg = migrate_all_local_files_to_firebase()
