@@ -186,13 +186,15 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* HIDE TOP STREAMLIT TOOLBAR & FOOTER WHILE KEEPING SIDEBAR TOGGLE ACCESSIBLE */
+    /* HIDE STREAMLIT TOP HEADER BAR COMPLETELY WHILE ALLOWING FIXED TOGGLE BUTTON */
     header[data-testid="stHeader"],
     [data-testid="stHeader"],
     .stAppHeader {
         background: transparent !important;
         box-shadow: none !important;
-        color: #ffffff !important;
+        height: 0px !important;
+        min-height: 0px !important;
+        pointer-events: none !important;
     }
     #MainMenu,
     footer,
@@ -2610,27 +2612,41 @@ if not is_owner_or_mgr:
     </style>
     """, unsafe_allow_html=True)
 else:
-    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - ENSURE TOGGLE ARROW (>) IS BRIGHT GOLD & HIGHLY VISIBLE
+    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - POSITION TOGGLE ARROW (>) AT VERTICAL MIDDLE OF LEFT SIDE
     st.markdown("""
     <style>
-        /* MANAGER SIDEBAR TOGGLE ARROW BUTTON (>) STYLING */
+        /* POSITION MANAGER SIDEBAR TOGGLE ARROW (>) AT THE VERTICAL MIDDLE OF LEFT SCREEN EDGE */
         button[data-testid="stSidebarCollapseButton"],
         button[data-testid="collapsedControl"],
         div[data-testid="collapsedControl"],
         div[data-testid="collapsedControl"] button,
         header[data-testid="stHeader"] button,
-        [data-testid="stHeader"] svg,
         button[kind="header"] {
+            position: fixed !important;
+            top: 50% !important;
+            left: 0px !important;
+            transform: translateY(-50%) !important;
             display: flex !important;
             visibility: visible !important;
             opacity: 1 !important;
+            pointer-events: auto !important;
             color: #081d19 !important;
             fill: #081d19 !important;
             background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
             border: 2px solid #ffe8be !important;
-            border-radius: 8px !important;
-            box-shadow: 0 4px 10px rgba(229, 169, 60, 0.4) !important;
+            border-left: none !important;
+            border-radius: 0px 12px 12px 0px !important;
+            padding: 14px 10px !important;
+            box-shadow: 4px 0 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
             z-index: 999999 !important;
+            cursor: pointer !important;
+        }
+        button[data-testid="stSidebarCollapseButton"] *,
+        button[data-testid="collapsedControl"] *,
+        div[data-testid="collapsedControl"] * {
+            color: #081d19 !important;
+            fill: #081d19 !important;
+            font-weight: 900 !important;
         }
     </style>
     """, unsafe_allow_html=True)
