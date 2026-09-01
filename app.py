@@ -186,10 +186,14 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* HIDE TOP STREAMLIT HEADER, TOOLBAR (Fork, GitHub, 3-Dots Menu) & FOOTER */
+    /* HIDE TOP STREAMLIT TOOLBAR & FOOTER WHILE KEEPING SIDEBAR TOGGLE ACCESSIBLE */
     header[data-testid="stHeader"],
     [data-testid="stHeader"],
-    .stAppHeader,
+    .stAppHeader {
+        background: transparent !important;
+        box-shadow: none !important;
+        color: #ffffff !important;
+    }
     #MainMenu,
     footer,
     [data-testid="stFooter"],
@@ -2573,65 +2577,51 @@ if not st.session_state.authenticated:
         """, unsafe_allow_html=True)
     st.stop()
 
-# --- SIDEBAR CONFIGURATION (AUTHENTICATED) ---
-st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
-st.sidebar.title("🍞 Bakery Portal Controls")
-
 curr_user_key = st.session_state.logged_in_user
 curr_user_info = user_profiles.get(curr_user_key, {})
 display_name = "🏪 Store Timeclock Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("employee_name", curr_user_key)
 
 is_owner_or_mgr = (
     curr_user_info.get("role") == "Manager" or 
-    curr_user_info.get("profile", {}).get("classification", "").lower() == "owner" or 
-    curr_user_key in ["admin", "viet", "jane"]
-)
+    curr_user_info.get("profile", {}).get("classification", "").lower() in ["owner", "manager", "store manager", "bakery manager"] or 
+    curr_user_key.lower() in ["admin", "viet", "jane", "manager", "bakery.manager"] or
+    st.session_state.get("user_role") == "Manager"
+) and not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk"
 
-if is_owner_or_mgr and not st.session_state.get("is_kiosk_mode", False):
+if is_owner_or_mgr:
     st.session_state.user_role = "Manager"
+    role_title = "Manager"
+else:
+    role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("role", "Employee")
 
-role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else ("Manager" if is_owner_or_mgr else curr_user_info.get("role", "Employee"))
+# --- SIDEBAR DISPLAY CONTROL: ONLY AVAILABLE FOR MANAGER ACCOUNTS ---
+if not is_owner_or_mgr:
+    # HIDE SIDEBAR COMPLETELY FOR EMPLOYEES AND KIOSK MODE
+    st.markdown("""
+    <style>
+        [data-testid="stSidebar"],
+        section[data-testid="stSidebar"],
+        button[data-testid="stSidebarCollapseButton"],
+        div[data-testid="stSidebarCollapseButton"] {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0px !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY
+    st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
+    st.sidebar.title("🍞 Bakery Portal Controls")
 
-st.sidebar.markdown(f"""
-<div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
-    <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
-    <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
-    <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
-</div>
-""", unsafe_allow_html=True)
+    st.sidebar.markdown(f"""
+    <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
+        <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
+        <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
+        <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Helper function to render Change Password form
-def render_change_password_form(user_key, is_admin=False):
-    user_data = user_profiles.get(user_key, {})
-    emp_name = user_data.get("employee_name", user_key)
-    
-    with st.expander(f"🔑 Change Password for {emp_name}", expanded=False):
-        with st.form(key=f"form_change_pw_{user_key}"):
-            if not is_admin:
-                curr_pw = st.text_input("Current Password", type="password", key=f"cp_curr_pw_{user_key}")
-            else:
-                curr_pw = None
-                
-            new_pw = st.text_input("New Password", type="password", key=f"cp_new_pw_{user_key}")
-            confirm_pw = st.text_input("Confirm New Password", type="password", key=f"cp_conf_pw_{user_key}")
-            
-            submit_pw = st.form_submit_button("🔒 Save New Password")
-            
-            if submit_pw:
-                actual_pw = user_data.get("password", "")
-                if not is_admin and curr_pw != actual_pw:
-                    st.error("❌ Incorrect current password.")
-                elif not new_pw.strip():
-                    st.error("❌ New password cannot be empty.")
-                elif new_pw != confirm_pw:
-                    st.error("❌ New passwords do not match.")
-                else:
-                    user_profiles[user_key]["password"] = new_pw.strip()
-                    save_user_profiles(user_profiles)
-                    st.success(f"✅ Password for {emp_name} updated successfully!")
-
-# Sidebar Change Password Expander (Hidden in Store Kiosk Mode)
-if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk":
     with st.sidebar.expander("🔑 Change My Password", expanded=False):
         with st.form(key=f"form_sidebar_pw_{curr_user_key}"):
             sb_curr_pw = st.text_input("Current Password", type="password", key=f"sb_cp_curr_{curr_user_key}")
@@ -2653,8 +2643,6 @@ if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.
                     save_user_profiles(user_profiles)
                     st.success("✅ Your password has been updated successfully!")
 
-# Sidebar Email Settings & Firebase Cloud Sync Expanders (Hidden in Store Kiosk Mode)
-if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk":
     with st.sidebar.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
         smtp_cfg = load_smtp_config()
         with st.form(key="form_smtp_config"):
@@ -2718,12 +2706,13 @@ if not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.
         else:
             st.warning("🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.")
             
-        if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
+        if st.sidebar.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
             ok, msg = migrate_all_local_files_to_firebase()
             if ok:
                 st.success(msg)
             else:
                 st.error(msg)
+
 
 def logout_user():
     for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "is_kiosk_mode", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
