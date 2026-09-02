@@ -3071,8 +3071,37 @@ with col_head2:
             if st.button("🚪 Logout", key="btn_logout_popover", use_container_width=True):
                 logout_user()
     else:
-        if st.button("🚪 Logout", key="btn_logout_header", use_container_width=True):
-            logout_user()
+        with st.popover("🔑 Account & Password", use_container_width=True):
+            st.markdown(f"""
+            <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
+                <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
+                <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
+                <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.expander("🔑 Change My Password", expanded=True):
+                with st.form(key=f"form_emp_pop_pw_{curr_user_key}"):
+                    emp_curr_pw = st.text_input("Current Password", type="password", key=f"emp_cp_curr_{curr_user_key}")
+                    emp_new_pw = st.text_input("New Password", type="password", key=f"emp_cp_new_{curr_user_key}")
+                    emp_conf_pw = st.text_input("Confirm New Password", type="password", key=f"emp_cp_conf_{curr_user_key}")
+                    emp_submit_pw = st.form_submit_button("🔒 Update Password")
+                    if emp_submit_pw:
+                        actual_pw = curr_user_info.get("password", "")
+                        if emp_curr_pw != actual_pw:
+                            st.error("❌ Incorrect current password.")
+                        elif not emp_new_pw.strip():
+                            st.error("❌ New password cannot be empty.")
+                        elif emp_new_pw != emp_conf_pw:
+                            st.error("❌ New passwords do not match.")
+                        else:
+                            user_profiles[curr_user_key]["password"] = emp_new_pw.strip()
+                            save_user_profiles(user_profiles)
+                            st.success("✅ Your password has been updated successfully!")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚪 Logout", key="btn_logout_emp_popover", use_container_width=True):
+                logout_user()
 
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
@@ -4005,6 +4034,25 @@ def render_confidential_profile_form(user_key, is_admin=False):
     </div>
     """, unsafe_allow_html=True)
     
+    with st.expander("🔑 Change My Account Login Password", expanded=False):
+        with st.form(key=f"form_profile_pw_{user_key}"):
+            p_curr_pw = st.text_input("Current Password", type="password", key=f"prof_cp_curr_{user_key}")
+            p_new_pw = st.text_input("New Password", type="password", key=f"prof_cp_new_{user_key}")
+            p_conf_pw = st.text_input("Confirm New Password", type="password", key=f"prof_cp_conf_{user_key}")
+            p_submit_pw = st.form_submit_button("🔒 Update Password")
+            if p_submit_pw:
+                actual_pw = user_data.get("password", "")
+                if p_curr_pw != actual_pw:
+                    st.error("❌ Incorrect current password.")
+                elif not p_new_pw.strip():
+                    st.error("❌ New password cannot be empty.")
+                elif p_new_pw != p_conf_pw:
+                    st.error("❌ New passwords do not match.")
+                else:
+                    user_profiles[user_key]["password"] = p_new_pw.strip()
+                    save_user_profiles(user_profiles)
+                    st.success("✅ Your password has been updated successfully!")
+
     with st.form(key=f"form_profile_{user_key}"):
         st.markdown("### 1. 👤 Employee Personal Details")
         c1, c2 = st.columns(2)
