@@ -426,11 +426,19 @@ st.markdown("""
         z-index: 99999 !important;
     }
     
+    /* HIDE TOP-RIGHT TOOLBAR BUTTONS (FORK, GITHUB, THREE-DOTS MENU) & FOOTER */
+    #MainMenu,
     footer,
-    [data-testid="stFooter"] {
+    [data-testid="stFooter"],
+    [data-testid="stToolbar"],
+    .stAppToolbar,
+    [data-testid="stStatusWidget"],
+    div[class*="stToolbar"],
+    div[class*="stAppToolbar"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
+        width: 0px !important;
     }
 
     /* GUARANTEE SIDEBAR TOGGLE BUTTON IS ALWAYS VISIBLE AT TOP-LEFT */
