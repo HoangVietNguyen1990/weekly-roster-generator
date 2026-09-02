@@ -169,6 +169,7 @@ def firestore_save_df(collection_name, df):
     except Exception:
         return False
 
+@st.cache_data(ttl=60, show_spinner=False)
 def firestore_load_df(collection_name):
     db = get_firebase_db()
     if db is None:
@@ -423,8 +424,15 @@ st.markdown("""
         box-shadow: none !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
-        pointer-events: none !important;
-        z-index: 99999 !important;
+    }
+    
+    /* STREAMLIT STALE ELEMENT OVERLAY CLEANUP - PREVENT GHOST/BLUR PANELS ON RERUN */
+    div[data-stale="true"],
+    .element-container[data-stale="true"],
+    [data-testid="stAppViewBlockContainer"][data-stale="true"] {
+        opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
     }
     
     /* HIDE SPECIFIC TOP-RIGHT TOOLBAR BUTTONS (FORK, GITHUB, THREE-DOTS MENU) & FOOTER */
@@ -1254,6 +1262,7 @@ DEFAULT_PROFILES = {
   }
 }
 
+@st.cache_data(ttl=60, show_spinner=False)
 def load_user_profiles():
     fs_profiles = firestore_load_profiles()
     if fs_profiles and isinstance(fs_profiles, dict) and "admin" in fs_profiles:
@@ -1292,6 +1301,10 @@ def save_user_profiles(profiles):
             json.dump(profiles, f, indent=2)
     except Exception as e:
         st.error(f"Error saving user profiles: {e}")
+    try:
+        load_user_profiles.clear()
+    except Exception:
+        pass
 
 # --- SMTP EMAIL CONFIGURATION ENGINE ---
 SMTP_CONFIG_FILE = os.path.join(DATA_DIR, "smtp_config.json")
@@ -1649,6 +1662,7 @@ def send_announcement_broadcast_smtp(title, content, author="Store Management"):
     except Exception as e:
         return False, f"Failed to send email broadcast: {str(e)}"
 
+@st.cache_data(ttl=60, show_spinner=False)
 def load_persisted_df(filename, default_df=None):
     collection_name = filename.replace(".csv", "")
     fs_df = firestore_load_df(collection_name)
@@ -1703,6 +1717,11 @@ def save_persisted_df(df, filename):
         if filename == "unavailability.csv":
             clear_unavailability_widget_cache()
     except:
+        pass
+    try:
+        load_persisted_df.clear()
+        firestore_load_df.clear()
+    except Exception:
         pass
 
 def build_roster_excel_bytes(edited_final_df, start_date):
@@ -2836,11 +2855,6 @@ if 'logged_in_user' not in st.session_state:
     st.session_state.logged_in_user = None
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
-if 'is_demo' not in st.session_state:
-    st.session_state.is_demo = False
-
-user_profiles = get_active_user_profiles()
-
 # LOGIN PAGE IF NOT AUTHENTICATED
 if not st.session_state.authenticated:
     st.markdown("""
@@ -2899,6 +2913,8 @@ if not st.session_state.authenticated:
             st.rerun()
 
     st.stop()
+
+user_profiles = get_active_user_profiles()
 
 curr_user_key = st.session_state.logged_in_user
 curr_user_key_clean = str(curr_user_key).strip().lower() if curr_user_key else ""
@@ -3543,7 +3559,6 @@ default_unavail = pd.DataFrame([
 
 if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
-    save_persisted_df(st.session_state.manual_unavailability, "unavailability.csv")
 
 if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
     default_req = pd.DataFrame([
@@ -3778,32 +3793,6 @@ def render_store_kiosk_timeclock():
             st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs)."
             st.session_state.reset_kiosk_emp = True
             st.rerun()
-
-# --- ROLE-BASED TAB NAVIGATION ---
-is_kiosk = (st.session_state.user_role == "Kiosk" or st.session_state.get("is_kiosk_mode", False))
-is_manager = (st.session_state.user_role == "Manager" or role_title == "Manager" or is_owner_or_mgr)
-
-if is_kiosk:
-    render_store_kiosk_timeclock()
-    st.stop()
-elif is_manager:
-    tab_dash, tab_roster, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
-        "🏠 Home / Dashboard",
-        "📅 Roster Inside",
-        "⚡ Weekly Roster Generator",
-        "👥 Staff Members", 
-        "🚫 Unavailability", 
-        "📋 Daily Requirements", 
-        "📌 Fixed Shifts",
-        "⏱️ Shift Timesheet Audit & Live Attendance"
-    ])
-else:
-    # Employee sees 3 tabs: Current Roster (1st), Personal Information (2nd), Availability (3rd)
-    tab_my_current_roster, tab_my_info, tab_my_avail = st.tabs([
-        "📅 Current Roster",
-        "📋 Personal Information Form",
-        "📅 My Availability & Constraints"
-    ])
 
 def render_employee_current_roster_tab(user_key):
     user_info = user_profiles.get(user_key, {})
@@ -5426,8 +5415,31 @@ def render_home_dashboard():
         </div>
         """, unsafe_allow_html=True)
 
-    # 4. Manager System & Email Settings Control Panel
+# --- ROLE-BASED TAB NAVIGATION ---
+is_kiosk = (st.session_state.user_role == "Kiosk" or st.session_state.get("is_kiosk_mode", False))
+is_manager = (st.session_state.user_role == "Manager" or role_title == "Manager" or is_owner_or_mgr)
 
+if is_kiosk:
+    render_store_kiosk_timeclock()
+    st.stop()
+elif is_manager:
+    tab_dash, tab_roster, tab_gen, tab_emp, tab_unavail, tab_req, tab_fixed, tab_timesheets = st.tabs([
+        "🏠 Home / Dashboard",
+        "📅 Roster Inside",
+        "⚡ Weekly Roster Generator",
+        "👥 Staff Members", 
+        "🚫 Unavailability", 
+        "📋 Daily Requirements", 
+        "📌 Fixed Shifts",
+        "⏱️ Shift Timesheet Audit & Live Attendance"
+    ])
+else:
+    # Employee sees 3 tabs: Current Roster (1st), Personal Information (2nd), Availability (3rd)
+    tab_my_current_roster, tab_my_info, tab_my_avail = st.tabs([
+        "📅 Current Roster",
+        "📋 Personal Information Form",
+        "📅 My Availability & Constraints"
+    ])
 
 if is_manager:
     # --- TAB 1: HOME / DASHBOARD ---
