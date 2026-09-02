@@ -435,21 +435,34 @@ st.markdown("""
         transition: none !important;
     }
     
-    /* HIDE SPECIFIC TOP-RIGHT TOOLBAR BUTTONS (FORK, GITHUB, THREE-DOTS MENU) & FOOTER */
+    /* HIDE TOP-RIGHT TOOLBAR BUTTONS (SHARE, STAR, EDIT, GITHUB, FORK, THREE-DOTS MENU) & FOOTER */
     #MainMenu,
     footer,
     [data-testid="stFooter"],
     [data-testid="stStatusWidget"],
-    header[data-testid="stHeader"] a[href*="github"],
-    header[data-testid="stHeader"] button[title*="Fork"],
-    header[data-testid="stHeader"] button[aria-label*="Fork"],
+    [data-testid="stToolbar"],
+    [data-testid="stHeader"] button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
+    [data-testid="stHeader"] a,
+    [data-testid="stHeader"] div[class*="stActionButton"],
+    header[data-testid="stHeader"] button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
+    header[data-testid="stHeader"] a,
     header[data-testid="stHeader"] div[class*="stActionButton"],
-    .stAppHeader a[href*="github"],
-    .stAppHeader button[title*="Fork"] {
+    .stAppHeader button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
+    .stAppHeader a,
+    .stAppHeader div[class*="stActionButton"],
+    button[title*="Fork"],
+    button[aria-label*="Fork"],
+    button[title*="Share"],
+    button[aria-label*="Share"],
+    button[title*="Star"],
+    button[aria-label*="Star"],
+    button[title*="Edit"],
+    button[aria-label*="Edit"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
         width: 0px !important;
+        pointer-events: none !important;
     }
 
     /* CUSTOM FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) */
@@ -954,6 +967,19 @@ st.markdown("""
 
     /* RESPONSIVE MOBILE OPTIMIZATION (@media max-width 768px) */
     @media screen and (max-width: 768px) {
+        /* HIDE ALL TOP-RIGHT TOOLBAR BUTTONS & CONTAINERS ON MOBILE DEVICES */
+        [data-testid="stToolbar"],
+        [data-testid="stHeader"] > div:last-child,
+        header[data-testid="stHeader"] > div:last-child,
+        .stAppHeader > div:last-child,
+        div[class*="stAppHeader"] > div:last-child {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0px !important;
+            width: 0px !important;
+            pointer-events: none !important;
+        }
+
         .header-style {
             font-size: 1.85rem !important;
             letter-spacing: -0.5px !important;
