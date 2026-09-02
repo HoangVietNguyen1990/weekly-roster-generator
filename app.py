@@ -415,19 +415,27 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* STREAMLIT HEADER CLEANUP - KEEP HEADER TRANSPARENT WITHOUT CLIPPING SIDEBAR CONTROLS */
+    /* STREAMLIT HEADER CLEANUP - HIDE DECORATION, TOOLBAR & FOOTER WITHOUT HIDING SIDEBAR TOGGLE */
     header[data-testid="stHeader"],
-    [data-testid="stHeader"],
     .stAppHeader {
         background: transparent !important;
         box-shadow: none !important;
         z-index: 9999 !important;
     }
+    #MainMenu,
     footer,
-    [data-testid="stFooter"] {
+    [data-testid="stFooter"],
+    [data-testid="stToolbar"],
+    .stAppToolbar,
+    div[data-testid="stDecoration"],
+    [data-testid="stStatusWidget"],
+    [data-testid="stHeaderActionElements"],
+    div[class*="stToolbar"],
+    div[class*="stAppToolbar"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
+        width: 0px !important;
     }
 
     /* REDUCE TOP CONTAINER PADDING FOR CLEAN FULL-SCREEN LAYOUT */
@@ -2885,8 +2893,6 @@ else:
         [data-testid="stSidebarCollapseButton"],
         [data-testid="stSidebarToggle"],
         div[data-testid="collapsedControl"],
-        button[data-testid="stBaseButton-header"],
-        button[data-testid="stHeaderIconButton"],
         button[aria-label="Expand sidebar"],
         button[aria-label="Collapse sidebar"],
         button[aria-label="Open sidebar"],
