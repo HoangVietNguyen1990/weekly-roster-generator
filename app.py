@@ -58,7 +58,12 @@ def get_firebase_db():
         from firebase_admin import credentials, firestore, auth
         
         firebase_config = None
-        if hasattr(st, "secrets"):
+        if hasattr(st, "session_state") and "firebase_uploaded_config" in st.session_state:
+            cfg_sess = st.session_state.get("firebase_uploaded_config")
+            if cfg_sess and isinstance(cfg_sess, dict) and ("project_id" in cfg_sess or "private_key" in cfg_sess):
+                firebase_config = dict(cfg_sess)
+
+        if not firebase_config and hasattr(st, "secrets"):
             try:
                 if "firebase" in st.secrets:
                     firebase_config = {k: str(v) if not isinstance(v, (dict, list, bool, int, float)) else v for k, v in st.secrets["firebase"].items()}
@@ -5296,13 +5301,21 @@ def render_home_dashboard():
                 try:
                     json_data = json.load(up_json)
                     if json_data and "project_id" in json_data and "private_key" in json_data:
-                        # 1. Save serviceAccountKey.json in root folder
-                        with open("serviceAccountKey.json", "w", encoding="utf-8") as f_json:
-                            json.dump(json_data, f_json, indent=2)
+                        # 1. Store in session state for instant in-memory connection
+                        st.session_state["firebase_uploaded_config"] = json_data
                         
-                        # 2. Format clean private key and write .streamlit/secrets.toml
-                        pk = str(json_data.get("private_key", "")).replace("\\n", "\n")
-                        toml_content = f"""[firebase]
+                        # Reset global status so get_firebase_db re-initializes
+                        global FIREBASE_INITIALIZED, FIREBASE_DB
+                        FIREBASE_INITIALIZED = False
+                        FIREBASE_DB = None
+                        
+                        # 2. Try saving to disk (succeeds locally; safely caught if read-only cloud filesystem)
+                        try:
+                            with open("serviceAccountKey.json", "w", encoding="utf-8") as f_json:
+                                json.dump(json_data, f_json, indent=2)
+                            
+                            pk = str(json_data.get("private_key", "")).replace("\\n", "\n")
+                            toml_content = f"""[firebase]
 type = "{json_data.get('type', 'service_account')}"
 project_id = "{json_data.get('project_id', '')}"
 private_key_id = "{json_data.get('private_key_id', '')}"
@@ -5315,12 +5328,15 @@ auth_provider_x509_cert_url = "{json_data.get('auth_provider_x509_cert_url', '')
 client_x509_cert_url = "{json_data.get('client_x509_cert_url', '')}"
 universe_domain = "{json_data.get('universe_domain', 'googleapis.com')}"
 """
-                        secrets_dir = ".streamlit"
-                        os.makedirs(secrets_dir, exist_ok=True)
-                        with open(os.path.join(secrets_dir, "secrets.toml"), "w", encoding="utf-8") as f_toml:
-                            f_toml.write(toml_content)
+                            secrets_dir = ".streamlit"
+                            os.makedirs(secrets_dir, exist_ok=True)
+                            with open(os.path.join(secrets_dir, "secrets.toml"), "w", encoding="utf-8") as f_toml:
+                                f_toml.write(toml_content)
+                        except Exception:
+                            # Streamlit Cloud read-only filesystem: session_state handles in-memory connection
+                            pass
                             
-                        st.success("🎉 Firebase Service Account credentials updated successfully! Reloading...")
+                        st.success("🎉 Firebase Service Account credentials uploaded successfully!")
                         st.rerun()
                     else:
                         st.error("❌ The uploaded JSON file is missing required fields ('project_id' or 'private_key').")
@@ -5333,18 +5349,18 @@ universe_domain = "{json_data.get('universe_domain', 'googleapis.com')}"
                 err_detail = get_firebase_error()
                 st.warning(f"🟡 **Firebase Not Connected**\n\n{err_detail if err_detail else 'Local Backup Mode Active.'}")
                 
-                # Dynamic TOML generator if secrets file or JSON exists
-                current_cfg = None
-                if os.path.exists("serviceAccountKey.json"):
-                    try:
-                        with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
-                            current_cfg = json.load(f)
-                    except:
-                        pass
-                
-                if current_cfg and "private_key" in current_cfg:
-                    pk_dyn = str(current_cfg.get("private_key", "")).replace("\\n", "\n")
-                    toml_secret_snippet = f"""[firebase]
+            # Dynamic TOML generator if uploaded in session state, local json file, or secrets
+            current_cfg = st.session_state.get("firebase_uploaded_config")
+            if not current_cfg and os.path.exists("serviceAccountKey.json"):
+                try:
+                    with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
+                        current_cfg = json.load(f)
+                except:
+                    pass
+            
+            if current_cfg and "private_key" in current_cfg:
+                pk_dyn = str(current_cfg.get("private_key", "")).replace("\\n", "\n")
+                toml_secret_snippet = f"""[firebase]
 type = "{current_cfg.get('type', 'service_account')}"
 project_id = "{current_cfg.get('project_id', '')}"
 private_key_id = "{current_cfg.get('private_key_id', '')}"
@@ -5357,8 +5373,9 @@ auth_provider_x509_cert_url = "{current_cfg.get('auth_provider_x509_cert_url', '
 client_x509_cert_url = "{current_cfg.get('client_x509_cert_url', '')}"
 universe_domain = "{current_cfg.get('universe_domain', 'googleapis.com')}"
 """
-                    with st.expander("📋 Click here to view & copy Streamlit Cloud Secrets TOML Block"):
-                        st.code(toml_secret_snippet, language="toml")
+                with st.expander("📋 Click here to view & copy Streamlit Cloud Secrets TOML Block"):
+                    st.markdown("Copy the TOML block below into your **Streamlit Cloud Dashboard → Settings → Secrets** for permanent cloud connection:")
+                    st.code(toml_secret_snippet, language="toml")
                 
             if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_dash"):
                 ok, msg = migrate_all_local_files_to_firebase()
