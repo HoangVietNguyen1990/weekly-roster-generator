@@ -416,14 +416,21 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* STREAMLIT HEADER CLEANUP - TRANSPARENT HEADER CONTAINER */
+    /* OPTION 3: COMPLETE HEADER SUPPRESSION (100% REMOVAL OF ALL TOP-RIGHT TOOLBAR BUTTONS) */
     header[data-testid="stHeader"],
     [data-testid="stHeader"],
-    .stAppHeader {
-        background: transparent !important;
-        box-shadow: none !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+    .stAppHeader,
+    div[data-testid="stToolbar"],
+    #MainMenu,
+    footer,
+    [data-testid="stFooter"],
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
+        width: 0px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
     
     /* STREAMLIT STALE ELEMENT OVERLAY CLEANUP - PREVENT GHOST/BLUR PANELS ON RERUN */
@@ -434,36 +441,8 @@ st.markdown("""
         filter: none !important;
         transition: none !important;
     }
-    
-    /* TOP-RIGHT TOOLBAR BUTTONS MERGE INTO BACKGROUND (TRANSPARENT & INVISIBLE) */
-    #MainMenu,
-    footer,
-    [data-testid="stFooter"],
-    [data-testid="stStatusWidget"],
-    button[title*="Fork"],
-    button[aria-label*="Fork"],
-    button[title*="Share"],
-    button[aria-label*="Share"],
-    button[title*="Star"],
-    button[aria-label*="Star"],
-    button[title*="Edit"],
-    button[aria-label*="Edit"],
-    button[title*="Deploy"],
-    button[aria-label*="Deploy"],
-    a[href*="github.com"] {
-        background: transparent !important;
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        color: transparent !important;
-        fill: transparent !important;
-        opacity: 0 !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-    }
 
-    /* CUSTOM FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) - ALWAYS VISIBLE */
+    /* UNBREAKABLE FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) - ALWAYS VISIBLE */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarToggle"],
@@ -474,16 +453,10 @@ st.markdown("""
     button[aria-label="Open sidebar"],
     button[aria-label="Close sidebar"],
     button[aria-label*="sidebar"],
-    button[aria-label*="Sidebar"],
-    [data-testid="stHeader"] [data-testid="collapsedControl"],
-    [data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
-    [data-testid="stHeader"] button[aria-label*="sidebar"],
-    [data-testid="stHeader"] button[aria-label*="Sidebar"],
-    header button[aria-label*="sidebar"],
-    header button[aria-label*="Sidebar"] {
+    button[aria-label*="Sidebar"] {
         position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
+        top: 14px !important;
+        left: 14px !important;
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
