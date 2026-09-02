@@ -440,17 +440,6 @@ st.markdown("""
     footer,
     [data-testid="stFooter"],
     [data-testid="stStatusWidget"],
-    [data-testid="stToolbar"],
-    [data-testid="stToolbar"] *,
-    [data-testid="stHeader"] [data-testid="stToolbar"] button,
-    header button[title*="Fork"],
-    header button[aria-label*="Fork"],
-    header button[title*="Share"],
-    header button[aria-label*="Share"],
-    header button[title*="Star"],
-    header button[aria-label*="Star"],
-    header button[title*="Edit"],
-    header button[aria-label*="Edit"],
     button[title*="Fork"],
     button[aria-label*="Fork"],
     button[title*="Share"],
@@ -459,6 +448,8 @@ st.markdown("""
     button[aria-label*="Star"],
     button[title*="Edit"],
     button[aria-label*="Edit"],
+    button[title*="Deploy"],
+    button[aria-label*="Deploy"],
     a[href*="github.com"] {
         background: transparent !important;
         background-color: transparent !important;
@@ -477,6 +468,7 @@ st.markdown("""
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarToggle"],
     div[data-testid="collapsedControl"],
+    div[data-testid="stSidebarCollapseButton"],
     button[aria-label="Expand sidebar"],
     button[aria-label="Collapse sidebar"],
     button[aria-label="Open sidebar"],
@@ -486,32 +478,37 @@ st.markdown("""
     [data-testid="stHeader"] [data-testid="collapsedControl"],
     [data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
     [data-testid="stHeader"] button[aria-label*="sidebar"],
-    [data-testid="stHeader"] button[aria-label*="Sidebar"] {
+    [data-testid="stHeader"] button[aria-label*="Sidebar"],
+    header button[aria-label*="sidebar"],
+    header button[aria-label*="Sidebar"] {
         position: fixed !important;
-        top: 14px !important;
-        left: 14px !important;
+        top: 12px !important;
+        left: 12px !important;
         display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
         color: #081d19 !important;
         fill: #081d19 !important;
+        background-color: #e5a93c !important;
         background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
         border: 2px solid #ffe8be !important;
         border-radius: 10px !important;
         padding: 8px 12px !important;
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
-        z-index: 99999999 !important;
+        z-index: 999999999 !important;
         cursor: pointer !important;
     }
     [data-testid="collapsedControl"] *,
     [data-testid="stSidebarCollapseButton"] *,
     [data-testid="stSidebarToggle"] *,
-    button[aria-label*="sidebar"] * {
+    button[aria-label*="sidebar"] *,
+    button[aria-label*="Sidebar"] * {
         color: #081d19 !important;
         fill: #081d19 !important;
         font-weight: 900 !important;
         opacity: 1 !important;
+        visibility: visible !important;
     }
     .main .block-container,
     div[data-testid="stMainBlockContainer"],
@@ -1009,7 +1006,16 @@ st.markdown("""
             visibility: visible !important;
             opacity: 1 !important;
             pointer-events: auto !important;
-            z-index: 99999999 !important;
+            color: #081d19 !important;
+            fill: #081d19 !important;
+            background-color: #e5a93c !important;
+            background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+            border: 2px solid #ffe8be !important;
+            border-radius: 10px !important;
+            padding: 8px 12px !important;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
+            z-index: 999999999 !important;
+            cursor: pointer !important;
         }
 
         .header-style {
