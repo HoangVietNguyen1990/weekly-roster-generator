@@ -441,9 +441,42 @@ st.markdown("""
         width: 0px !important;
     }
 
-
-
-    /* REDUCE TOP CONTAINER PADDING FOR CLEAN FULL-SCREEN LAYOUT */
+    /* PROMINENT & HIGHLY LOCATABLE GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarToggle"],
+    div[data-testid="collapsedControl"],
+    button[aria-label="Expand sidebar"],
+    button[aria-label="Collapse sidebar"],
+    button[aria-label="Open sidebar"],
+    button[aria-label="Close sidebar"],
+    button[aria-label*="sidebar"],
+    button[aria-label*="Sidebar"] {
+        position: fixed !important;
+        top: 14px !important;
+        left: 14px !important;
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        color: #081d19 !important;
+        fill: #081d19 !important;
+        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+        border: 2px solid #ffe8be !important;
+        border-radius: 10px !important;
+        padding: 8px 12px !important;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
+        z-index: 9999999 !important;
+        cursor: pointer !important;
+    }
+    [data-testid="collapsedControl"] *,
+    [data-testid="stSidebarCollapseButton"] *,
+    [data-testid="stSidebarToggle"] *,
+    button[aria-label*="sidebar"] * {
+        color: #081d19 !important;
+        fill: #081d19 !important;
+        font-weight: 900 !important;
+    }
     .main .block-container,
     div[data-testid="stMainBlockContainer"],
     section.main > div {
