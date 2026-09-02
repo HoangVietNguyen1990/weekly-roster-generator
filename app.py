@@ -209,8 +209,116 @@ def firestore_load_profiles():
         pass
     return None
 
+def firestore_save_finalized_roster(date_str, df):
+    db = get_firebase_db()
+    if db is None or df is None:
+        return False
+    try:
+        records = df.astype(str).to_dict(orient="records")
+        doc_ref = db.collection("finalized_rosters").document(date_str)
+        doc_ref.set({"records": records, "date_str": date_str, "updated_at": datetime.now().isoformat()})
+        return True
+    except Exception:
+        return False
+
+def firestore_load_finalized_roster(date_str):
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        doc_ref = db.collection("finalized_rosters").document(date_str)
+        doc = doc_ref.get()
+        if doc.exists:
+            data = doc.to_dict()
+            records = data.get("records", [])
+            if records:
+                return pd.DataFrame(records)
+    except Exception:
+        pass
+    return None
+
+def firestore_delete_finalized_roster(date_str):
+    db = get_firebase_db()
+    if db is None:
+        return False
+    try:
+        db.collection("finalized_rosters").document(date_str).delete()
+        return True
+    except Exception:
+        return False
+
+def firestore_list_finalized_rosters():
+    db = get_firebase_db()
+    if db is None:
+        return []
+    try:
+        docs = db.collection("finalized_rosters").stream()
+        results = []
+        for doc in docs:
+            raw_date = doc.id
+            try:
+                dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                end_dt = dt + timedelta(days=6)
+                label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+            except:
+                dt = None
+                label = f"Roster {raw_date}"
+            results.append({"csv_filename": f"Roster_{raw_date}.csv", "date_str": raw_date, "start_date": dt, "label": label})
+        results.sort(key=lambda x: x["date_str"], reverse=True)
+        return results
+    except Exception:
+        return []
+
+def firestore_save_announcements(announcements):
+    db = get_firebase_db()
+    if db is None or not announcements:
+        return False
+    try:
+        doc_ref = db.collection("system").document("announcements")
+        doc_ref.set({"announcements": announcements, "updated_at": datetime.now().isoformat()})
+        return True
+    except Exception:
+        return False
+
+def firestore_load_announcements():
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        doc_ref = db.collection("system").document("announcements")
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict().get("announcements")
+    except Exception:
+        pass
+    return None
+
+def firestore_save_smtp_config(cfg):
+    db = get_firebase_db()
+    if db is None or not cfg:
+        return False
+    try:
+        doc_ref = db.collection("system").document("smtp_config")
+        doc_ref.set({"config": cfg, "updated_at": datetime.now().isoformat()})
+        return True
+    except Exception:
+        return False
+
+def firestore_load_smtp_config():
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        doc_ref = db.collection("system").document("smtp_config")
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict().get("config")
+    except Exception:
+        pass
+    return None
+
 def migrate_all_local_files_to_firebase():
-    """One-click migration tool: uploads all CSVs, user_profiles.json, and config to Firebase Cloud Firestore."""
+    """One-click migration tool: uploads all CSVs, user_profiles.json, timecards, announcements, SMTP config, and finalized rosters to Firebase Cloud Firestore."""
     db = get_firebase_db()
     if db is None:
         err = get_firebase_error()
@@ -257,6 +365,40 @@ def migrate_all_local_files_to_firebase():
                 if profiles:
                     firestore_save_profiles(profiles)
                     uploaded_files.append("user_profiles.json")
+                    
+        # 6. Timecards CSV
+        if os.path.exists(TIMECARDS_FILE):
+            tc_df = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False)
+            if tc_df is not None:
+                firestore_save_df("timecards", tc_df)
+                uploaded_files.append("timecards.csv")
+
+        # 7. Announcements JSON
+        if os.path.exists(ANNOUNCEMENTS_FILE):
+            with open(ANNOUNCEMENTS_FILE, "r", encoding="utf-8") as f:
+                ann = json.load(f)
+                if ann:
+                    firestore_save_announcements(ann)
+                    uploaded_files.append("announcements.json")
+
+        # 8. SMTP Config JSON
+        if os.path.exists(SMTP_CONFIG_FILE):
+            with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f:
+                sc = json.load(f)
+                if sc:
+                    firestore_save_smtp_config(sc)
+                    uploaded_files.append("smtp_config.json")
+
+        # 9. Finalized Rosters
+        if os.path.exists(FINALIZED_DIR):
+            roster_files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+            for rf in roster_files:
+                d_str = rf.replace("Roster_", "").replace(".csv", "")
+                r_df = pd.read_csv(os.path.join(FINALIZED_DIR, rf), dtype=str, keep_default_na=False)
+                if r_df is not None:
+                    firestore_save_finalized_roster(d_str, r_df)
+            if roster_files:
+                uploaded_files.append(f"{len(roster_files)} finalized roster(s)")
             
         return True, f"🎉 Successfully uploaded {len(uploaded_files)} database resource(s) to Firebase Cloud Firestore: {', '.join(uploaded_files)}!"
     except Exception as e:
@@ -912,6 +1054,10 @@ def get_week_start_date_str(dt_obj=None):
     return mon_dt.strftime("%d.%m.%Y")
 
 def load_persisted_timecards():
+    fs_df = firestore_load_df("timecards")
+    if fs_df is not None and not fs_df.empty:
+        return fs_df
+
     df_cards = pd.DataFrame()
     if os.path.exists(TIMECARDS_FILE):
         try:
@@ -946,6 +1092,11 @@ def save_timecard_records(df_cards):
     if df_cards is None or not isinstance(df_cards, pd.DataFrame):
         return
     df_cards = df_cards.copy().astype(str)
+    
+    # 1. Cloud auto-sync to Firebase Firestore
+    firestore_save_df("timecards", df_cards)
+
+    # 2. Local file write
     try:
         df_cards.to_csv(TIMECARDS_FILE, index=False)
     except:
@@ -1110,6 +1261,14 @@ def load_smtp_config():
     }
 
     cfg = default_config.copy()
+    
+    # 1. Cloud auto-sync from Firebase Firestore
+    fs_cfg = firestore_load_smtp_config()
+    if fs_cfg and isinstance(fs_cfg, dict):
+        for k, v in fs_cfg.items():
+            if v or k not in cfg:
+                cfg[k] = v
+
     if os.path.exists(SMTP_CONFIG_FILE):
         try:
             with open(SMTP_CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -1139,6 +1298,8 @@ def load_smtp_config():
     return cfg
 
 def save_smtp_config(cfg):
+    # 1. Cloud auto-sync to Firebase Firestore
+    firestore_save_smtp_config(cfg)
     try:
         # Load existing disk config to prevent erasing existing password with an empty string
         existing_cfg = {}
@@ -1330,6 +1491,10 @@ This is an automated notification sent from the Brumby's Bakery Portal to keep m
         return False, f"SMTP Notification Error: {e}"
 
 def load_announcements():
+    fs_ann = firestore_load_announcements()
+    if fs_ann and isinstance(fs_ann, list):
+        return fs_ann
+
     default_announcements = [
         {
             "id": "ANN_1001",
@@ -1351,6 +1516,8 @@ def load_announcements():
     return default_announcements
 
 def save_announcements(announcements):
+    # 1. Cloud auto-sync to Firebase Firestore
+    firestore_save_announcements(announcements)
     try:
         with open(ANNOUNCEMENTS_FILE, "w", encoding="utf-8") as f:
             json.dump(announcements, f, indent=2, ensure_ascii=False)
@@ -1727,12 +1894,18 @@ def save_finalized_roster(df, start_date):
     
     excel_bytes = build_roster_excel_bytes(df, start_date)
     
-    csv_path = os.path.join(FINALIZED_DIR, csv_filename)
-    xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
-    
-    df.astype(str).to_csv(csv_path, index=False)
-    with open(xlsx_path, "wb") as f:
-        f.write(excel_bytes)
+    # 1. Cloud auto-sync to Firebase Firestore
+    firestore_save_finalized_roster(date_str, df)
+
+    # 2. Local file write (if writable)
+    try:
+        csv_path = os.path.join(FINALIZED_DIR, csv_filename)
+        xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
+        df.astype(str).to_csv(csv_path, index=False)
+        with open(xlsx_path, "wb") as f:
+            f.write(excel_bytes)
+    except Exception:
+        pass
         
     return date_str, xlsx_filename, excel_bytes
 
@@ -1906,24 +2079,36 @@ def auto_import_reference_rosters(force_scan=False):
     return imported_count
 
 def list_finalized_rosters():
-    if not os.path.exists(FINALIZED_DIR):
-        os.makedirs(FINALIZED_DIR, exist_ok=True)
-        
-    auto_import_reference_rosters()
+    # 1. Fetch cloud rosters from Firebase Firestore
+    fs_rosters = firestore_list_finalized_rosters()
     
-    files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
-    files.sort(reverse=True)
-    results = []
-    for f in files:
-        raw_date = f.replace("Roster_", "").replace(".csv", "")
+    # 2. Fetch local disk rosters
+    local_files = []
+    if os.path.exists(FINALIZED_DIR):
         try:
-            dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
-            end_dt = dt + timedelta(days=6)
-            label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
-        except:
-            dt = None
-            label = f"Roster {raw_date}"
-        results.append({"csv_filename": f, "date_str": raw_date, "start_date": dt, "label": label})
+            auto_import_reference_rosters()
+            local_files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+        except Exception:
+            pass
+
+    merged_map = {}
+    for r in fs_rosters:
+        merged_map[r["date_str"]] = r
+        
+    for f in local_files:
+        raw_date = f.replace("Roster_", "").replace(".csv", "")
+        if raw_date not in merged_map:
+            try:
+                dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
+                end_dt = dt + timedelta(days=6)
+                label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+            except:
+                dt = None
+                label = f"Roster {raw_date}"
+            merged_map[raw_date] = {"csv_filename": f, "date_str": raw_date, "start_date": dt, "label": label}
+            
+    results = list(merged_map.values())
+    results.sort(key=lambda x: x["date_str"], reverse=True)
     return results
 
 def clean_roster_unavailability_display(df):
@@ -2055,6 +2240,11 @@ def attach_daily_gross_row(df, daily_gross_dict):
     return df_out
 
 def load_finalized_roster(csv_filename):
+    date_str = csv_filename.replace("Roster_", "").replace(".csv", "")
+    fs_df = firestore_load_finalized_roster(date_str)
+    if fs_df is not None and not fs_df.empty:
+        return clean_roster_unavailability_display(fs_df)
+
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     if os.path.exists(csv_path):
         try:
@@ -2065,8 +2255,9 @@ def load_finalized_roster(csv_filename):
     return None
 
 def delete_finalized_roster(date_str):
+    firestore_delete_finalized_roster(date_str)
     if not os.path.exists(FINALIZED_DIR):
-        return False
+        return True
     deleted = False
     date_label = date_str
     try:
@@ -2082,7 +2273,7 @@ def delete_finalized_roster(date_str):
                 deleted = True
             except:
                 pass
-    return deleted
+    return True
 
 def calculate_roster_wages(edited_df):
     if edited_df is None or edited_df.empty:
@@ -2664,15 +2855,17 @@ if not st.session_state.authenticated:
     st.stop()
 
 curr_user_key = st.session_state.logged_in_user
-curr_user_info = user_profiles.get(curr_user_key, {})
+curr_user_key_clean = str(curr_user_key).strip().lower() if curr_user_key else ""
+curr_user_info = user_profiles.get(curr_user_key, {}) if isinstance(user_profiles, dict) else {}
 display_name = "🏪 Store Timeclock Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("employee_name", curr_user_key)
 
 is_owner_or_mgr = (
     curr_user_info.get("role") == "Manager" or 
-    curr_user_info.get("profile", {}).get("classification", "").lower() in ["owner", "manager", "store manager", "bakery manager"] or 
-    curr_user_key.lower() in ["admin", "viet", "jane", "manager", "bakery.manager"] or
+    str(curr_user_info.get("profile", {}).get("classification", "")).lower() in ["owner", "manager", "store manager", "bakery manager"] or 
+    str(curr_user_info.get("profile", {}).get("employment_level", "")).lower() in ["owner", "manager", "store manager", "bakery manager"] or
+    curr_user_key_clean in ["admin", "viet", "jane", "manager", "bakery.manager", "store.manager", "owner"] or
     st.session_state.get("user_role") == "Manager"
-) and not st.session_state.get("is_kiosk_mode", False) and curr_user_key != "store.kiosk"
+) and not st.session_state.get("is_kiosk_mode", False) and curr_user_key_clean != "store.kiosk"
 
 if is_owner_or_mgr:
     st.session_state.user_role = "Manager"
@@ -2687,8 +2880,11 @@ if not is_owner_or_mgr:
     <style>
         [data-testid="stSidebar"],
         section[data-testid="stSidebar"],
-        button[data-testid="stSidebarCollapseButton"],
-        div[data-testid="stSidebarCollapseButton"] {
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarToggle"],
+        button[aria-label*="sidebar"],
+        button[aria-label*="Sidebar"] {
             display: none !important;
             visibility: hidden !important;
             width: 0px !important;
@@ -2696,25 +2892,25 @@ if not is_owner_or_mgr:
     </style>
     """, unsafe_allow_html=True)
 else:
-    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - POSITION TOGGLE ARROW (>) AT VERTICAL MIDDLE OF LEFT SIDE
+    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - ALWAYS VISIBLE & LOCATABLE AT TOP-LEFT
     st.markdown("""
     <style>
-        /* COMPREHENSIVE MANAGER SIDEBAR TOGGLE ARROW (>) TARGETING AT VERTICAL MIDDLE OF LEFT EDGE */
+        /* PROMINENT & HIGHLY LOCATABLE SIDEBAR TOGGLE BUTTON (TOP-LEFT EDGE) */
         [data-testid="collapsedControl"],
         [data-testid="stSidebarCollapseButton"],
-        button[data-testid="collapsedControl"],
-        button[data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarToggle"],
         div[data-testid="collapsedControl"],
-        div[data-testid="collapsedControl"] button,
+        button[data-testid="stBaseButton-header"],
+        button[data-testid="stHeaderIconButton"],
         button[aria-label="Expand sidebar"],
         button[aria-label="Collapse sidebar"],
         button[aria-label="Open sidebar"],
         button[aria-label="Close sidebar"],
-        button[kind="header"] {
+        button[aria-label*="sidebar"],
+        button[aria-label*="Sidebar"] {
             position: fixed !important;
-            top: 50% !important;
-            left: 0px !important;
-            transform: translateY(-50%) !important;
+            top: 14px !important;
+            left: 14px !important;
             display: flex !important;
             visibility: visible !important;
             opacity: 1 !important;
@@ -2723,20 +2919,24 @@ else:
             fill: #081d19 !important;
             background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
             border: 2px solid #ffe8be !important;
-            border-left: none !important;
-            border-radius: 0px 14px 14px 0px !important;
-            padding: 16px 12px !important;
-            box-shadow: 4px 0 22px rgba(0, 0, 0, 0.7), 0 0 16px rgba(229, 169, 60, 0.6) !important;
+            border-radius: 10px !important;
+            padding: 8px 12px !important;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
             z-index: 9999999 !important;
             cursor: pointer !important;
         }
         [data-testid="collapsedControl"] *,
         [data-testid="stSidebarCollapseButton"] *,
-        button[data-testid="collapsedControl"] *,
-        div[data-testid="collapsedControl"] * {
+        [data-testid="stSidebarToggle"] *,
+        button[aria-label*="sidebar"] * {
             color: #081d19 !important;
             fill: #081d19 !important;
             font-weight: 900 !important;
+        }
+        [data-testid="stSidebar"],
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #061916 0%, #0c2b25 100%) !important;
+            border-right: 2px solid #e5a93c !important;
         }
     </style>
     """, unsafe_allow_html=True)
