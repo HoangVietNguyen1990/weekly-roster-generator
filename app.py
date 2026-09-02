@@ -435,11 +435,22 @@ st.markdown("""
         transition: none !important;
     }
     
-    /* HIDE ONLY SPECIFIC TOP-RIGHT TOOLBAR BUTTONS (SHARE, STAR, EDIT, FORK, GITHUB, MENU) */
+    /* TOP-RIGHT TOOLBAR BUTTONS MERGE INTO BACKGROUND (TRANSPARENT & INVISIBLE) */
     #MainMenu,
     footer,
     [data-testid="stFooter"],
     [data-testid="stStatusWidget"],
+    [data-testid="stToolbar"],
+    [data-testid="stToolbar"] *,
+    [data-testid="stHeader"] [data-testid="stToolbar"] button,
+    header button[title*="Fork"],
+    header button[aria-label*="Fork"],
+    header button[title*="Share"],
+    header button[aria-label*="Share"],
+    header button[title*="Star"],
+    header button[aria-label*="Star"],
+    header button[title*="Edit"],
+    header button[aria-label*="Edit"],
     button[title*="Fork"],
     button[aria-label*="Fork"],
     button[title*="Share"],
@@ -448,16 +459,16 @@ st.markdown("""
     button[aria-label*="Star"],
     button[title*="Edit"],
     button[aria-label*="Edit"],
-    a[href*="github.com"],
-    header a[href*="github"],
-    div[data-testid="stToolbar"] button[title*="Fork"],
-    div[data-testid="stToolbar"] button[title*="Share"],
-    div[data-testid="stToolbar"] button[title*="Star"],
-    div[data-testid="stToolbar"] button[title*="Edit"] {
+    a[href*="github.com"] {
+        background: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        outline: none !important;
+        color: transparent !important;
+        fill: transparent !important;
+        opacity: 0 !important;
         visibility: hidden !important;
-        display: none !important;
-        height: 0px !important;
-        width: 0px !important;
         pointer-events: none !important;
     }
 
@@ -500,6 +511,7 @@ st.markdown("""
         color: #081d19 !important;
         fill: #081d19 !important;
         font-weight: 900 !important;
+        opacity: 1 !important;
     }
     .main .block-container,
     div[data-testid="stMainBlockContainer"],
