@@ -5298,24 +5298,27 @@ def render_home_dashboard():
             # Service Account JSON File Uploader
             up_json = st.file_uploader("🔑 Upload Firebase Service Account Key (.json)", type=["json"], key="up_firebase_service_json", help="Upload serviceAccountKey.json downloaded from Firebase Console")
             if up_json is not None:
-                try:
-                    json_data = json.load(up_json)
-                    if json_data and "project_id" in json_data and "private_key" in json_data:
-                        # 1. Store in session state for instant in-memory connection
-                        st.session_state["firebase_uploaded_config"] = json_data
-                        
-                        # Reset global status so get_firebase_db re-initializes
-                        global FIREBASE_INITIALIZED, FIREBASE_DB
-                        FIREBASE_INITIALIZED = False
-                        FIREBASE_DB = None
-                        
-                        # 2. Try saving to disk (succeeds locally; safely caught if read-only cloud filesystem)
-                        try:
-                            with open("serviceAccountKey.json", "w", encoding="utf-8") as f_json:
-                                json.dump(json_data, f_json, indent=2)
+                up_key = f"fb_up_{up_json.name}_{up_json.size}"
+                if st.session_state.get("last_fb_json_up_key") != up_key:
+                    try:
+                        json_data = json.load(up_json)
+                        if json_data and "project_id" in json_data and "private_key" in json_data:
+                            # 1. Store in session state for instant in-memory connection
+                            st.session_state["firebase_uploaded_config"] = json_data
+                            st.session_state["last_fb_json_up_key"] = up_key
                             
-                            pk = str(json_data.get("private_key", "")).replace("\\n", "\n")
-                            toml_content = f"""[firebase]
+                            # Reset global status so get_firebase_db re-initializes
+                            global FIREBASE_INITIALIZED, FIREBASE_DB
+                            FIREBASE_INITIALIZED = False
+                            FIREBASE_DB = None
+                            
+                            # 2. Try saving to disk (succeeds locally; safely caught if read-only cloud filesystem)
+                            try:
+                                with open("serviceAccountKey.json", "w", encoding="utf-8") as f_json:
+                                    json.dump(json_data, f_json, indent=2)
+                                
+                                pk = str(json_data.get("private_key", "")).replace("\\n", "\n")
+                                toml_content = f"""[firebase]
 type = "{json_data.get('type', 'service_account')}"
 project_id = "{json_data.get('project_id', '')}"
 private_key_id = "{json_data.get('private_key_id', '')}"
@@ -5328,20 +5331,20 @@ auth_provider_x509_cert_url = "{json_data.get('auth_provider_x509_cert_url', '')
 client_x509_cert_url = "{json_data.get('client_x509_cert_url', '')}"
 universe_domain = "{json_data.get('universe_domain', 'googleapis.com')}"
 """
-                            secrets_dir = ".streamlit"
-                            os.makedirs(secrets_dir, exist_ok=True)
-                            with open(os.path.join(secrets_dir, "secrets.toml"), "w", encoding="utf-8") as f_toml:
-                                f_toml.write(toml_content)
-                        except Exception:
-                            # Streamlit Cloud read-only filesystem: session_state handles in-memory connection
-                            pass
-                            
-                        st.success("🎉 Firebase Service Account credentials uploaded successfully!")
-                        st.rerun()
-                    else:
-                        st.error("❌ The uploaded JSON file is missing required fields ('project_id' or 'private_key').")
-                except Exception as ex_up:
-                    st.error(f"❌ Error reading uploaded JSON key file: {ex_up}")
+                                secrets_dir = ".streamlit"
+                                os.makedirs(secrets_dir, exist_ok=True)
+                                with open(os.path.join(secrets_dir, "secrets.toml"), "w", encoding="utf-8") as f_toml:
+                                    f_toml.write(toml_content)
+                            except Exception:
+                                # Streamlit Cloud read-only filesystem: session_state handles in-memory connection
+                                pass
+                                
+                            st.success("🎉 Firebase Service Account credentials uploaded successfully!")
+                            st.rerun()
+                        else:
+                            st.error("❌ The uploaded JSON file is missing required fields ('project_id' or 'private_key').")
+                    except Exception as ex_up:
+                        st.error(f"❌ Error reading uploaded JSON key file: {ex_up}")
 
             if is_firebase_active():
                 st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
