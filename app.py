@@ -4960,20 +4960,7 @@ def render_manager_timesheet_audit_dashboard():
         data=excel_bytes,
         file_name=f"Timesheet_Audit_Week_{sel_download_week}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="btn_download_timesheet_excel"
-    )
 
-# IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
-if not is_manager:
-    with tab_my_current_roster:
-        render_employee_current_roster_tab(st.session_state.logged_in_user)
-    with tab_my_info:
-        render_confidential_profile_form(st.session_state.logged_in_user)
-    with tab_my_avail:
-        render_employee_availability_manager(st.session_state.logged_in_user)
-
-
-# Deterministic solver
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
     # Standardize column headers to lowercase and stripped
     employees = employees_raw.copy()
@@ -6412,3 +6399,11 @@ if is_manager:
     # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
     with tab_timesheets:
         render_manager_timesheet_audit_dashboard()
+else:
+    # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
+    with tab_my_current_roster:
+        render_employee_current_roster_tab(st.session_state.logged_in_user)
+    with tab_my_info:
+        render_confidential_profile_form(st.session_state.logged_in_user)
+    with tab_my_avail:
+        render_employee_availability_manager(st.session_state.logged_in_user)
