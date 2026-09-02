@@ -2807,19 +2807,33 @@ if not st.session_state.authenticated:
         .stApp {
             background-color: #051412 !important;
         }
+        /* HIDE SIDEBAR & HEADER TOOLBAR ON LOGIN PAGE FOR CLEAN CENTERING */
+        [data-testid="stSidebar"],
+        section[data-testid="stSidebar"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarToggle"],
+        header[data-testid="stHeader"],
+        .stAppHeader {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0px !important;
+            height: 0px !important;
+        }
     </style>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 1.8, 1])
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 35px 30px; border-radius: 20px; border: 2px solid #e5a93c; box-shadow: 0 12px 36px rgba(0,0,0,0.6); margin-top: 40px;">
-            <h2 style="color: #e5a93c !important; margin-top: 0; text-align: center; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
-            <p style="color: #c8e6e0 !important; font-size: 0.95rem; text-align: center; margin-bottom: 25px;">Please log in with your username and password to access your bakery account.</p>
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 25px; border-radius: 16px; border: 2px solid #e5a93c; text-align: center; margin-top: 30px; margin-bottom: 20px;">
+            <h2 style="color: #e5a93c !important; margin: 0; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
+            <p style="color: #c8e6e0 !important; font-size: 0.95rem; margin-top: 6px; margin-bottom: 0;">Please log in with your username and password to access your account.</p>
+        </div>
         """, unsafe_allow_html=True)
         
-        login_user = st.text_input("Username", key="input_user")
-        login_pass = st.text_input("Password", type="password", key="input_pass")
+        login_user = st.text_input("👤 Username", key="input_user")
+        login_pass = st.text_input("🔑 Password", type="password", key="input_pass")
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🚀 Login to Portal", use_container_width=True, key="btn_login"):
@@ -2840,9 +2854,9 @@ if not st.session_state.authenticated:
                 st.error("🔒 Invalid username or password. Please check your credentials.")
                 
         # Store Phone Timeclock Kiosk Launcher
-        st.markdown("<hr style='border-color: rgba(229, 169, 60, 0.4); margin: 18px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color: rgba(229, 169, 60, 0.4); margin: 24px 0;'>", unsafe_allow_html=True)
         st.markdown("""
-        <div style="text-align: center; margin-bottom: 10px;">
+        <div style="text-align: center; margin-bottom: 12px;">
             <span style="color: #e5a93c; font-weight: 800; font-size: 1rem;">🏪 SHARED STORE PHONE KIOSK MODE</span><br>
             <span style="color: #c8e6e0; font-size: 0.85rem;">Set this device as the shared store terminal at Brumby's Bakery:</span>
         </div>
@@ -2855,9 +2869,6 @@ if not st.session_state.authenticated:
             st.session_state.is_demo = False
             st.rerun()
 
-        st.markdown("""
-        </div>
-        """, unsafe_allow_html=True)
     st.stop()
 
 curr_user_key = st.session_state.logged_in_user
