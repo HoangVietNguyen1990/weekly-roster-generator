@@ -435,21 +435,11 @@ st.markdown("""
         transition: none !important;
     }
     
-    /* HIDE TOP-RIGHT TOOLBAR BUTTONS (SHARE, STAR, EDIT, GITHUB, FORK, THREE-DOTS MENU) & FOOTER */
+    /* HIDE ONLY SPECIFIC TOP-RIGHT TOOLBAR BUTTONS (SHARE, STAR, EDIT, FORK, GITHUB, MENU) */
     #MainMenu,
     footer,
     [data-testid="stFooter"],
     [data-testid="stStatusWidget"],
-    [data-testid="stToolbar"],
-    [data-testid="stHeader"] button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
-    [data-testid="stHeader"] a,
-    [data-testid="stHeader"] div[class*="stActionButton"],
-    header[data-testid="stHeader"] button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
-    header[data-testid="stHeader"] a,
-    header[data-testid="stHeader"] div[class*="stActionButton"],
-    .stAppHeader button:not([aria-label*="sidebar"]):not([aria-label*="Sidebar"]),
-    .stAppHeader a,
-    .stAppHeader div[class*="stActionButton"],
     button[title*="Fork"],
     button[aria-label*="Fork"],
     button[title*="Share"],
@@ -457,7 +447,13 @@ st.markdown("""
     button[title*="Star"],
     button[aria-label*="Star"],
     button[title*="Edit"],
-    button[aria-label*="Edit"] {
+    button[aria-label*="Edit"],
+    a[href*="github.com"],
+    header a[href*="github"],
+    div[data-testid="stToolbar"] button[title*="Fork"],
+    div[data-testid="stToolbar"] button[title*="Share"],
+    div[data-testid="stToolbar"] button[title*="Star"],
+    div[data-testid="stToolbar"] button[title*="Edit"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
@@ -465,7 +461,7 @@ st.markdown("""
         pointer-events: none !important;
     }
 
-    /* CUSTOM FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) */
+    /* CUSTOM FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) - ALWAYS VISIBLE */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarToggle"],
@@ -475,7 +471,11 @@ st.markdown("""
     button[aria-label="Open sidebar"],
     button[aria-label="Close sidebar"],
     button[aria-label*="sidebar"],
-    button[aria-label*="Sidebar"] {
+    button[aria-label*="Sidebar"],
+    [data-testid="stHeader"] [data-testid="collapsedControl"],
+    [data-testid="stHeader"] [data-testid="stSidebarCollapseButton"],
+    [data-testid="stHeader"] button[aria-label*="sidebar"],
+    [data-testid="stHeader"] button[aria-label*="Sidebar"] {
         position: fixed !important;
         top: 14px !important;
         left: 14px !important;
@@ -490,7 +490,7 @@ st.markdown("""
         border-radius: 10px !important;
         padding: 8px 12px !important;
         box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
-        z-index: 9999999 !important;
+        z-index: 99999999 !important;
         cursor: pointer !important;
     }
     [data-testid="collapsedControl"] *,
@@ -967,17 +967,37 @@ st.markdown("""
 
     /* RESPONSIVE MOBILE OPTIMIZATION (@media max-width 768px) */
     @media screen and (max-width: 768px) {
-        /* HIDE ALL TOP-RIGHT TOOLBAR BUTTONS & CONTAINERS ON MOBILE DEVICES */
-        [data-testid="stToolbar"],
-        [data-testid="stHeader"] > div:last-child,
-        header[data-testid="stHeader"] > div:last-child,
-        .stAppHeader > div:last-child,
-        div[class*="stAppHeader"] > div:last-child {
+        /* HIDE ONLY TOP-RIGHT TOOLBAR BUTTONS ON MOBILE DEVICES */
+        button[title*="Fork"],
+        button[aria-label*="Fork"],
+        button[title*="Share"],
+        button[aria-label*="Share"],
+        button[title*="Star"],
+        button[aria-label*="Star"],
+        button[title*="Edit"],
+        button[aria-label*="Edit"],
+        a[href*="github.com"] {
             display: none !important;
             visibility: hidden !important;
             height: 0px !important;
             width: 0px !important;
             pointer-events: none !important;
+        }
+
+        /* FORCE TOP-LEFT SIDEBAR TOGGLE BUTTON VISIBILITY ON MOBILE */
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarToggle"],
+        button[aria-label*="sidebar"],
+        button[aria-label*="Sidebar"] {
+            position: fixed !important;
+            top: 10px !important;
+            left: 10px !important;
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            z-index: 99999999 !important;
         }
 
         .header-style {
