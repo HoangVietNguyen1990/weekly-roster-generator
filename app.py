@@ -2823,12 +2823,12 @@ if not st.session_state.authenticated:
     </style>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 1.8, 1])
+    col1, col2, col3 = st.columns([1.2, 2, 1.2])
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 25px; border-radius: 16px; border: 2px solid #e5a93c; text-align: center; margin-top: 30px; margin-bottom: 20px;">
-            <h2 style="color: #e5a93c !important; margin: 0; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
-            <p style="color: #c8e6e0 !important; font-size: 0.95rem; margin-top: 6px; margin-bottom: 0;">Please log in with your username and password to access your account.</p>
+        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 30px; border-radius: 18px; border: 2px solid #e5a93c; text-align: center; margin-top: 50px; margin-bottom: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <h2 style="color: #e5a93c !important; margin: 0; font-size: 1.9rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
+            <p style="color: #c8e6e0 !important; font-size: 0.95rem; margin-top: 8px; margin-bottom: 0;">Please log in with your username and password to access your account.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -2846,7 +2846,6 @@ if not st.session_state.authenticated:
                     st.session_state.logged_in_user = login_user_clean
                     st.session_state.user_role = account.get("role", "Employee")
                     st.session_state.is_demo = False
-                    st.success(f"Welcome back, {account.get('employee_name', login_user_clean)}!")
                     st.rerun()
                 else:
                     st.error("🔒 Invalid username or password. Please check your credentials.")
