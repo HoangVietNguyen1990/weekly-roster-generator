@@ -4960,6 +4960,8 @@ def render_manager_timesheet_audit_dashboard():
         data=excel_bytes,
         file_name=f"Timesheet_Audit_Week_{sel_download_week}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        key="btn_download_timesheet_excel"
+    )
 
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
     # Standardize column headers to lowercase and stripped
