@@ -410,7 +410,7 @@ st.set_page_config(
     page_title="Brumby's Bakery Roster Creator",
     page_icon="🥐",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
@@ -442,46 +442,30 @@ st.markdown("""
         transition: none !important;
     }
 
-    /* UNBREAKABLE FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) - ALWAYS VISIBLE */
+    /* COMPLETELY REMOVE THE LEFT SIDEBAR & TOGGLE FROM DOM (FULL SCREEN WIDTH) */
+    [data-testid="stSidebar"],
+    section[data-testid="stSidebar"],
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarToggle"],
-    div[data-testid="collapsedControl"],
-    div[data-testid="stSidebarCollapseButton"],
-    button[aria-label="Expand sidebar"],
-    button[aria-label="Collapse sidebar"],
-    button[aria-label="Open sidebar"],
-    button[aria-label="Close sidebar"],
     button[aria-label*="sidebar"],
     button[aria-label*="Sidebar"] {
-        position: fixed !important;
-        top: 14px !important;
-        left: 14px !important;
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-        color: #081d19 !important;
-        fill: #081d19 !important;
-        background-color: #e5a93c !important;
-        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
-        border: 2px solid #ffe8be !important;
-        border-radius: 10px !important;
-        padding: 8px 12px !important;
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 12px rgba(229, 169, 60, 0.5) !important;
-        z-index: 999999999 !important;
-        cursor: pointer !important;
+        display: none !important;
+        visibility: hidden !important;
+        width: 0px !important;
+        height: 0px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    [data-testid="collapsedControl"] *,
-    [data-testid="stSidebarCollapseButton"] *,
-    [data-testid="stSidebarToggle"] *,
-    button[aria-label*="sidebar"] *,
-    button[aria-label*="Sidebar"] * {
-        color: #081d19 !important;
-        fill: #081d19 !important;
-        font-weight: 900 !important;
-        opacity: 1 !important;
-        visibility: visible !important;
+
+    /* MAXIMIZE APP SCREEN WIDTH FOR ALL TABLES & ROSTERS */
+    .main .block-container,
+    div[data-testid="stMainBlockContainer"],
+    section.main > div {
+        max-width: 100% !important;
+        padding-left: 1.2rem !important;
+        padding-right: 1.2rem !important;
+        padding-top: 0.8rem !important;
     }
     .main .block-container,
     div[data-testid="stMainBlockContainer"],
@@ -2972,142 +2956,123 @@ if is_owner_or_mgr:
 else:
     role_title = "Store Kiosk" if st.session_state.get("is_kiosk_mode", False) else curr_user_info.get("role", "Employee")
 
-# --- SIDEBAR DISPLAY CONTROL: ONLY AVAILABLE FOR MANAGER ACCOUNTS ---
-if not is_owner_or_mgr:
-    # MINIMAL SIDEBAR FOR EMPLOYEES / KIOSK
-    st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=60)
-    st.sidebar.markdown(f"### 🥐 Brumby's Pakenham\n**Role:** `{role_title}`")
-else:
-    # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - HIGH CONTRAST STREAMLIT NATIVE TOGGLE
-    st.markdown("""
-    <style>
-        [data-testid="stSidebar"],
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #061916 0%, #0c2b25 100%) !important;
-            border-right: 2px solid #e5a93c !important;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-    st.sidebar.image("https://img.icons8.com/fluency/96/bakery.png", width=80)
-    st.sidebar.title("🍞 Bakery Portal Controls")
-
-    st.sidebar.markdown(f"""
-    <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
-        <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
-        <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
-        <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.sidebar.expander("🔑 Change My Password", expanded=False):
-        with st.form(key=f"form_sidebar_pw_{curr_user_key}"):
-            sb_curr_pw = st.text_input("Current Password", type="password", key=f"sb_cp_curr_{curr_user_key}")
-            sb_new_pw = st.text_input("New Password", type="password", key=f"sb_cp_new_{curr_user_key}")
-            sb_conf_pw = st.text_input("Confirm New Password", type="password", key=f"sb_cp_conf_{curr_user_key}")
-            
-            sb_submit_pw = st.form_submit_button("🔒 Update Password")
-            
-            if sb_submit_pw:
-                actual_pw = curr_user_info.get("password", "")
-                if sb_curr_pw != actual_pw:
-                    st.error("❌ Incorrect current password.")
-                elif not sb_new_pw.strip():
-                    st.error("❌ New password cannot be empty.")
-                elif sb_new_pw != sb_conf_pw:
-                    st.error("❌ New passwords do not match.")
-                else:
-                    user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
-                    save_user_profiles(user_profiles)
-                    st.success("✅ Your password has been updated successfully!")
-
-    with st.sidebar.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
-        smtp_cfg = load_smtp_config()
-        with st.form(key="form_smtp_config"):
-            st.markdown("##### 🌐 Default Portal Web Link")
-            cfg_url = st.text_input("Streamlit Cloud URL", value=smtp_cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app"))
-            cfg_sname = st.text_input("Sender Display Name", value=smtp_cfg.get("sender_name", "Bakery Manager"))
-            
-            st.markdown("##### 📮 SMTP Server Credentials")
-            cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", "Brumby.pakenham@gmail.com"), placeholder="e.g. Brumby.pakenham@gmail.com")
-            cfg_spass = st.text_input("Sender App Password", value=smtp_cfg.get("sender_password", ""), type="password")
-            cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
-            cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
-            
-            st.markdown("##### 🔔 Manager Notification Recipients")
-            cfg_recipients = st.text_input("Notification Emails (comma-separated)", value=smtp_cfg.get("notification_recipients", "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"))
-            
-            c_save, c_test = st.columns([1.2, 1])
-            with c_save:
-                btn_save_smtp = st.form_submit_button("💾 Save Settings")
-            with c_test:
-                btn_test_smtp = st.form_submit_button("🧪 Test Email")
-
-            if btn_save_smtp:
-                saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
-                new_cfg = {
-                    "portal_url": cfg_url.strip(),
-                    "sender_name": cfg_sname.strip(),
-                    "sender_email": cfg_semail.strip(),
-                    "sender_password": saved_pass,
-                    "smtp_server": cfg_host.strip(),
-                    "smtp_port": int(cfg_port),
-                    "notification_recipients": cfg_recipients.strip()
-                }
-                save_smtp_config(new_cfg)
-                if saved_pass:
-                    st.success("✅ Email settings saved successfully!")
-                else:
-                    st.warning("⚠️ Settings saved, but **Sender App Password** is currently blank. Email notifications will not send until a 16-character Google App Password is entered.")
-
-            if btn_test_smtp:
-                saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
-                new_cfg = {
-                    "portal_url": cfg_url.strip(),
-                    "sender_name": cfg_sname.strip(),
-                    "sender_email": cfg_semail.strip(),
-                    "sender_password": saved_pass,
-                    "smtp_server": cfg_host.strip(),
-                    "smtp_port": int(cfg_port),
-                    "notification_recipients": cfg_recipients.strip()
-                }
-                save_smtp_config(new_cfg)
-                ok, msg = send_test_email_smtp(cfg_semail.strip())
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-
-    with st.sidebar.expander("🔥 Firebase Cloud Sync & Security", expanded=False):
-        if is_firebase_active():
-            st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
-        else:
-            st.warning(f"🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files. Add your Firebase credentials to `.streamlit/secrets.toml` or Streamlit Cloud Secrets to enable 24/7 cloud sync.\n\n`Status: {get_firebase_error()}`")
-            
-        if st.sidebar.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
-            ok, msg = migrate_all_local_files_to_firebase()
-            if ok:
-                st.success(msg)
-            else:
-                st.error(msg)
-
-
 def logout_user():
     for k in ["authenticated", "logged_in_user", "user_role", "is_demo", "is_kiosk_mode", "demo_user_profiles", "demo_state_initialized", "manual_employees", "manual_unavailability", "manual_requirements", "manual_fixed", "final_roster_df", "edit_employees", "edit_unavailability_v4", "edit_requirements", "edit_fixed"]:
         st.session_state.pop(k, None)
     st.session_state.authenticated = False
     st.rerun()
 
-if st.sidebar.button("🚪 Logout", key="btn_logout"):
-    logout_user()
-
-col_head1, col_head2 = st.columns([3.5, 1])
+col_head1, col_head2 = st.columns([3.2, 1.2])
 with col_head1:
     st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
     st.markdown(f'<p class="sub-header-style">Welcome back, <b>{display_name}</b> ({role_title})</p>', unsafe_allow_html=True)
 with col_head2:
-    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
-    if st.button("🚪 Logout", key="btn_logout_header", use_container_width=True):
-        logout_user()
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    if is_owner_or_mgr:
+        with st.popover("⚙️ Bakery Controls", use_container_width=True):
+            st.markdown(f"""
+            <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
+                <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
+                <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
+                <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.expander("🔑 Change My Password", expanded=False):
+                with st.form(key=f"form_pop_pw_{curr_user_key}"):
+                    sb_curr_pw = st.text_input("Current Password", type="password", key=f"pop_cp_curr_{curr_user_key}")
+                    sb_new_pw = st.text_input("New Password", type="password", key=f"pop_cp_new_{curr_user_key}")
+                    sb_conf_pw = st.text_input("Confirm New Password", type="password", key=f"pop_cp_conf_{curr_user_key}")
+                    sb_submit_pw = st.form_submit_button("🔒 Update Password")
+                    if sb_submit_pw:
+                        actual_pw = curr_user_info.get("password", "")
+                        if sb_curr_pw != actual_pw:
+                            st.error("❌ Incorrect current password.")
+                        elif not sb_new_pw.strip():
+                            st.error("❌ New password cannot be empty.")
+                        elif sb_new_pw != sb_conf_pw:
+                            st.error("❌ New passwords do not match.")
+                        else:
+                            user_profiles[curr_user_key]["password"] = sb_new_pw.strip()
+                            save_user_profiles(user_profiles)
+                            st.success("✅ Your password has been updated successfully!")
+
+            with st.expander("📧 Email Settings (SMTP & Portal Link)", expanded=False):
+                smtp_cfg = load_smtp_config()
+                with st.form(key="form_smtp_config"):
+                    st.markdown("##### 🌐 Default Portal Web Link")
+                    cfg_url = st.text_input("Streamlit Cloud URL", value=smtp_cfg.get("portal_url", "https://weekly-roster-generator.streamlit.app"))
+                    cfg_sname = st.text_input("Sender Display Name", value=smtp_cfg.get("sender_name", "Bakery Manager"))
+                    
+                    st.markdown("##### 📮 SMTP Server Credentials")
+                    cfg_semail = st.text_input("Sender Email Address", value=smtp_cfg.get("sender_email", "Brumby.pakenham@gmail.com"), placeholder="e.g. Brumby.pakenham@gmail.com")
+                    cfg_spass = st.text_input("Sender App Password", value=smtp_cfg.get("sender_password", ""), type="password")
+                    cfg_host = st.text_input("SMTP Host", value=smtp_cfg.get("smtp_server", "smtp.gmail.com"))
+                    cfg_port = st.number_input("SMTP Port", value=int(smtp_cfg.get("smtp_port", 587)))
+                    
+                    st.markdown("##### 🔔 Manager Notification Recipients")
+                    cfg_recipients = st.text_input("Notification Emails (comma-separated)", value=smtp_cfg.get("notification_recipients", "quietsong2006@yahoo.com, uyentrinhtran2309@gmail.com"))
+                    
+                    c_save, c_test = st.columns([1.2, 1])
+                    with c_save:
+                        btn_save_smtp = st.form_submit_button("💾 Save Settings")
+                    with c_test:
+                        btn_test_smtp = st.form_submit_button("🧪 Test Email")
+
+                    if btn_save_smtp:
+                        saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
+                        new_cfg = {
+                            "portal_url": cfg_url.strip(),
+                            "sender_name": cfg_sname.strip(),
+                            "sender_email": cfg_semail.strip(),
+                            "sender_password": saved_pass,
+                            "smtp_server": cfg_host.strip(),
+                            "smtp_port": int(cfg_port),
+                            "notification_recipients": cfg_recipients.strip()
+                        }
+                        save_smtp_config(new_cfg)
+                        if saved_pass:
+                            st.success("✅ Email settings saved successfully!")
+                        else:
+                            st.warning("⚠️ Settings saved, but **Sender App Password** is currently blank.")
+
+                    if btn_test_smtp:
+                        saved_pass = cfg_spass.strip() if cfg_spass.strip() else smtp_cfg.get("sender_password", "")
+                        new_cfg = {
+                            "portal_url": cfg_url.strip(),
+                            "sender_name": cfg_sname.strip(),
+                            "sender_email": cfg_semail.strip(),
+                            "sender_password": saved_pass,
+                            "smtp_server": cfg_host.strip(),
+                            "smtp_port": int(cfg_port),
+                            "notification_recipients": cfg_recipients.strip()
+                        }
+                        save_smtp_config(new_cfg)
+                        ok, msg = send_test_email_smtp(cfg_semail.strip())
+                        if ok:
+                            st.success(msg)
+                        else:
+                            st.error(msg)
+
+            with st.expander("🔥 Firebase Cloud Sync & Security", expanded=False):
+                if is_firebase_active():
+                    st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
+                else:
+                    st.warning(f"🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files.\n\n`Status: {get_firebase_error()}`")
+                    
+                if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
+                    ok, msg = migrate_all_local_files_to_firebase()
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚪 Logout", key="btn_logout_popover", use_container_width=True):
+                logout_user()
+    else:
+        if st.button("🚪 Logout", key="btn_logout_header", use_container_width=True):
+            logout_user()
 
 # Helper to read excel sheets robustly, converting everything to strings for easy editing
 def read_excel_robust(uploaded_file):
