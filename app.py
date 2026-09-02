@@ -441,41 +441,7 @@ st.markdown("""
         width: 0px !important;
     }
 
-    /* GUARANTEE SIDEBAR TOGGLE BUTTON IS ALWAYS VISIBLE AT TOP-LEFT */
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    [data-testid="stSidebarToggle"],
-    div[data-testid="collapsedControl"],
-    button[aria-label="Expand sidebar"],
-    button[aria-label="Collapse sidebar"],
-    button[aria-label="Open sidebar"],
-    button[aria-label="Close sidebar"],
-    button[aria-label*="sidebar"],
-    button[aria-label*="Sidebar"] {
-        display: flex !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 9999999 !important;
-        color: #081d19 !important;
-        fill: #081d19 !important;
-        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
-        border: 2px solid #ffe8be !important;
-        border-radius: 8px !important;
-        padding: 6px 10px !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
-        cursor: pointer !important;
-    }
-    [data-testid="collapsedControl"] *,
-    [data-testid="stSidebarCollapseButton"] *,
-    [data-testid="stSidebarToggle"] *,
-    button[aria-label*="sidebar"] * {
-        color: #081d19 !important;
-        fill: #081d19 !important;
-        font-weight: 900 !important;
-    }
+
 
     /* REDUCE TOP CONTAINER PADDING FOR CLEAN FULL-SCREEN LAYOUT */
     .main .block-container,
@@ -2926,38 +2892,6 @@ else:
     # RENDER SIDEBAR CONTROLS FOR MANAGERS ONLY - HIGH CONTRAST STREAMLIT NATIVE TOGGLE
     st.markdown("""
     <style>
-        /* STREAMLIT NATIVE SIDEBAR TOGGLE BUTTON HIGH-CONTRAST STYLING */
-        [data-testid="collapsedControl"],
-        [data-testid="stSidebarCollapseButton"],
-        [data-testid="stSidebarToggle"],
-        div[data-testid="collapsedControl"],
-        button[aria-label="Expand sidebar"],
-        button[aria-label="Collapse sidebar"],
-        button[aria-label="Open sidebar"],
-        button[aria-label="Close sidebar"],
-        button[aria-label*="sidebar"],
-        button[aria-label*="Sidebar"] {
-            display: flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            color: #081d19 !important;
-            fill: #081d19 !important;
-            background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
-            border: 2px solid #ffe8be !important;
-            border-radius: 8px !important;
-            padding: 6px 10px !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
-            z-index: 999999 !important;
-            cursor: pointer !important;
-        }
-        [data-testid="collapsedControl"] *,
-        [data-testid="stSidebarCollapseButton"] *,
-        [data-testid="stSidebarToggle"] *,
-        button[aria-label*="sidebar"] * {
-            color: #081d19 !important;
-            fill: #081d19 !important;
-            font-weight: 900 !important;
-        }
         [data-testid="stSidebar"],
         section[data-testid="stSidebar"] {
             background: linear-gradient(180deg, #061916 0%, #0c2b25 100%) !important;
