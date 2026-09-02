@@ -37,7 +37,7 @@ def repair_pem_private_key(pk_str):
         footer = "-----END PRIVATE KEY-----"
         body = re.sub(r'-----.*?-----', '', s).strip()
 
-    body_clean = "".join(body.split())
+    body_clean = re.sub(r'[^A-Za-z0-9+/=]', '', body)
     if not body_clean:
         return s
         
@@ -87,8 +87,20 @@ def get_firebase_db():
                     FIREBASE_LAST_ERROR = f"Error reading secrets.toml: {e_file}"
 
         if not firebase_config:
+            for json_filename in ["serviceAccountKey.json", "firebase_key.json", "firebase_service_account.json"]:
+                if os.path.exists(json_filename):
+                    try:
+                        with open(json_filename, "r", encoding="utf-8") as f:
+                            raw_cfg = json.load(f)
+                        if raw_cfg and ("project_id" in raw_cfg or "private_key" in raw_cfg):
+                            firebase_config = dict(raw_cfg)
+                            break
+                    except Exception as e_json:
+                        FIREBASE_LAST_ERROR = f"Error reading {json_filename}: {e_json}"
+
+        if not firebase_config:
             if not FIREBASE_LAST_ERROR:
-                FIREBASE_LAST_ERROR = "No [firebase] section or project_id found in st.secrets or .streamlit/secrets.toml."
+                FIREBASE_LAST_ERROR = "No [firebase] section or project_id found in st.secrets, .streamlit/secrets.toml, or local serviceAccountKey.json."
             return None
 
         # Clean private key string with multi-candidate Certificate compatibility repair
@@ -5277,53 +5289,76 @@ def render_home_dashboard():
 
         with c_set2:
             st.markdown("#### 🔥 Firebase Cloud Sync & Security")
+            
+            # Service Account JSON File Uploader
+            up_json = st.file_uploader("🔑 Upload Firebase Service Account Key (.json)", type=["json"], key="up_firebase_service_json", help="Upload serviceAccountKey.json downloaded from Firebase Console")
+            if up_json is not None:
+                try:
+                    json_data = json.load(up_json)
+                    if json_data and "project_id" in json_data and "private_key" in json_data:
+                        # 1. Save serviceAccountKey.json in root folder
+                        with open("serviceAccountKey.json", "w", encoding="utf-8") as f_json:
+                            json.dump(json_data, f_json, indent=2)
+                        
+                        # 2. Format clean private key and write .streamlit/secrets.toml
+                        pk = str(json_data.get("private_key", "")).replace("\\n", "\n")
+                        toml_content = f"""[firebase]
+type = "{json_data.get('type', 'service_account')}"
+project_id = "{json_data.get('project_id', '')}"
+private_key_id = "{json_data.get('private_key_id', '')}"
+private_key = \"\"\"{pk}\"\"\"
+client_email = "{json_data.get('client_email', '')}"
+client_id = "{json_data.get('client_id', '')}"
+auth_uri = "{json_data.get('auth_uri', 'https://accounts.google.com/o/oauth2/auth')}"
+token_uri = "{json_data.get('token_uri', 'https://oauth2.googleapis.com/token')}"
+auth_provider_x509_cert_url = "{json_data.get('auth_provider_x509_cert_url', '')}"
+client_x509_cert_url = "{json_data.get('client_x509_cert_url', '')}"
+universe_domain = "{json_data.get('universe_domain', 'googleapis.com')}"
+"""
+                        secrets_dir = ".streamlit"
+                        os.makedirs(secrets_dir, exist_ok=True)
+                        with open(os.path.join(secrets_dir, "secrets.toml"), "w", encoding="utf-8") as f_toml:
+                            f_toml.write(toml_content)
+                            
+                        st.success("🎉 Firebase Service Account credentials updated successfully! Reloading...")
+                        st.rerun()
+                    else:
+                        st.error("❌ The uploaded JSON file is missing required fields ('project_id' or 'private_key').")
+                except Exception as ex_up:
+                    st.error(f"❌ Error reading uploaded JSON key file: {ex_up}")
+
             if is_firebase_active():
                 st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
             else:
-                st.warning("🟡 **Local Backup Mode Active**\nYour local PC app has `.streamlit/secrets.toml`. To enable Firebase on Streamlit Cloud (`weekly-roster-generator.streamlit.app`), copy the secrets snippet below into your **Streamlit Cloud Dashboard -> Settings -> Secrets**:")
+                err_detail = get_firebase_error()
+                st.warning(f"🟡 **Firebase Not Connected**\n\n{err_detail if err_detail else 'Local Backup Mode Active.'}")
                 
-                toml_secret_snippet = '''[firebase]
-type = "service_account"
-project_id = "app-database-b486e"
-private_key_id = "6d58fb705e94a0542cfc87ad2108ed25ff60e5ed"
-private_key = """-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDrq+O6ZvgmETLA
-D+Ykb0zeSQjeaDXFsUljIWzkxH4I19rE2pnnU+56TUK39gr9Jc7cmyT7f3IkCEWK
-KlLmP6fjuuPVMgxY7rcWaq5UyDMyqYVSQV8R2ZwLqG4WqeTXtpOISOZnID+3HeJD
-moknv2T31nIopMimfT1z68qlv4GyyGPeNQ1BZbYKoORxUCtvCUQEX1bJ7iBPQyJh
-GREkQoR+8ZxjxrC1giRr/SK7zx1BKl0r5A7a0rSsNBTwTd6ZMlrFL32CUHDg9Q0S
-voBOopLtNJWA3kT+1taNguKr3+rNlAMWicsPZsJzy3+h/Eh7GlwcrS1A0gip1f8R
-zI/meqaPAgMBAAECggEAQpVp3bxB1998Cy9ywlB/0z2nN88Rgi04or1K2sd5JF53
-/K4WVXktI3i4pOjq6eLIsyNSK4wyX2PG4eZbTZomgPzIae+d9XJcYAT8BBAcBvBG
-LpsxlQV6RQDtOZH+icOXoyWVkwVVexMCXj9HCOfWSv9XeYw09HTl695ufq3AoxXX
-4gyEV3i2ouSPEnDmJ9kP2oN/5C4b7wL0rKJJuuatZ89X7G9bzLMzmcnItwD/WeLX
-r77pT29XcFtGwAto3NaWmt2iMJp/StEobaOAtvAMi4f9ghxrL1k25COAWiDv/k07
-3+p7x75ZKPB7X8RMOGJ8z6GBOqCHOchIGBQQQKBgQD+B33apA/sBxrO/nIQ
-tR+DEMiSG3l6OnG8z3iDl49zpWYKPkbaNrdeYmeE0ZqDIApzguD6IzYpmzbvYM/U
-XXy921+yeOw+Syj1PQx3MbkIpF10AOFqGR+6ykla2VBkZTsouzsBnUKKY+jdzlIV
-7peIsl9ExMXK1rSi1s6vCveNxwKBgQDtf/BZN3ORjeeAXT6LpUuzTCOJrVJqD77R
-sWK/B6IxqmqO8SMJCrlLI6smjxjOoLwfmcSEnn6jvGRpJptkwv1LQ+XYOSoFDVtz
-RKKg8VKRlySKmldCJvfIWJ8r8NlhlgLFRSdcFHuyWRWeHjfwyJapzDcAJxPK3z+j
-1KVV5cBA+QKBgQDFeQlq59LAxp0egEonlsVSW7+vZNBAJiK4hgfHNBB98/uoxtTJ
-WXOeWZzjcRVODaBSP1Go4ap/GXvRBk9JZQtNg7WWxc3Qdxj122lPV0Xh4/QJ841H
-rxQtXoc7qmeGQ/ODLFkoXhmV/yjNFFBXYExIJXFNwjGIBvQRCi9Nf5cFjQKBgFfF
-XHHcSF2Wb+PEkgTRxbQxg0CySS7hOsgMIk4u6AYq0M6a1zPUPr5CJFJPt/9E78FN
-9o58dJjWWtVxayRF244hPaQ3HAxZ714eE2wfQ0CC9wIyH+VWuWPVPJ3kmLGz2rpE
-4FLrTvuOaKrSyCG4P9XonrrztiDXeJF3WNLx4achAoGAJwJo3TrHCMqHDHOad9tm
-zoigOAgZ8phi4vIlq7tmW+j+bVKR8Hc0W8F4lBKD5pzgFIz54qREz5nP3WSNh/78
-93MWYKpJKdJddOAbO4m73+Gaj32OEztHhQ6qcB0c0UgtfgHCShFFEqU/ea6ad5wF
-uSCRdHpr+IyEXIfp8gYqm4U=
------END PRIVATE KEY-----"""
-client_email = "firebase-adminsdk-fbsvc@app-database-b486e.iam.gserviceaccount.com"
-client_id = "118401674360276258498"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40app-database-b486e.iam.gserviceaccount.com"
-universe_domain = "googleapis.com"
-'''
-                with st.expander("📋 Click here to view & copy Streamlit Cloud Secrets TOML Block"):
-                    st.code(toml_secret_snippet, language="toml")
+                # Dynamic TOML generator if secrets file or JSON exists
+                current_cfg = None
+                if os.path.exists("serviceAccountKey.json"):
+                    try:
+                        with open("serviceAccountKey.json", "r", encoding="utf-8") as f:
+                            current_cfg = json.load(f)
+                    except:
+                        pass
+                
+                if current_cfg and "private_key" in current_cfg:
+                    pk_dyn = str(current_cfg.get("private_key", "")).replace("\\n", "\n")
+                    toml_secret_snippet = f"""[firebase]
+type = "{current_cfg.get('type', 'service_account')}"
+project_id = "{current_cfg.get('project_id', '')}"
+private_key_id = "{current_cfg.get('private_key_id', '')}"
+private_key = \"\"\"{pk_dyn}\"\"\"
+client_email = "{current_cfg.get('client_email', '')}"
+client_id = "{current_cfg.get('client_id', '')}"
+auth_uri = "{current_cfg.get('auth_uri', 'https://accounts.google.com/o/oauth2/auth')}"
+token_uri = "{current_cfg.get('token_uri', 'https://oauth2.googleapis.com/token')}"
+auth_provider_x509_cert_url = "{current_cfg.get('auth_provider_x509_cert_url', '')}"
+client_x509_cert_url = "{current_cfg.get('client_x509_cert_url', '')}"
+universe_domain = "{current_cfg.get('universe_domain', 'googleapis.com')}"
+"""
+                    with st.expander("📋 Click here to view & copy Streamlit Cloud Secrets TOML Block"):
+                        st.code(toml_secret_snippet, language="toml")
                 
             if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_dash"):
                 ok, msg = migrate_all_local_files_to_firebase()
