@@ -415,7 +415,7 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* STREAMLIT HEADER CLEANUP - REMOVE BACKDROP BLUR & KEEP HEADER TRANSPARENT */
+    /* STREAMLIT HEADER CLEANUP - TRANSPARENT HEADER CONTAINER */
     header[data-testid="stHeader"],
     [data-testid="stHeader"],
     .stAppHeader {
@@ -423,25 +423,28 @@ st.markdown("""
         box-shadow: none !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
+        pointer-events: none !important;
         z-index: 99999 !important;
     }
     
-    /* HIDE TOP-RIGHT TOOLBAR BUTTONS (FORK, GITHUB, THREE-DOTS MENU) & FOOTER */
+    /* HIDE SPECIFIC TOP-RIGHT TOOLBAR BUTTONS (FORK, GITHUB, THREE-DOTS MENU) & FOOTER */
     #MainMenu,
     footer,
     [data-testid="stFooter"],
-    [data-testid="stToolbar"],
-    .stAppToolbar,
     [data-testid="stStatusWidget"],
-    div[class*="stToolbar"],
-    div[class*="stAppToolbar"] {
+    header[data-testid="stHeader"] a[href*="github"],
+    header[data-testid="stHeader"] button[title*="Fork"],
+    header[data-testid="stHeader"] button[aria-label*="Fork"],
+    header[data-testid="stHeader"] div[class*="stActionButton"],
+    .stAppHeader a[href*="github"],
+    .stAppHeader button[title*="Fork"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
         width: 0px !important;
     }
 
-    /* PROMINENT & HIGHLY LOCATABLE GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) */
+    /* CUSTOM FIXED GOLDEN SIDEBAR TOGGLE BUTTON (TOP-LEFT) */
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
     [data-testid="stSidebarToggle"],
