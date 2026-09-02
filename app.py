@@ -415,27 +415,58 @@ st.set_page_config(
 # Custom high-contrast Emerald & Golden Wheat Bakery styling
 st.markdown("""
 <style>
-    /* STREAMLIT HEADER CLEANUP - HIDE DECORATION, TOOLBAR & FOOTER WITHOUT HIDING SIDEBAR TOGGLE */
+    /* STREAMLIT HEADER CLEANUP - REMOVE BACKDROP BLUR & KEEP HEADER TRANSPARENT */
     header[data-testid="stHeader"],
+    [data-testid="stHeader"],
     .stAppHeader {
         background: transparent !important;
         box-shadow: none !important;
-        z-index: 9999 !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        z-index: 99999 !important;
     }
-    #MainMenu,
+    
     footer,
-    [data-testid="stFooter"],
-    [data-testid="stToolbar"],
-    .stAppToolbar,
-    div[data-testid="stDecoration"],
-    [data-testid="stStatusWidget"],
-    [data-testid="stHeaderActionElements"],
-    div[class*="stToolbar"],
-    div[class*="stAppToolbar"] {
+    [data-testid="stFooter"] {
         visibility: hidden !important;
         display: none !important;
         height: 0px !important;
-        width: 0px !important;
+    }
+
+    /* GUARANTEE SIDEBAR TOGGLE BUTTON IS ALWAYS VISIBLE AT TOP-LEFT */
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarToggle"],
+    div[data-testid="collapsedControl"],
+    button[aria-label="Expand sidebar"],
+    button[aria-label="Collapse sidebar"],
+    button[aria-label="Open sidebar"],
+    button[aria-label="Close sidebar"],
+    button[aria-label*="sidebar"],
+    button[aria-label*="Sidebar"] {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 9999999 !important;
+        color: #081d19 !important;
+        fill: #081d19 !important;
+        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
+        border: 2px solid #ffe8be !important;
+        border-radius: 8px !important;
+        padding: 6px 10px !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+        cursor: pointer !important;
+    }
+    [data-testid="collapsedControl"] *,
+    [data-testid="stSidebarCollapseButton"] *,
+    [data-testid="stSidebarToggle"] *,
+    button[aria-label*="sidebar"] * {
+        color: #081d19 !important;
+        fill: #081d19 !important;
+        font-weight: 900 !important;
     }
 
     /* REDUCE TOP CONTAINER PADDING FOR CLEAN FULL-SCREEN LAYOUT */
@@ -2806,19 +2837,8 @@ if not st.session_state.authenticated:
     <style>
         .stApp {
             background-color: #051412 !important;
-        }
-        /* HIDE SIDEBAR & HEADER TOOLBAR ON LOGIN PAGE FOR CLEAN CENTERING */
-        [data-testid="stSidebar"],
-        section[data-testid="stSidebar"],
-        [data-testid="stSidebarCollapseButton"],
-        [data-testid="collapsedControl"],
-        [data-testid="stSidebarToggle"],
-        header[data-testid="stHeader"],
-        .stAppHeader {
-            display: none !important;
-            visibility: hidden !important;
-            width: 0px !important;
-            height: 0px !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
         }
     </style>
     """, unsafe_allow_html=True)
