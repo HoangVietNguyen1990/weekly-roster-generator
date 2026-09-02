@@ -3039,13 +3039,6 @@ def logout_user():
 if st.sidebar.button("🚪 Logout", key="btn_logout"):
     logout_user()
 
-if not st.session_state.get("is_kiosk_mode", False):
-    if st.sidebar.button("🏪 Switch to Store Kiosk Mode", key="btn_sb_switch_kiosk", use_container_width=True):
-        st.session_state.logged_in_user = "store.kiosk"
-        st.session_state.user_role = "Kiosk"
-        st.session_state.is_kiosk_mode = True
-        st.rerun()
-
 col_head1, col_head2 = st.columns([3.5, 1])
 with col_head1:
     st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
