@@ -564,36 +564,36 @@ st.markdown("""
     }
 
     /* TAB BAR CUSTOMIZATION - ULTRA-WIDE ROUNDED PILL BUTTONS */
-    /* TACTILE 3D TABS STYLING */
+    /* TACTILE 3D TABS STYLING WITH THEME PALETTE (from data/theme) */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 16px !important;
-        background-color: rgba(6, 24, 20, 0.95) !important;
-        padding: 16px 24px !important;
-        border-radius: 40px !important;
-        border: 2px solid rgba(229, 169, 60, 0.45) !important;
+        gap: 12px !important;
+        background: linear-gradient(135deg, #16241b 0%, #222e26 100%) !important;
+        padding: 14px 20px !important;
+        border-radius: 32px !important;
+        border: 2.5px solid #539127 !important;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0,0,0,0.5) !important;
     }
     .stTabs button[role="tab"],
     .stTabs [data-baseweb="tab"] {
-        height: 54px !important;
-        padding-left: 36px !important;
-        padding-right: 36px !important;
-        border-radius: 28px !important;
-        font-size: 1.05rem !important;
-        transition: all 0.15s ease-in-out !important;
-        margin: 0 4px !important;
+        height: 52px !important;
+        padding-left: 26px !important;
+        padding-right: 26px !important;
+        border-radius: 24px !important;
+        font-size: 1.02rem !important;
+        transition: all 0.2s ease-in-out !important;
+        margin: 0 3px !important;
         cursor: pointer !important;
     }
     .stTabs [aria-selected="false"] {
-        background: linear-gradient(180deg, #1d574c 0%, #134038 50%, #0b2923 100%) !important;
-        border: 2px solid #1f5c50 !important;
-        box-shadow: 0 5px 0 #061814, 0 6px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+        background: linear-gradient(180deg, #2e4813 0%, #1e310c 100%) !important;
+        border: 2px solid #3e611b !important;
+        box-shadow: 0 4px 0 #121f07, 0 5px 12px rgba(0, 0, 0, 0.4) !important;
     }
     .stTabs [aria-selected="false"]:hover {
-        background: linear-gradient(180deg, #24685b 0%, #184c42 50%, #0d332c 100%) !important;
-        border-color: #e5a93c !important;
+        background: linear-gradient(180deg, #3d5e1b 0%, #294212 100%) !important;
+        border-color: #539127 !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 7px 0 #061814, 0 8px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+        box-shadow: 0 6px 0 #121f07, 0 8px 16px rgba(83, 145, 39, 0.4) !important;
     }
     .stTabs [aria-selected="false"] * {
         color: #ffffff !important;
@@ -601,15 +601,15 @@ st.markdown("""
         text-shadow: 0 1px 2px rgba(0,0,0,0.8) !important;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
-        border: 2px solid #ffe8be !important;
-        box-shadow: 0 6px 0 #734c0e, 0 10px 24px rgba(229, 169, 60, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+        background: linear-gradient(180deg, #6bb833 0%, #539127 50%, #3a6b1a 100%) !important;
+        border: 2px solid #82d444 !important;
+        box-shadow: 0 5px 0 #23420f, 0 10px 24px rgba(83, 145, 39, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
         transform: translateY(-2px) !important;
     }
     .stTabs [aria-selected="true"] * {
-        color: #081d19 !important;
+        color: #ffffff !important;
         font-weight: 900 !important;
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
     }
 
     /* UNIFIED HIGH-CONTRAST 3D BUTTON STYLING FOR ALL BUTTONS ACROSS THE ENTIRE APP */
