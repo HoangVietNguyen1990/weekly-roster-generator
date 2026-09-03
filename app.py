@@ -551,12 +551,12 @@ st.markdown("""
     div[class*="Header"],
     div[role="columnheader"],
     div[class*="gdg-header"] {
-        background-color: #081d19 !important;
-        background: linear-gradient(135deg, #081d19 0%, #16443c 100%) !important;
+        background-color: #2e4813 !important;
+        background: linear-gradient(135deg, #2e4813 0%, #539127 100%) !important;
         color: #ffffff !important;
         font-weight: 900 !important;
         font-size: 1.05rem !important;
-        border-bottom: 2px solid #e5a93c !important;
+        border-bottom: 2.5px solid #539127 !important;
     }
     div[role="columnheader"] *, div[role="columnheader"] p, div[role="columnheader"] span {
         color: #ffffff !important;
@@ -612,7 +612,7 @@ st.markdown("""
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
     }
 
-    /* UNIFIED HIGH-CONTRAST 3D BUTTON STYLING FOR ALL BUTTONS ACROSS THE ENTIRE APP */
+    /* UNIFIED HIGH-CONTRAST 3D BUTTON STYLING MATCHING THEME PALETTE */
     button,
     .stButton > button,
     .stFormSubmitButton > button,
@@ -626,17 +626,17 @@ st.markdown("""
     button[kind="secondary"],
     button[kind="primary"],
     button[kind="header"] {
-        background: linear-gradient(180deg, #fce4b3 0%, #e5a93c 45%, #b87b1c 100%) !important;
-        border: 2px solid #ffe8be !important;
+        background: linear-gradient(180deg, #6bb833 0%, #539127 45%, #3a6b1a 100%) !important;
+        border: 2px solid #82d444 !important;
         border-radius: 14px !important;
-        color: #081d19 !important;
+        color: #ffffff !important;
         font-weight: 900 !important;
         font-size: 1.02rem !important;
         padding: 10px 22px !important;
-        box-shadow: 0 5px 0 #734c0e, 0 8px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 4px 0 #23420f, 0 8px 20px rgba(83, 145, 39, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
         transition: all 0.15s ease-in-out !important;
         cursor: pointer !important;
-        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
     }
     
     /* ALL BUTTON TEXT & SPAN OVERRIDE TO DEEP EMERALD BLACK */
@@ -649,7 +649,7 @@ st.markdown("""
     button[data-testid="baseButton-primary"] *,
     section[data-testid="stSidebar"] button *,
     div[data-testid="stSidebar"] button * {
-        color: #081d19 !important;
+        color: #ffffff !important;
         font-weight: 900 !important;
     }
 
@@ -660,8 +660,8 @@ st.markdown("""
     button[data-testid="stBaseButton-primary"]:hover,
     section[data-testid="stSidebar"] button:hover,
     div[data-testid="stSidebar"] button:hover {
-        background: linear-gradient(180deg, #fff0d4 0%, #f0b548 45%, #c78822 100%) !important;
-        box-shadow: 0 6px 0 #734c0e, 0 12px 24px rgba(229, 169, 60, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+        background: linear-gradient(180deg, #78c93c 0%, #5ba42c 45%, #3f741c 100%) !important;
+        box-shadow: 0 5px 0 #23420f, 0 12px 24px rgba(83, 145, 39, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.7) !important;
         transform: translateY(-2px) !important;
     }
 
@@ -672,7 +672,7 @@ st.markdown("""
     button[data-testid="stBaseButton-primary"]:active,
     section[data-testid="stSidebar"] button:active,
     div[data-testid="stSidebar"] button:active {
-        box-shadow: 0 2px 0 #734c0e, 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 0, 0, 0.2) !important;
+        box-shadow: 0 2px 0 #23420f, 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(0, 0, 0, 0.2) !important;
         transform: translateY(3px) !important;
     }
 
@@ -688,12 +688,12 @@ st.markdown("""
     .stExpander summary, 
     div[data-testid="stExpander"] summary,
     details summary {
-        background: linear-gradient(180deg, #1d574c 0%, #144038 50%, #0b2923 100%) !important;
-        border: 2px solid #e5a93c !important;
+        background: linear-gradient(180deg, #2e4813 0%, #1e310c 100%) !important;
+        border: 2px solid #539127 !important;
         border-radius: 12px !important;
-        color: #f7d594 !important;
+        color: #ffffff !important;
         padding: 12px 18px !important;
-        box-shadow: 0 5px 0 #061814, 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+        box-shadow: 0 4px 0 #121f07, 0 8px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
         transition: all 0.15s ease-in-out !important;
         cursor: pointer !important;
     }
@@ -2981,10 +2981,10 @@ with col_head2:
     if is_owner_or_mgr:
         with st.popover("⚙️ Bakery Controls", use_container_width=True):
             st.markdown(f"""
-            <div style="background-color: rgba(229, 169, 60, 0.15); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #e5a93c; margin-bottom: 15px;">
-                <div style="color: #e5a93c; font-size: 0.85rem; font-weight: 700;">LOGGED IN ACCOUNT</div>
+            <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); padding: 12px 16px; border-radius: 12px; border: 1.5px solid #539127; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
+                <div style="color: #539127; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px;">LOGGED IN ACCOUNT</div>
                 <div style="color: #ffffff; font-size: 1.1rem; font-weight: 900;">👤 {display_name}</div>
-                <div style="color: #c8e6e0; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
+                <div style="color: #e5e8e3; font-size: 0.85rem;">Role: <b>{role_title}</b></div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -3693,9 +3693,9 @@ if st.session_state.manual_fixed is not None:
     st.session_state.manual_fixed = st.session_state.manual_fixed.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "")
 def render_store_kiosk_timeclock():
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 22px 26px; border-radius: 16px; color: #ffffff !important; border: 2.5px solid #e5a93c; margin-bottom: 24px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5);">
-        <h2 style="margin: 0; color: #e5a93c; font-size: 1.8rem; font-weight: 900;">🥐 Brumby's Bakery Pakenham — Shared Store Timeclock</h2>
-        <p style="margin: 6px 0 0 0; color: #d0e6df; font-size: 1.05rem; font-weight: 600;">Store Terminal Mode • Select your name to Clock In or Clock Out</p>
+    <div style="background: linear-gradient(135deg, #16501f 0%, #2ca86c 100%); padding: 24px 28px; border-radius: 18px; color: #ffffff !important; border: 2.5px solid #539127; margin-bottom: 24px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <h2 style="margin: 0; color: #ffffff !important; font-size: 1.9rem; font-weight: 900; letter-spacing: 0.3px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">🥐 Brumby's Bakery Pakenham — Shared Store Timeclock</h2>
+        <p style="margin: 6px 0 0 0; color: #e5e8e3 !important; font-size: 1.05rem; font-weight: 600;">Store Terminal Mode • Select your name to Clock In or Clock Out</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -5421,7 +5421,7 @@ def render_home_dashboard():
 
     with c_dash1:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 12px 18px; border-radius: 10px 10px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.15rem; border: 1.5px solid #e5a93c; border-bottom: none;">
+        <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 14px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; border: 2px solid #539127; border-bottom: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             📢 Store Announcements & Team Bulletin Board
         </div>
         """, unsafe_allow_html=True)
@@ -5431,12 +5431,12 @@ def render_home_dashboard():
         if announcements:
             for idx, ann in enumerate(announcements):
                 prio = ann.get("priority", "Normal")
-                badge_bg = "#e53e3e" if prio == "Urgent" else ("#dd6b20" if prio == "Important" else "#319795")
+                badge_bg = "#e53e3e" if prio == "Urgent" else ("#dd6b20" if prio == "Important" else "#539127")
                 st.markdown(f"""
-                <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #1f5c50; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+                <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); border: 1.5px solid #3e611b; border-radius: 10px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-weight: 800; font-size: 1.05rem; color: #f7d594;">{ann.get('title', '')}</span>
-                        <span style="background: {badge_bg}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 800;">{prio}</span>
+                        <span style="font-weight: 800; font-size: 1.05rem; color: #ffffff;">{ann.get('title', '')}</span>
+                        <span style="background: {badge_bg}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 800;">{prio}</span>
                     </div>
                     <div style="color: #e2e8f0; font-size: 0.93rem; margin-bottom: 8px;">{ann.get('content', '')}</div>
                     <div style="color: #a0aec0; font-size: 0.78rem;">✍️ Posted by <b>{ann.get('author', 'Store Manager')}</b> on {ann.get('date', '')}</div>
@@ -6506,7 +6506,7 @@ if is_manager:
                     st.rerun()
                     
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+        <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
             📌 Fixed Baseline Staff Shifts
         </div>
         """, unsafe_allow_html=True)
