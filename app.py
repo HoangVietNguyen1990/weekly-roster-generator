@@ -2881,7 +2881,7 @@ if not st.session_state.authenticated:
     st.markdown("""
     <style>
         .stApp {
-            background-color: #051412 !important;
+            background-color: #222e26 !important;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
         }
@@ -2891,9 +2891,10 @@ if not st.session_state.authenticated:
     col1, col2, col3 = st.columns([1.2, 2, 1.2])
     with col2:
         st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 30px; border-radius: 18px; border: 2px solid #e5a93c; text-align: center; margin-top: 50px; margin-bottom: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <h2 style="color: #e5a93c !important; margin: 0; font-size: 1.9rem; font-weight: 900;">🥐 Brumby's Pakenham — Portal</h2>
-            <p style="color: #c8e6e0 !important; font-size: 0.95rem; margin-top: 8px; margin-bottom: 0;">Please log in with your username and password to access your account.</p>
+        <div style="background: linear-gradient(135deg, #16501f 0%, #2ca86c 100%); padding: 30px; border-radius: 20px; border: 2.5px solid #539127; text-align: center; margin-top: 45px; margin-bottom: 25px; box-shadow: 0 12px 36px rgba(0,0,0,0.6);">
+            <div style="font-size: 2.5rem; margin-bottom: 8px;">🥐</div>
+            <h2 style="color: #ffffff !important; margin: 0; font-size: 2rem; font-weight: 900; letter-spacing: 0.4px; text-shadow: 0 2px 4px rgba(0,0,0,0.4);">Brumby's Bakery Portal</h2>
+            <p style="color: #e5e8e3 !important; font-size: 0.98rem; margin-top: 8px; margin-bottom: 0; font-weight: 600;">Please log in with your credentials to access your account.</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -2918,11 +2919,11 @@ if not st.session_state.authenticated:
                 st.error("🔒 Invalid username or password. Please check your credentials.")
                 
         # Store Phone Timeclock Kiosk Launcher
-        st.markdown("<hr style='border-color: rgba(229, 169, 60, 0.4); margin: 24px 0;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color: rgba(83, 145, 39, 0.5); margin: 24px 0;'>", unsafe_allow_html=True)
         st.markdown("""
         <div style="text-align: center; margin-bottom: 12px;">
-            <span style="color: #e5a93c; font-weight: 800; font-size: 1rem;">🏪 SHARED STORE PHONE KIOSK MODE</span><br>
-            <span style="color: #c8e6e0; font-size: 0.85rem;">Set this device as the shared store terminal at Brumby's Bakery:</span>
+            <span style="color: #2ca86c; font-weight: 800; font-size: 1.05rem;">🏪 SHARED STORE PHONE KIOSK MODE</span><br>
+            <span style="color: #e5e8e3; font-size: 0.88rem;">Set this device as the shared store terminal at Brumby's Bakery:</span>
         </div>
         """, unsafe_allow_html=True)
         if st.button("⏱️ Launch Store Timeclock Kiosk Terminal", use_container_width=True, key="btn_launch_kiosk"):
@@ -2964,8 +2965,17 @@ def logout_user():
 
 col_head1, col_head2 = st.columns([3.2, 1.2])
 with col_head1:
-    st.markdown('<h1 class="header-style">🥐 Brumby\'s Pakenham Portal</h1>', unsafe_allow_html=True)
-    st.markdown(f'<p class="sub-header-style">Welcome back, <b>{display_name}</b> ({role_title})</p>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #16501f 0%, #2ca86c 100%); padding: 18px 24px; border-radius: 16px; border: 2px solid #539127; box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin-bottom: 15px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 2rem;">🥐</div>
+            <div>
+                <h1 style="color: #ffffff !important; margin: 0; font-size: 1.8rem; font-weight: 900; letter-spacing: 0.3px; text-shadow: 0 2px 4px rgba(0,0,0,0.4);">Brumby's Bakery Pakenham</h1>
+                <p style="color: #e5e8e3 !important; font-size: 0.95rem; margin: 4px 0 0 0; font-weight: 600;">Welcome back, <b>{display_name}</b> <span style="background: rgba(255,255,255,0.2); padding: 2px 10px; border-radius: 12px; font-size: 0.85rem; color: #ffffff;">🟢 {role_title} Mode Active</span></p>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 with col_head2:
     st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
     if is_owner_or_mgr:
@@ -5344,9 +5354,9 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
 
 def render_home_dashboard():
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 22px; border-radius: 16px; border: 2px solid #e5a93c; box-shadow: 0 8px 30px rgba(0,0,0,0.4); margin-bottom: 25px;">
-        <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.85rem; font-weight: 800;">🏠 Executive Home & Store Dashboard</h2>
-        <p style="color: #ffffff !important; font-size: 1.02rem; margin-bottom: 0;">Brumby's Bakery Pakenham • Live Store Notifications, Team Announcements & Operational KPI Hub</p>
+    <div style="background: linear-gradient(135deg, #16501f 0%, #2ca86c 100%); padding: 24px; border-radius: 16px; border: 2.5px solid #539127; box-shadow: 0 10px 30px rgba(0,0,0,0.4); margin-bottom: 25px;">
+        <h2 style="color: #ffffff !important; margin-top: 0; font-size: 1.85rem; font-weight: 900; letter-spacing: 0.3px; text-shadow: 0 2px 4px rgba(0,0,0,0.5);">🏠 Executive Home & Store Dashboard</h2>
+        <p style="color: #e5e8e3 !important; font-size: 1.02rem; margin-bottom: 0; font-weight: 600;">Brumby's Bakery Pakenham • Live Store Notifications, Team Announcements & Operational KPI Hub</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -5370,37 +5380,37 @@ def render_home_dashboard():
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown(f"""
-        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
-            <div style="color: #e5a93c; font-size: 0.8rem; font-weight: 800;">🗓️ TODAY'S DATE</div>
-            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{today_str}</div>
-            <div style="color: #a0aec0; font-size: 0.78rem;">Melbourne AEST</div>
+        <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); border: 2px solid #539127; border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,0.4);">
+            <div style="color: #2ba84a; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px;">🗓️ TODAY'S DATE</div>
+            <div style="color: #ffffff; font-size: 1.45rem; font-weight: 900; margin-top: 4px;">{today_str}</div>
+            <div style="color: #c8d6cb; font-size: 0.78rem; font-weight: 600;">Melbourne AEST</div>
         </div>
         """, unsafe_allow_html=True)
 
     with k2:
         st.markdown(f"""
-        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
-            <div style="color: #48bb78; font-size: 0.8rem; font-weight: 800;">🟢 ON DUTY TODAY</div>
-            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{working_count} Staff</div>
-            <div style="color: #a0aec0; font-size: 0.78rem;">Clocked In</div>
+        <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); border: 2px solid #2ca86c; border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,0.4);">
+            <div style="color: #2ca86c; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px;">🟢 ON DUTY TODAY</div>
+            <div style="color: #ffffff; font-size: 1.45rem; font-weight: 900; margin-top: 4px;">{working_count} Staff</div>
+            <div style="color: #c8d6cb; font-size: 0.78rem; font-weight: 600;">Clocked In</div>
         </div>
         """, unsafe_allow_html=True)
 
     with k3:
         st.markdown(f"""
-        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
-            <div style="color: #f7d594; font-size: 0.8rem; font-weight: 800;">📋 ACTIVE ROSTERS</div>
-            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{active_rosters_count} Weeks</div>
-            <div style="color: #a0aec0; font-size: 0.78rem;">Published</div>
+        <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); border: 2px solid #539127; border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,0.4);">
+            <div style="color: #539127; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px;">📋 ACTIVE ROSTERS</div>
+            <div style="color: #ffffff; font-size: 1.45rem; font-weight: 900; margin-top: 4px;">{active_rosters_count} Weeks</div>
+            <div style="color: #c8d6cb; font-size: 0.78rem; font-weight: 600;">Published</div>
         </div>
         """, unsafe_allow_html=True)
 
     with k4:
         st.markdown(f"""
-        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 12px; padding: 14px; text-align: center;">
-            <div style="color: #76eec6; font-size: 0.8rem; font-weight: 800;">👥 TOTAL TEAM</div>
-            <div style="color: #ffffff; font-size: 1.4rem; font-weight: 900; margin-top: 4px;">{active_emp_count} Members</div>
-            <div style="color: #a0aec0; font-size: 0.78rem;">Active Profiles</div>
+        <div style="background: linear-gradient(135deg, #1c3324 0%, #222e26 100%); border: 2px solid #2ca86c; border-radius: 14px; padding: 16px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,0.4);">
+            <div style="color: #76eec6; font-size: 0.85rem; font-weight: 800; letter-spacing: 0.5px;">👥 TOTAL TEAM</div>
+            <div style="color: #ffffff; font-size: 1.45rem; font-weight: 900; margin-top: 4px;">{active_emp_count} Members</div>
+            <div style="color: #c8d6cb; font-size: 0.78rem; font-weight: 600;">Active Profiles</div>
         </div>
         """, unsafe_allow_html=True)
 
