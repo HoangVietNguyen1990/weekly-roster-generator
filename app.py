@@ -3348,6 +3348,63 @@ def get_employee_team_and_age(emp_name, role_str="", age_val=None, dob_str=""):
 
     return (team_code, -final_age, emp_lower)
 
+def reorder_columns_logically(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    cols = list(df.columns)
+    
+    # 1. Employee / Primary Identifier column
+    emp_candidate_names = ["employee", "name", "staff", "employee name", "staff name", "employee_name"]
+    emp_col = None
+    for c in cols:
+        if str(c).strip().lower() in emp_candidate_names:
+            emp_col = c
+            break
+    if not emp_col and cols:
+        if cols[0] not in ["Shift", "Date", "Day", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]:
+            emp_col = cols[0]
+
+    # 2. Metadata columns
+    meta_candidate_names = ["team", "position", "role", "title", "job", "employment level", "status", "age", "dob", "date of birth", "commencing date", "start date"]
+    meta_cols = [c for c in cols if str(c).strip().lower() in meta_candidate_names and c != emp_col]
+
+    # 3. Days of the week in chronological order
+    days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    day_cols = []
+    for day_name in days_order:
+        for c in cols:
+            if str(c).strip().lower() == day_name.lower():
+                if c not in day_cols:
+                    day_cols.append(c)
+
+    # 4. Summary / Total / Metrics columns
+    summary_candidate_keywords = ["total", "sum", "hours", "cost", "pay", "shift", "notes", "comment"]
+    summary_cols = [c for c in cols if c != emp_col and c not in meta_cols and c not in day_cols and any(k in str(c).strip().lower() for k in summary_candidate_keywords)]
+
+    # Assemble ordered columns
+    ordered = []
+    if emp_col and emp_col in cols:
+        ordered.append(emp_col)
+    
+    for c in meta_cols:
+        if c in cols and c not in ordered:
+            ordered.append(c)
+
+    for c in day_cols:
+        if c in cols and c not in ordered:
+            ordered.append(c)
+
+    for c in summary_cols:
+        if c in cols and c not in ordered:
+            ordered.append(c)
+
+    # Append leftover columns
+    leftover = [c for c in cols if c not in ordered]
+    ordered.extend(leftover)
+
+    return df[ordered]
+
 def sort_dataframe_by_team_and_age(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return df
@@ -3359,7 +3416,7 @@ def sort_dataframe_by_team_and_age(df):
         if df_copy.columns[0] not in ["Shift", "Date", "Day"]:
             emp_col = df_copy.columns[0]
         else:
-            return df_copy
+            return reorder_columns_logically(df_copy)
 
     role_col = find_column(df_copy, ["position", "role", "employment level", "job", "title", "team"], "")
     age_col = find_column(df_copy, ["age"], "")
@@ -3377,7 +3434,8 @@ def sort_dataframe_by_team_and_age(df):
 
     df_copy["_sort_key"] = sort_keys
     df_copy = df_copy.sort_values(by="_sort_key").drop(columns=["_sort_key"]).reset_index(drop=True)
-    return df_copy
+    return reorder_columns_logically(df_copy)
+
 
 def cleanup_duplicate_employee_columns(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
