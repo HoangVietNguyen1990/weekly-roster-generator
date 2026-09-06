@@ -6067,6 +6067,8 @@ if is_manager:
                     use_container_width=(zoom_pct == 100)
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
+                if edited_final_df is not None and not edited_final_df.empty:
+                    st.session_state.final_roster_df = edited_final_df.copy()
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
