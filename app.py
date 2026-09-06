@@ -1749,6 +1749,8 @@ def build_roster_excel_bytes(edited_final_df, start_date):
     if edited_final_df is not None and not edited_final_df.empty:
         edited_final_df = strip_daily_gross_row(edited_final_df)
         edited_final_df = sort_dataframe_by_team_and_age(edited_final_df)
+        edited_final_df = reorder_roster_dataframe(edited_final_df)
+        edited_final_df = clean_roster_unavailability_display(edited_final_df)
         
     if isinstance(start_date, str):
         try:
@@ -1804,7 +1806,7 @@ def build_roster_excel_bytes(edited_final_df, start_date):
             val_str = "" if pd.isna(val) else str(val).strip()
             
             # Leave unavailable, off, and none cells completely clean & blank in exported Excel file
-            if not val_str or val_str.lower() in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_str.lower().startswith("unavail"):
+            if not val_str or val_str.lower() in ["off", "none", "nan", "null", "unavailable", " unavailable"] or val_str.lower().startswith("unavail") or "🚫" in val_str:
                 val_str = ""
             
             c.value = val_str
@@ -2218,73 +2220,7 @@ def clean_roster_unavailability_display(df):
     return df_out
 
 def format_roster_with_unavailability_badges(df, unavail_data=None):
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
-        return df
-
-    df_out = df.copy()
-    emp_col = find_column(df_out, ["employee", "name", "staff", "staff name"], df_out.columns[0])
-    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    days_in_df = [d for d in days_of_week if d in df_out.columns]
-    
-    if not days_in_df:
-        return df_out
-
-    if unavail_data is None or (isinstance(unavail_data, pd.DataFrame) and unavail_data.empty):
-        unavail_data = st.session_state.get("manual_unavailability", None)
-        if unavail_data is None or (isinstance(unavail_data, pd.DataFrame) and unavail_data.empty):
-            unavail_path = os.path.join(DATA_DIR, "unavailability.csv")
-            if os.path.exists(unavail_path):
-                try:
-                    unavail_data = pd.read_csv(unavail_path, dtype=str, keep_default_na=False)
-                except:
-                    unavail_data = pd.DataFrame()
-
-    # Build name_map for robust employee name matching across table rows
-    roster_emp_names = [str(r.get(emp_col, "")).strip() for _, r in df_out.iterrows() if str(r.get(emp_col, "")).strip()]
-    name_map = {n.lower(): n for n in roster_emp_names}
-
-    unavail_map = {}
-    if isinstance(unavail_data, pd.DataFrame) and not unavail_data.empty:
-        un_name_c = find_column(unavail_data, ["employee", "name", "staff", "person"])
-        un_day_c = find_column(unavail_data, ["day", "date", "weekday"])
-        un_win_c = find_column(unavail_data, ["time window", "window", "time", "unavailability", "reason"])
-        
-        if un_name_c and un_day_c and un_win_c:
-            for _, u_row in unavail_data.iterrows():
-                raw_u_emp = str(u_row.get(un_name_c, "")).strip()
-                u_day = str(u_row.get(un_day_c, "")).strip().lower()
-                u_win = str(u_row.get(un_win_c, "Full Day")).strip()
-                
-                matched_emp = find_matching_employee(raw_u_emp, name_map)
-                if matched_emp and u_day:
-                    key = (matched_emp.lower(), u_day)
-                    if key not in unavail_map:
-                        unavail_map[key] = []
-                    unavail_map[key].append(u_win)
-
-    for idx, row in df_out.iterrows():
-        emp_name = str(row.get(emp_col, "")).strip()
-        if not emp_name:
-            continue
-        emp_lower = emp_name.lower()
-
-        for day in days_in_df:
-            val = str(row.get(day, "")).strip()
-            val_lower = val.lower()
-            key = (emp_lower, day.lower())
-
-            # Check if this cell is unassigned/off or already flagged as unavailable
-            if not val or val_lower in ["off", "none", "nan", "unavailable", " unavailable"] or "unavail" in val_lower or val.startswith("🚫"):
-                if key in unavail_map and unavail_map[key]:
-                    clean_win = clean_win_display(unavail_map[key][0])
-                    if "all day" in clean_win.lower():
-                        clean_win = "Full Day"
-                    df_out.at[idx, day] = f"🚫 Unavailable ({clean_win})"
-                else:
-                    # Clean cell for employees with no logged unavailability on this day
-                    df_out.at[idx, day] = ""
-
-    return df_out
+    return clean_roster_unavailability_display(df)
 
 def highlight_unavailability_dataframe(df):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
@@ -5390,13 +5326,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
             val = str(sched.get(day, "")).strip()
             key = (norm_name, day.lower())
             if not val or val.lower() in ["off", "none", "nan", "null", "unavailable", ""] or val.lower().startswith("unavail") or val.startswith("🚫"):
-                if key in unavail_map and unavail_map[key]:
-                    clean_win = clean_win_display(unavail_map[key][0])
-                    row[day] = f"🚫 Unavailable ({clean_win})"
-                elif "unavail" in val.lower() or val.startswith("🚫"):
-                    row[day] = "🚫 Unavailable (Full Day)"
-                else:
-                    row[day] = ""
+                row[day] = ""
             else:
                 row[day] = val
         roster_rows.append(row)
