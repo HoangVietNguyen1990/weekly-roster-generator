@@ -2000,6 +2000,12 @@ def save_finalized_roster(df, start_date):
     except Exception:
         pass
         
+    try:
+        firestore_load_finalized_roster.clear()
+        firestore_list_finalized_rosters.clear()
+    except Exception:
+        pass
+        
     return date_str, xlsx_filename, excel_bytes
 
 def extract_date_from_filename(filename):
@@ -5732,7 +5738,9 @@ if is_manager:
                 with col_act1:
                     if st.button("💾 SAVE CHANGES TO ROSTER", key=f"btn_save_home_{selected_info['date_str']}", use_container_width=True):
                         save_finalized_roster(edited_archived_df, dt)
-                        st.success(f"🎉 Changes to roster for week {selected_info['date_str']} successfully saved to disk!")
+                        if f"edit_home_roster_{selected_info['date_str']}" in st.session_state:
+                            del st.session_state[f"edit_home_roster_{selected_info['date_str']}"]
+                        st.success(f"🎉 Changes to roster for week {selected_info['date_str']} successfully saved to disk & cloud!")
                         st.rerun()
                 
                 with col_act2:
@@ -6121,21 +6129,15 @@ if is_manager:
         if "email_notice_warning" in st.session_state:
             st.warning(st.session_state.pop("email_notice_warning"))
 
-        emp_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="emp_upload_mode", horizontal=True)
         upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
         
         if upload_emp is not None:
-            file_key = f"processed_{upload_emp.name}_{upload_emp.size}_{emp_mode}"
+            file_key = f"processed_{upload_emp.name}_{upload_emp.size}"
             if st.session_state.get("last_emp_file") != file_key:
                 loaded = read_excel_robust(upload_emp)
                 if loaded is not None:
                     loaded = cleanup_duplicate_employee_columns(loaded)
-                    if emp_mode == "Replace current data":
-                        st.session_state.manual_employees = loaded
-                    else:
-                        combined = pd.concat([st.session_state.manual_employees, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_employees = cleanup_duplicate_employee_columns(combined)
-                    st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                    st.session_state.manual_employees = sync_user_profiles_to_employees(loaded)
                     st.session_state.last_emp_file = file_key
                     save_persisted_df(st.session_state.manual_employees, "employees.csv")
                     if "edit_employees" in st.session_state:
@@ -6475,33 +6477,19 @@ if is_manager:
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
-        col_hdr_r1, col_hdr_r2 = st.columns([3, 1])
-        with col_hdr_r1:
-            st.subheader("Daily Bakery Shift Requirements")
-        with col_hdr_r2:
-            if st.button("🔄 Reset Master Requirements Data", key="btn_reset_req_master"):
-                st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
-                if "edit_requirements" in st.session_state:
-                    del st.session_state["edit_requirements"]
-                st.success("✅ Requirements reloaded from master data!")
-                st.rerun()
+        st.subheader("Daily Bakery Shift Requirements")
 
         if st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
             st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
-        req_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="req_upload_mode", horizontal=True)
         upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
         
         if upload_req is not None:
-            file_key = f"processed_{upload_req.name}_{upload_req.size}_{req_mode}"
+            file_key = f"processed_{upload_req.name}_{upload_req.size}"
             if st.session_state.get("last_req_file") != file_key:
                 loaded = read_excel_robust(upload_req)
                 if loaded is not None:
-                    if req_mode == "Replace current data":
-                        st.session_state.manual_requirements = loaded
-                    else:
-                        combined = pd.concat([st.session_state.manual_requirements, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_requirements = combined
+                    st.session_state.manual_requirements = loaded
                     st.session_state.last_req_file = file_key
                     save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
                     st.rerun()
@@ -6520,33 +6508,19 @@ if is_manager:
 
     # --- TAB 5: FIXED SHIFTS ---
     with tab_fixed:
-        col_hdr_f1, col_hdr_f2 = st.columns([3, 1])
-        with col_hdr_f1:
-            st.subheader("Fixed Baseline Shifts")
-        with col_hdr_f2:
-            if st.button("🔄 Reset Master Fixed Shifts Data", key="btn_reset_fixed_master"):
-                st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
-                if "edit_fixed" in st.session_state:
-                    del st.session_state["edit_fixed"]
-                st.success("✅ Fixed shifts reloaded from master data!")
-                st.rerun()
+        st.subheader("Fixed Baseline Shifts")
 
         if st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
             st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
 
-        fixed_mode = st.radio("Upload Mode:", ["Replace current data", "Append to current data"], key="fixed_upload_mode", horizontal=True)
         upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
         
         if upload_fixed is not None:
-            file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}_{fixed_mode}"
+            file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
             if st.session_state.get("last_fixed_file") != file_key:
                 loaded = read_excel_robust(upload_fixed)
                 if loaded is not None:
-                    if fixed_mode == "Replace current data":
-                        st.session_state.manual_fixed = loaded
-                    else:
-                        combined = pd.concat([st.session_state.manual_fixed, loaded], ignore_index=True).drop_duplicates()
-                        st.session_state.manual_fixed = combined
+                    st.session_state.manual_fixed = loaded
                     st.session_state.last_fixed_file = file_key
                     save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
                     st.rerun()
