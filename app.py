@@ -5926,22 +5926,13 @@ if is_manager:
             with col_tbl_h2:
                 show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
             
-            # Mobile View Mode & Zoom Level Controls Side-by-Side
-            col_mode, col_zoom = st.columns([1.8, 1.2])
-            with col_mode:
-                roster_view_mode = st.radio(
-                    "📱 Mobile Layout Mode:",
-                    ["📊 Full 7-Day Table", "📅 Single Day Focus", "🎴 Mobile Staff Cards"],
-                    key="roster_view_mode",
-                    horizontal=True
-                )
-            with col_zoom:
-                roster_zoom_val = st.select_slider(
-                    "🔍 Table Zoom Level:",
-                    options=["60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%"],
-                    value="100%",
-                    key="roster_zoom_slider"
-                )
+            # Zoom Level Control
+            roster_zoom_val = st.select_slider(
+                "🔍 Table Zoom Level:",
+                options=["60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%"],
+                value="100%",
+                key="roster_zoom_slider"
+            )
 
             # Strip out any existing summary row first to get pure staff dataframe
             st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
@@ -6002,73 +5993,19 @@ if is_manager:
             </style>
             """, unsafe_allow_html=True)
 
-            if roster_view_mode == "📅 Single Day Focus":
-                selected_day = st.selectbox("Select Day to Inspect:", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], key="sel_single_day_focus")
-                emp_col = df_for_editor.columns[0]
-                day_cols = [emp_col, selected_day] if selected_day in df_for_editor.columns else list(df_for_editor.columns)
-                edited_display_df = st.data_editor(
-                    df_for_editor[day_cols],
-                    num_rows="dynamic",
-                    key="edit_generated_roster_single",
-                    height=roster_table_height,
-                    column_config=dynamic_col_config,
-                    use_container_width=(zoom_pct == 100)
-                )
-                edited_final_df = strip_daily_gross_row(edited_display_df)
-                
-                day_g = daily_gross_map.get(selected_day, 0.0)
-                st.markdown(f"""
-                <div style="background: rgba(8, 29, 25, 0.95); border: 2px solid #e5a93c; border-radius: 10px; padding: 12px 18px; margin-top: 8px; text-align: center;">
-                    <span style="color: #e5a93c; font-weight: 800; font-size: 1.1rem;">💵 {selected_day} Predicted Gross Payroll: </span>
-                    <span style="color: #ffffff; font-weight: 900; font-size: 1.3rem; margin-left: 8px;">${day_g:,.2f}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-            elif roster_view_mode == "🎴 Mobile Staff Cards":
-                edited_final_df = strip_daily_gross_row(st.session_state.final_roster_df)
-                
-                # Daily Gross Header Strip for Mobile Staff Cards
-                daily_card_strip = "".join([
-                    f"<div style='background:#0d332b; border:1px solid #e5a93c; border-radius:8px; padding:6px 10px; text-align:center; min-width:85px; margin:2px;'>"
-                    f"<div style='color:#e5a93c; font-size:0.75rem; font-weight:800;'>{d[:3]}</div>"
-                    f"<div style='color:#ffffff; font-weight:900; font-size:0.95rem;'>${daily_gross_map.get(d, 0.0):,.2f}</div>"
-                    f"</div>"
-                    for d in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                ])
-                st.markdown(f"""
-                <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #e5a93c; border-radius: 12px; padding: 10px 14px; margin-bottom: 15px;">
-                    <div style="color: #f7d594; font-weight: 800; font-size: 1.0rem; margin-bottom: 8px;">💵 Daily Gross Payroll Breakdown</div>
-                    <div style="display: flex; overflow-x: auto; gap: 4px; padding-bottom: 4px;">{daily_card_strip}</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-                days_cols = [c for c in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] if c in edited_final_df.columns]
-                emp_col = edited_final_df.columns[0]
-                for idx, r_row in edited_final_df.iterrows():
-                    emp_n = r_row.get(emp_col, f"Employee #{idx+1}")
-                    shifts_html = "".join([f"<span style='background:#0d332b; border:1px solid #e5a93c; border-radius:6px; padding:4px 8px; margin:2px; font-size:0.85rem; display:inline-block;'><b>{d[:3]}:</b> {r_row.get(d, 'OFF')}</span>" for d in days_cols if str(r_row.get(d, '')).strip()])
-                    if not shifts_html:
-                        shifts_html = "<span style='color:#aaaaaa; font-style:italic;'>No shifts assigned</span>"
-                    st.markdown(f"""
-                    <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #e5a93c; border-radius: 12px; padding: 12px 16px; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                        <div style="color: #f7d594; font-weight: 800; font-size: 1.1rem; margin-bottom: 6px;">👤 {emp_n}</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 4px;">{shifts_html}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                gen_cols = list(df_for_editor.columns)
-                edited_display_df = st.data_editor(
-                    df_for_editor,
-                    column_order=gen_cols,
-                    num_rows="dynamic",
-                    key="edit_generated_roster",
-                    height=roster_table_height,
-                    column_config=dynamic_col_config,
-                    use_container_width=(zoom_pct == 100)
-                )
-                edited_final_df = strip_daily_gross_row(edited_display_df)
-                if edited_final_df is not None and not edited_final_df.empty:
-                    st.session_state.final_roster_df = edited_final_df.copy()
+            gen_cols = list(df_for_editor.columns)
+            edited_display_df = st.data_editor(
+                df_for_editor,
+                column_order=gen_cols,
+                num_rows="dynamic",
+                key="edit_generated_roster",
+                height=roster_table_height,
+                column_config=dynamic_col_config,
+                use_container_width=(zoom_pct == 100)
+            )
+            edited_final_df = strip_daily_gross_row(edited_display_df)
+            if edited_final_df is not None and not edited_final_df.empty:
+                st.session_state.final_roster_df = edited_final_df.copy()
 
             # Real-Time Financial Breakdown for Generated Roster
             wages_summary_gen = calculate_roster_wages(edited_final_df)
