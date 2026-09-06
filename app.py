@@ -3230,6 +3230,45 @@ def reorder_roster_dataframe(df):
             
     return df_out[ordered_cols]
 
+def reorder_requirements_dataframe(df):
+    """
+    Ensures Daily Shift Coverage Requirements dataframe always has logical column ordering:
+    1. Shift / Time Window column first.
+    2. Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
+    3. Any extra columns at the end.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    df_out = df.copy()
+    standard_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # Locate shift time window column
+    shift_col = find_column(df_out, ["shift", "shift time", "time", "window", "time window", "requirement"], df_out.columns[0])
+    
+    ordered_cols = []
+    if shift_col and shift_col in df_out.columns:
+        ordered_cols.append(shift_col)
+        
+    lower_map = {str(c).strip().lower(): c for c in df_out.columns}
+    
+    # Add days in Monday -> Sunday order
+    for day in standard_days:
+        if day in df_out.columns:
+            if day not in ordered_cols:
+                ordered_cols.append(day)
+        elif day.lower() in lower_map:
+            actual_col = lower_map[day.lower()]
+            if actual_col not in ordered_cols:
+                ordered_cols.append(actual_col)
+                
+    # Add remaining columns
+    for c in df_out.columns:
+        if c not in ordered_cols:
+            ordered_cols.append(c)
+            
+    return df_out[ordered_cols]
+
 import re
 
 def parse_date_robust(date_str):
@@ -6472,7 +6511,10 @@ if is_manager:
             📋 Daily Shift Coverage Requirements (Mon-Sun)
         </div>
         """, unsafe_allow_html=True)
-        requirements_df = st.data_editor(st.session_state.manual_requirements, num_rows="dynamic", key="edit_requirements_v2")
+        if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty:
+            st.session_state.manual_requirements = reorder_requirements_dataframe(st.session_state.manual_requirements)
+        req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
+        requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
         st.session_state.manual_requirements = requirements_df
         save_persisted_df(requirements_df, "requirements.csv")
 
