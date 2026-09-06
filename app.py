@@ -222,6 +222,7 @@ def firestore_save_finalized_roster(date_str, df):
     except Exception:
         return False
 
+@st.cache_data(ttl=30, show_spinner=False)
 def firestore_load_finalized_roster(date_str):
     db = get_firebase_db()
     if db is None:
@@ -248,6 +249,7 @@ def firestore_delete_finalized_roster(date_str):
     except Exception:
         return False
 
+@st.cache_data(ttl=15, show_spinner=False)
 def firestore_list_finalized_rosters():
     db = get_firebase_db()
     if db is None:
@@ -2177,7 +2179,9 @@ def list_finalized_rosters():
     local_files = []
     if os.path.exists(FINALIZED_DIR):
         try:
-            auto_import_reference_rosters()
+            if not st.session_state.get("auto_scanned_rosters_done"):
+                auto_import_reference_rosters()
+                st.session_state["auto_scanned_rosters_done"] = True
             local_files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
         except Exception:
             pass
