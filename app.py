@@ -1967,6 +1967,8 @@ def build_roster_excel_bytes(edited_final_df, start_date):
     return excel_buffer.getvalue()
 
 def save_finalized_roster(df, start_date):
+    if df is not None and isinstance(df, pd.DataFrame):
+        df = reorder_roster_dataframe(df)
     if isinstance(start_date, str):
         try:
             start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -2330,13 +2332,13 @@ def load_finalized_roster(csv_filename):
     date_str = csv_filename.replace("Roster_", "").replace(".csv", "")
     fs_df = firestore_load_finalized_roster(date_str)
     if fs_df is not None and not fs_df.empty:
-        return clean_roster_unavailability_display(fs_df)
+        return reorder_roster_dataframe(clean_roster_unavailability_display(fs_df))
 
     csv_path = os.path.join(FINALIZED_DIR, csv_filename)
     if os.path.exists(csv_path):
         try:
             df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
-            return clean_roster_unavailability_display(df)
+            return reorder_roster_dataframe(clean_roster_unavailability_display(df))
         except:
             return None
     return None
@@ -3171,7 +3173,57 @@ def clean_roster_dataframe(df):
             
         clean_indices.append(idx)
         
-    return df.loc[clean_indices].reset_index(drop=True)
+    df_clean = df.loc[clean_indices].reset_index(drop=True)
+    return reorder_roster_dataframe(df_clean)
+
+def reorder_roster_dataframe(df):
+    """
+    Ensures roster dataframes always have logical column ordering:
+    1. Employee / Staff name column first.
+    2. Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday.
+    3. Any extra columns at the end (e.g. Total Hours, Total Cost, Notes).
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+
+    df_out = df.copy()
+    standard_days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    
+    # Check if this dataframe actually contains roster day columns
+    lower_cols = [str(c).strip().lower() for c in df_out.columns]
+    has_days = any(d.lower() in lower_cols for d in standard_days)
+    if not has_days:
+        return df_out
+
+    # Locate employee column
+    emp_col = find_column(df_out, ["employee", "name", "staff", "staff name", "personnel", "employee name"])
+    if not emp_col and len(df_out.columns) > 0:
+        first_c = df_out.columns[0]
+        if first_c not in standard_days and first_c.lower() not in [d.lower() for d in standard_days]:
+            emp_col = first_c
+
+    ordered_cols = []
+    if emp_col and emp_col in df_out.columns:
+        ordered_cols.append(emp_col)
+        
+    lower_map = {str(c).strip().lower(): c for c in df_out.columns}
+    
+    # Add days in Monday -> Sunday order
+    for day in standard_days:
+        if day in df_out.columns:
+            if day not in ordered_cols:
+                ordered_cols.append(day)
+        elif day.lower() in lower_map:
+            actual_col = lower_map[day.lower()]
+            if actual_col not in ordered_cols:
+                ordered_cols.append(actual_col)
+                
+    # Add remaining columns
+    for c in df_out.columns:
+        if c not in ordered_cols:
+            ordered_cols.append(c)
+            
+    return df_out[ordered_cols]
 
 import re
 
@@ -5622,8 +5674,15 @@ if is_manager:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Live-editable dataframe for displayed roster
-                edited_archived_df = st.data_editor(archived_df, num_rows="dynamic", key=f"edit_home_roster_{selected_info['date_str']}")
+                # Live-editable dataframe for displayed roster with logical column ordering
+                archived_df = reorder_roster_dataframe(archived_df)
+                arch_cols = list(archived_df.columns)
+                edited_archived_df = st.data_editor(
+                    archived_df, 
+                    column_order=arch_cols,
+                    num_rows="dynamic", 
+                    key=f"edit_home_roster_{selected_info['date_str']}"
+                )
                 
                 try:
                     dt = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
@@ -5993,8 +6052,10 @@ if is_manager:
                     </div>
                     """, unsafe_allow_html=True)
             else:
+                gen_cols = list(df_for_editor.columns)
                 edited_display_df = st.data_editor(
                     df_for_editor,
+                    column_order=gen_cols,
                     num_rows="dynamic",
                     key="edit_generated_roster",
                     height=roster_table_height,
@@ -6511,8 +6572,9 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
         if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
-            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(st.session_state.manual_fixed)
-        fixed_df = st.data_editor(st.session_state.manual_fixed, num_rows="dynamic", key="edit_fixed_v2")
+            st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(st.session_state.manual_fixed))
+        fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
+        fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
         st.session_state.manual_fixed = fixed_df
         save_persisted_df(fixed_df, "fixed.csv")
 
