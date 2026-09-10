@@ -1281,7 +1281,7 @@ DEFAULT_PROFILES = {
   },
   "shaelyn": {
     "username": "shaelyn", "password": "TempPass123!", "role": "Employee", "employee_name": "Shaelyn",
-    "profile": { "full_name": "Shaelyn", "dob": "01/08/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "01/08/2026", "employment_level": "Service Staff" }
+    "profile": { "full_name": "Shaelyn", "dob": "25/02/2011", "store": "Brumby's Pakenham", "classification": "casual", "commencement_date": "01/08/2026", "employment_level": "Service Staff" }
   }
 }
 
@@ -3725,40 +3725,13 @@ if 'manual_employees' not in st.session_state:
         {"NAME": "Jane", "Team": "Store Owners", "DOB": "", "Commencing Date": "", "status": "owner", "position": "Service Staff"},
         {"NAME": "Amy", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
         {"NAME": "Viet", "Team": "Bakery Staff", "DOB": "", "Commencing Date": "", "status": "owner", "position": "baker"},
-        {"NAME": "Shaelyn", "Team": "Service Staff", "DOB": "01/08/2011", "Commencing Date": "01/08/2026", "status": "casual", "position": "Service Staff"}
+        {"NAME": "Shaelyn", "Team": "Service Staff", "DOB": "25/02/2011", "Commencing Date": "01/08/2026", "status": "casual", "position": "Service Staff"}
     ])
     st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
-default_unavail = pd.DataFrame([
-    {"Employee": "Elizabeth", "Day": "Saturday", "Time Window": "All Day"},
-    {"Employee": "Elizabeth", "Day": "Sunday", "Time Window": "All Day"},
-    {"Employee": "Stella", "Day": "Monday", "Time Window": "Before 3:30pm"},
-    {"Employee": "Stella", "Day": "Tuesday", "Time Window": "Before 3:30pm"},
-    {"Employee": "Stella", "Day": "Thursday", "Time Window": "Before 3:30pm"},
-    {"Employee": "Stella", "Day": "Friday", "Time Window": "Before 3:30pm"},
-    {"Employee": "Ainsley Mactier", "Day": "Monday", "Time Window": "After 5:00pm"},
-    {"Employee": "Ainsley Mactier", "Day": "Friday", "Time Window": "After 5:00pm"},
-    {"Employee": "Jude", "Day": "Sunday", "Time Window": "Before 12:00pm"},
-    {"Employee": "Jack", "Day": "Monday", "Time Window": "4:30pm-7:00pm"},
-    {"Employee": "Jack", "Day": "Tuesday", "Time Window": "4:30pm-7:00pm"},
-    {"Employee": "Jack", "Day": "Wednesday", "Time Window": "4:30pm-7:00pm"},
-    {"Employee": "Jack", "Day": "Thursday", "Time Window": "4:30pm-7:00pm"},
-    {"Employee": "Jack", "Day": "Friday", "Time Window": "2:30pm-5:30pm"},
-    {"Employee": "Violet", "Day": "Saturday", "Time Window": "All Day"},
-    {"Employee": "Violet", "Day": "Sunday", "Time Window": "All Day"},
-    {"Employee": "Amy", "Day": "Monday", "Time Window": "All Day"},
-    {"Employee": "Amy", "Day": "Tuesday", "Time Window": "All Day"},
-    {"Employee": "Amy", "Day": "Wednesday", "Time Window": "All Day"},
-    {"Employee": "Amy", "Day": "Thursday", "Time Window": "All Day"},
-    {"Employee": "Amy", "Day": "Friday", "Time Window": "All Day"},
-    {"Employee": "Olivia", "Day": "Monday", "Time Window": "All Day"},
-    {"Employee": "Olivia", "Day": "Tuesday", "Time Window": "All Day"},
-    {"Employee": "Olivia", "Day": "Wednesday", "Time Window": "All Day"},
-    {"Employee": "Olivia", "Day": "Thursday", "Time Window": "All Day"},
-    {"Employee": "Olivia", "Day": "Friday", "Time Window": "All Day"}
-])
+default_unavail = pd.DataFrame(columns=["Employee", "Day", "Time Window"])
 
-if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
+if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None:
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
 
 if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
