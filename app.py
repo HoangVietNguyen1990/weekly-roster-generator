@@ -2265,11 +2265,11 @@ def list_finalized_rosters():
     # 1. Fetch cloud rosters from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
     
-    # 2. Fetch local disk rosters
+    # 2. Fetch local disk rosters (.csv and .xlsx)
     local_files = []
     if os.path.exists(FINALIZED_DIR):
         try:
-            local_files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
+            local_files = [f for f in os.listdir(FINALIZED_DIR) if (f.endswith(".csv") or f.endswith(".xlsx")) and not f.startswith("~$")]
         except Exception:
             pass
 
@@ -2278,10 +2278,15 @@ def list_finalized_rosters():
         merged_map[r["date_str"]] = r
         
     for f in local_files:
-        raw_date = f.replace("Roster_", "").replace(".csv", "")
-        if raw_date not in merged_map:
+        if f.endswith(".csv"):
+            raw_date = f.replace("Roster_", "").replace(".csv", "")
+            dt = parse_date_robust(raw_date)
+        else:
+            dt = extract_date_from_filename(f)
+            raw_date = dt.strftime("%Y-%m-%d") if dt else f.replace(".xlsx", "")
+
+        if raw_date and raw_date not in merged_map:
             try:
-                dt = parse_date_robust(raw_date)
                 if dt:
                     end_dt = dt + timedelta(days=6)
                     label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
@@ -2425,18 +2430,34 @@ def attach_daily_gross_row(df, daily_gross_dict):
     return df_out
 
 def load_finalized_roster(csv_filename):
-    date_str = csv_filename.replace("Roster_", "").replace(".csv", "")
+    dt = extract_date_from_filename(csv_filename)
+    date_str = dt.strftime("%Y-%m-%d") if dt else csv_filename.replace("Roster_", "").replace(".csv", "").replace(".xlsx", "")
+    
     fs_df = firestore_load_finalized_roster(date_str)
     if fs_df is not None and not fs_df.empty:
         return reorder_roster_dataframe(clean_roster_unavailability_display(fs_df))
 
-    csv_path = os.path.join(FINALIZED_DIR, csv_filename)
-    if os.path.exists(csv_path):
+    file_path = os.path.join(FINALIZED_DIR, csv_filename)
+    if os.path.exists(file_path):
         try:
-            df = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
+            if csv_filename.endswith(".xlsx"):
+                df = read_excel_robust(file_path)
+            else:
+                df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+            if df is not None:
+                return reorder_roster_dataframe(clean_roster_unavailability_display(df))
+        except:
+            return None
+            
+    # Fallback: check if a CSV with Roster_{date_str}.csv exists
+    alt_csv = os.path.join(FINALIZED_DIR, f"Roster_{date_str}.csv")
+    if os.path.exists(alt_csv):
+        try:
+            df = pd.read_csv(alt_csv, dtype=str, keep_default_na=False)
             return reorder_roster_dataframe(clean_roster_unavailability_display(df))
         except:
             return None
+
     return None
 
 def delete_finalized_roster(date_str):
