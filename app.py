@@ -4117,28 +4117,53 @@ def render_store_kiosk_timeclock():
     df_cards = load_persisted_timecards()
     today_punch = None
     if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
-        for idx, r in df_cards.iterrows():
-            if str(r.get("Date", "")).strip() == today_str and str(r.get("Employee", "")).strip().lower() == selected_emp.strip().lower():
-                today_punch = r.to_dict()
-                break
+        target_date = today_dt.date() if isinstance(today_dt, datetime) else today_dt
+        sel_emp_clean = str(selected_emp).strip().lower()
+        sel_emp_first = sel_emp_clean.split()[0] if sel_emp_clean else ""
+
+        for idx in range(len(df_cards) - 1, -1, -1):
+            r = df_cards.iloc[idx]
+            raw_d = str(r.get("Date", "")).strip()
+            parsed_d = parse_date_robust(raw_d)
+            is_same_date = (raw_d == today_str) or (parsed_d and parsed_d == target_date)
+            
+            if is_same_date:
+                raw_emp = str(r.get("Employee", "")).strip()
+                emp_clean = raw_emp.lower()
+                emp_first = emp_clean.split()[0] if emp_clean else ""
+                
+                is_match = (
+                    emp_clean == sel_emp_clean or
+                    sel_emp_clean in emp_clean or
+                    emp_clean in sel_emp_clean or
+                    (sel_emp_first and emp_first and sel_emp_first == emp_first)
+                )
+                if is_match:
+                    today_punch = r.to_dict()
+                    break
 
     scheduled_shift = get_scheduled_shift_for_employee_and_date(selected_emp, today_dt)
 
     c_in = today_punch.get("Clock In", "") if today_punch else ""
     c_out = today_punch.get("Clock Out", "") if today_punch else ""
 
+    sched_clean = str(scheduled_shift).strip().lower() if scheduled_shift else ""
+    is_off = not scheduled_shift or sched_clean in ["off", "nan", "none", "null", "unavailable", ""]
+
     st.markdown(f"""
     <div style="background: #081d19; padding: 20px; border-radius: 14px; border: 1.5px solid #1f5c50; margin-bottom: 20px;">
         <h3 style="color: #e5a93c; margin: 0 0 10px 0;">👤 Staff Member: {selected_emp}</h3>
-        <p style="color: #d0e6df; margin: 4px 0; font-size: 1rem;"><b>Scheduled Shift Today:</b> <code>{scheduled_shift}</code></p>
+        <p style="color: #d0e6df; margin: 4px 0; font-size: 1rem;"><b>Scheduled Shift Today:</b> <code>{scheduled_shift if scheduled_shift else "Off"}</code></p>
     """, unsafe_allow_html=True)
 
     if c_in and not c_out:
         st.markdown(f"<p style='color: #48bb78; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>🟢 Status: WORKING NOW (Clocked IN at {c_in})</p></div>", unsafe_allow_html=True)
     elif c_in and c_out:
         st.markdown(f"<p style='color: #4299e1; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>✅ Status: SHIFT COMPLETED ({c_in} - {c_out})</p></div>", unsafe_allow_html=True)
+    elif is_off:
+        st.markdown(f"<p style='color: #a0aec0; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>⚪ Status: NOT SCHEDULED TODAY</p></div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<p style='color: #fc8181; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>🔴 Status: CLOCKED OUT</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #e5a93c; font-size: 1.15rem; font-weight: 800; margin: 6px 0;'>🟡 Status: NOT CLOCKED IN YET (Scheduled {scheduled_shift})</p></div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     col_in, col_out = st.columns(2)
