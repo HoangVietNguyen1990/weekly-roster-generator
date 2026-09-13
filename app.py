@@ -3511,7 +3511,17 @@ def parse_date_robust(date_str):
     try:
         dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
         if pd.notna(dt):
-            return dt.date()
+            d = dt.date()
+            # Australian weekly rosters start on Monday (weekday 0).
+            # If d is non-Monday, test if swapping day and month resolves to Monday (e.g. 2026-07-09 vs 2026-09-07)
+            if d.weekday() != 0 and 1 <= d.day <= 12 and 1 <= d.month <= 12:
+                try:
+                    d_swapped = datetime(d.year, d.day, d.month).date()
+                    if d_swapped.weekday() == 0:
+                        return d_swapped
+                except Exception:
+                    pass
+            return d
     except:
         pass
     return None
