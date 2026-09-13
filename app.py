@@ -2259,46 +2259,12 @@ def find_all_old_roster_files():
     return found_files
 
 def sync_local_finalized_rosters_to_firestore():
-    """Syncs any unsynced local roster files in FINALIZED_DIR directly to Cloud Firestore."""
-    db = get_firebase_db()
-    if db is None or not os.path.exists(FINALIZED_DIR):
-        return
-    try:
-        fs_list = firestore_list_finalized_rosters()
-        fs_dates = {item["date_str"] for item in fs_list if item.get("date_str")}
-        
-        for f in os.listdir(FINALIZED_DIR):
-            if f.startswith("~$") or f.startswith("."):
-                continue
-            dt = extract_date_from_filename(f)
-            if not dt and f.startswith("Roster_"):
-                raw_date = f.replace("Roster_", "").replace(".csv", "").replace(".xlsx", "")
-                dt = parse_date_robust(raw_date)
-            if not dt:
-                continue
-            d_str = dt.strftime("%Y-%m-%d")
-            if d_str not in fs_dates:
-                file_p = os.path.join(FINALIZED_DIR, f)
-                try:
-                    if f.endswith(".xlsx"):
-                        df = read_excel_robust(file_p)
-                    else:
-                        df = pd.read_csv(file_p, dtype=str, keep_default_na=False)
-                    if df is not None and not df.empty:
-                        firestore_save_finalized_roster(d_str, df)
-                        fs_dates.add(d_str)
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    return 0
 
 def auto_import_reference_rosters(force_scan=False):
     return 0
 
 def list_finalized_rosters():
-    # 0. Sync any unsynced local disk files to Cloud Firestore
-    sync_local_finalized_rosters_to_firestore()
-
     # 1. Fetch cloud rosters strictly from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
     if fs_rosters:
@@ -2499,14 +2465,8 @@ def load_finalized_roster(csv_filename):
 def delete_finalized_roster(date_str):
     if not date_str:
         return False
-        
-    # 1. Save to persistent deleted rosters list so auto_import won't revive it
-    try:
-        save_deleted_roster_date(date_str)
-    except Exception:
-        pass
 
-    # 2. Delete from cloud Firestore
+    # 1. Delete from cloud Firestore
     try:
         firestore_delete_finalized_roster(date_str)
     except Exception:
