@@ -10,6 +10,7 @@ import json
 import re
 import math
 from datetime import datetime, timedelta
+import traceback
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -239,14 +240,35 @@ def firestore_load_profiles():
 
 def firestore_save_finalized_roster(date_str, df):
     db = get_firebase_db()
-    if db is None or df is None:
+    if db is None:
+        err = get_firebase_error()
+        if hasattr(st, "error"):
+            st.error(f"❌ **Firestore Upload Failed**: Firebase Cloud Database is not connected.\n\n`Details: {err}`")
+        return False
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        if hasattr(st, "warning"):
+            st.warning("⚠️ **Firestore Upload Skipped**: Cannot upload empty roster DataFrame.")
         return False
     try:
-        records = df.astype(str).to_dict(orient="records")
+        df_clean = df.copy()
+        clean_cols = []
+        for c in df_clean.columns:
+            col_str = str(c).strip().replace(".", "_").replace("/", "_").replace("[", "").replace("]", "")
+            clean_cols.append(col_str if col_str else "Col")
+        df_clean.columns = clean_cols
+
+        records = df_clean.astype(str).to_dict(orient="records")
         doc_ref = db.collection("finalized_rosters").document(date_str)
         doc_ref.set({"records": records, "date_str": date_str, "updated_at": datetime.now().isoformat()})
+
+        clear_roster_caches()
         return True
-    except Exception:
+    except Exception as e:
+        tb_str = traceback.format_exc()
+        if hasattr(st, "error"):
+            st.error(f"❌ **Firestore Save Exception for Roster ({date_str})**:\n\n`{e}`")
+            with st.expander("🔍 View Complete Exception Traceback", expanded=False):
+                st.code(tb_str, language="python")
         return False
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -302,6 +324,14 @@ def firestore_list_finalized_rosters():
         return results
     except Exception:
         return []
+
+def clear_roster_caches():
+    """Immediately invalidates Streamlit cache_data entries for finalized rosters."""
+    try:
+        firestore_load_finalized_roster.clear()
+        firestore_list_finalized_rosters.clear()
+    except Exception:
+        pass
 
 def firestore_save_announcements(announcements):
     db = get_firebase_db()
@@ -2133,12 +2163,7 @@ def save_finalized_roster(df, start_date):
     except Exception:
         pass
         
-    try:
-        firestore_load_finalized_roster.clear()
-        firestore_list_finalized_rosters.clear()
-    except Exception:
-        pass
-        
+    clear_roster_caches()
     return date_str, xlsx_filename, excel_bytes
 
 def extract_date_from_filename(filename):
@@ -2483,12 +2508,8 @@ def delete_finalized_roster(date_str):
     except Exception:
         pass
 
-    # 3. Clear Streamlit function caches
-    try:
-        firestore_load_finalized_roster.clear()
-        firestore_list_finalized_rosters.clear()
-    except Exception:
-        pass
+    # 2. Clear Streamlit function caches
+    clear_roster_caches()
 
     # 4. Remove all matching local files from FINALIZED_DIR
     date_label = date_str
