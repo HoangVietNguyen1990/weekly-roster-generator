@@ -1324,28 +1324,42 @@ def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
     matching_r_df = None
     
     if past_rosters:
-        # Search ONLY for exact published week roster match covering date_val
+        # Search for published week roster match covering date_val
         for r_item in past_rosters:
             s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
-            if s_dt and (s_dt <= d_obj <= s_dt + timedelta(days=6)):
-                matching_r_df = load_finalized_roster(r_item["csv_filename"])
-                break
+            if s_dt:
+                # Ensure s_dt is Monday-aligned
+                if s_dt.weekday() != 0 and 1 <= s_dt.day <= 12 and 1 <= s_dt.month <= 12:
+                    try:
+                        s_dt_sw = datetime(s_dt.year, s_dt.day, s_dt.month).date()
+                        if s_dt_sw.weekday() == 0:
+                            s_dt = s_dt_sw
+                    except Exception:
+                        pass
+                
+                # Check if target date falls within the week starting on Monday s_dt
+                if s_dt <= d_obj <= s_dt + timedelta(days=6):
+                    loaded_df = load_finalized_roster(r_item["csv_filename"])
+                    if loaded_df is not None and not loaded_df.empty:
+                        matching_r_df = loaded_df
+                        break
 
-    # If an exact published roster exists for this week, extract employee shift
-    if matching_r_df is not None and not matching_r_df.empty and day_name in matching_r_df.columns:
-        emp_col = find_column(matching_r_df, ["name", "employee", "staff"])
-        if emp_col in matching_r_df.columns:
+    if matching_r_df is not None and not matching_r_df.empty:
+        # Find day column using robust find_column helper
+        day_col = find_column(matching_r_df, [day_name, day_name[:3]], None)
+        emp_col = find_column(matching_r_df, ["name", "employee", "staff", "staff name"], None)
+        
+        if day_col and emp_col and day_col in matching_r_df.columns and emp_col in matching_r_df.columns:
             for _, r in matching_r_df.iterrows():
                 raw_emp = str(r.get(emp_col, "")).strip()
-                if find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
-                    val = str(r.get(day_name, "")).strip()
-                    if val and val.lower() not in ["off", "nan", "none", "unavailable", ""]:
+                if raw_emp and find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
+                    val = str(r.get(day_col, "")).strip()
+                    if val and val.lower() not in ["off", "nan", "none", "null", "unavailable", ""]:
                         return val
                     else:
                         return "Off"
             return "Off"
 
-    # If no published roster exists for this target week date, leave scheduled shift empty
     return ""
 
 def get_week_start_date_str(dt_obj=None):
