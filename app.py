@@ -1319,16 +1319,18 @@ def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
         
     days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     day_name = days_list[d_obj.weekday()]
+    monday_dt = d_obj - timedelta(days=d_obj.weekday())
+    sunday_dt = monday_dt + timedelta(days=6)
     
-    past_rosters = list_finalized_rosters()
     matching_r_df = None
     
+    # 1. Search in list_finalized_rosters()
+    past_rosters = list_finalized_rosters()
     if past_rosters:
-        # Search for published week roster match covering date_val
         for r_item in past_rosters:
             s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
             if s_dt:
-                # Ensure s_dt is Monday-aligned
+                # Monday-align s_dt if needed
                 if s_dt.weekday() != 0 and 1 <= s_dt.day <= 12 and 1 <= s_dt.month <= 12:
                     try:
                         s_dt_sw = datetime(s_dt.year, s_dt.day, s_dt.month).date()
@@ -1337,22 +1339,58 @@ def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
                     except Exception:
                         pass
                 
-                # Check if target date falls within the week starting on Monday s_dt
                 if s_dt <= d_obj <= s_dt + timedelta(days=6):
                     loaded_df = load_finalized_roster(r_item["csv_filename"])
                     if loaded_df is not None and not loaded_df.empty:
                         matching_r_df = loaded_df
                         break
 
+    # 2. Fallback: try direct loading by Monday date string variants
+    if matching_r_df is None or matching_r_df.empty:
+        possible_keys = [
+            f"Roster_{monday_dt.strftime('%Y-%m-%d')}.csv",
+            f"Team_Roster_{monday_dt.strftime('%d.%m.%Y')}.xlsx",
+            monday_dt.strftime('%Y-%m-%d'),
+            monday_dt.strftime('%d.%m.%Y')
+        ]
+        for key in possible_keys:
+            loaded_df = load_finalized_roster(key)
+            if loaded_df is not None and not loaded_df.empty:
+                matching_r_df = loaded_df
+                break
+
+    # 3. Fallback: check session state active roster
+    if (matching_r_df is None or matching_r_df.empty) and hasattr(st, "session_state"):
+        if "final_roster_df" in st.session_state and st.session_state.final_roster_df is not None:
+            matching_r_df = st.session_state.final_roster_df
+
+    # Extract shift value from matching dataframe
     if matching_r_df is not None and not matching_r_df.empty:
-        # Find day column using robust find_column helper
         day_col = find_column(matching_r_df, [day_name, day_name[:3]], None)
         emp_col = find_column(matching_r_df, ["name", "employee", "staff", "staff name"], None)
+        if not emp_col and len(matching_r_df.columns) > 0:
+            first_c = matching_r_df.columns[0]
+            if first_c not in days_list and first_c[:3] not in [d[:3] for d in days_list]:
+                emp_col = first_c
         
         if day_col and emp_col and day_col in matching_r_df.columns and emp_col in matching_r_df.columns:
+            e_clean = str(emp_name).strip().lower()
+            e_first = e_clean.split()[0] if e_clean else ""
+            
             for _, r in matching_r_df.iterrows():
                 raw_emp = str(r.get(emp_col, "")).strip()
-                if raw_emp and find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
+                if not raw_emp or raw_emp.lower() in ["nan", "none", "off", ""]:
+                    continue
+                r_clean = raw_emp.lower()
+                r_first = r_clean.split()[0] if r_clean else ""
+                
+                is_match = (
+                    r_clean == e_clean or
+                    r_clean in e_clean or
+                    e_clean in r_clean or
+                    (r_first and e_first and r_first == e_first)
+                )
+                if is_match:
                     val = str(r.get(day_col, "")).strip()
                     if val and val.lower() not in ["off", "nan", "none", "null", "unavailable", ""]:
                         return val
@@ -3525,17 +3563,7 @@ def parse_date_robust(date_str):
     try:
         dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
         if pd.notna(dt):
-            d = dt.date()
-            # Australian weekly rosters start on Monday (weekday 0).
-            # If d is non-Monday, test if swapping day and month resolves to Monday (e.g. 2026-07-09 vs 2026-09-07)
-            if d.weekday() != 0 and 1 <= d.day <= 12 and 1 <= d.month <= 12:
-                try:
-                    d_swapped = datetime(d.year, d.day, d.month).date()
-                    if d_swapped.weekday() == 0:
-                        return d_swapped
-                except Exception:
-                    pass
-            return d
+            return dt.date()
     except:
         pass
     return None
