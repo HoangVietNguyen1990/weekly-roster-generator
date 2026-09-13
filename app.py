@@ -4115,6 +4115,10 @@ def render_store_kiosk_timeclock():
         st.session_state["kiosk_selected_emp"] = "-- Select Your Name --"
         st.session_state.reset_kiosk_emp = False
 
+    for k in list(st.session_state.keys()):
+        if k.startswith("kiosk_confirm_break_"):
+            del st.session_state[k]
+
     st.markdown("#### 👤 Select Your Name to Punch In / Out")
     selected_emp = st.selectbox(
         "Choose Employee:",
@@ -4221,36 +4225,36 @@ def render_store_kiosk_timeclock():
             st.session_state.reset_kiosk_emp = True
             st.rerun()
 
-    confirm_key = f"kiosk_confirm_break_{selected_emp}"
-    if confirm_key not in st.session_state:
-        st.session_state[confirm_key] = False
-
-    with col_out:
-        is_out_disabled = bool(not c_in or c_out)
-        btn_out = st.button("🔴 CLOCK OUT NOW", key=f"kiosk_btn_out_{selected_emp}", use_container_width=True, disabled=is_out_disabled)
-        if btn_out:
-            st.session_state[confirm_key] = True
-
-    if st.session_state.get(confirm_key, False) and c_in and not c_out:
-        clock_out_time_str = melbourne_now.strftime("%I:%M %p")
+    # Evaluate worked shift hours and break entitlement for currently clocked-in staff
+    worked_hrs = 0.0
+    expected_break_mins = 0
+    entitlement_desc = ""
+    break_required = False
+    
+    if c_in and not c_out:
         clock_in_str = today_punch.get("Clock In", "") if today_punch else ""
-        c_in_dec = parse_time_to_decimal(clock_in_str)
-        c_out_dec = parse_time_to_decimal(clock_out_time_str)
-        net_h = round(c_out_dec - c_in_dec, 2) if c_out_dec > c_in_dec else 0.0
-        
-        expected_break_mins, entitlement_desc = calculate_award_break(net_h)
+        c_in_dec = parse_time_to_decimal(clock_in_str) if clock_in_str else 0.0
+        now_dec = melbourne_now.hour + melbourne_now.minute / 60.0
+        worked_hrs = round(now_dec - c_in_dec, 2) if now_dec > c_in_dec else 0.0
+        expected_break_mins, entitlement_desc = calculate_award_break(worked_hrs)
+        break_required = (worked_hrs >= 5.0)
 
+    final_break_mins = 0
+    has_answered_break = not break_required
+
+    # Render Break Confirmation Box ABOVE Clock Out controls if shift >= 5 hours
+    if c_in and not c_out and break_required:
         st.markdown(f"""
-        <div style="background: rgba(12, 43, 37, 0.95); border: 2px solid #e5a93c; padding: 20px; border-radius: 14px; margin: 16px 0;">
-            <h4 style="color: #f7d594; margin: 0 0 8px 0; font-size: 1.2rem;">☕ Shift Break Confirmation</h4>
-            <p style="color: #ffffff; font-size: 0.95rem; margin-bottom: 4px;"><b>Staff Member:</b> {selected_emp} &nbsp;|&nbsp; <b>Clocked Shift:</b> {clock_in_str} – {clock_out_time_str} (~{net_h:.2f} hrs worked)</p>
-            <p style="color: #d0e6df; font-size: 0.9rem; margin-bottom: 12px;"><b>Award Guideline:</b> {entitlement_desc}</p>
+        <div style="background: rgba(12, 43, 37, 0.95); border: 2px solid #e5a93c; padding: 18px; border-radius: 14px; margin-bottom: 16px;">
+            <h4 style="color: #f7d594; margin: 0 0 6px 0; font-size: 1.15rem;">☕ Shift Break Confirmation (Worked ~{worked_hrs:.2f} hrs)</h4>
+            <p style="color: #d0e6df; font-size: 0.9rem; margin-bottom: 8px;"><b>Award Requirement:</b> {entitlement_desc}. Please confirm your break taken below to enable Clock Out.</p>
         </div>
         """, unsafe_allow_html=True)
 
         break_mode = st.radio(
-            "Did you take your scheduled break today?",
+            "Confirm break taken today before clocking out:",
             options=[
+                "-- Select Break Taken --",
                 f"✅ Standard Award Break ({expected_break_mins} mins)",
                 "⏱️ Custom Break Duration",
                 "❌ No Break Taken (Worked Through)"
@@ -4258,64 +4262,71 @@ def render_store_kiosk_timeclock():
             key=f"kiosk_break_mode_{selected_emp}"
         )
 
-        final_break_mins = expected_break_mins
-        if "Standard Award Break" in break_mode:
+        if break_mode == "-- Select Break Taken --":
+            has_answered_break = False
+            st.warning("⚠️ Please select your break taken above to enable the Clock Out button.")
+        elif "Standard Award Break" in break_mode:
+            has_answered_break = True
             final_break_mins = expected_break_mins
         elif "Custom Break" in break_mode:
+            has_answered_break = True
             final_break_mins = st.selectbox("Select actual break taken (minutes):", options=[0, 10, 15, 30, 45, 60, 90], index=3, key=f"kiosk_custom_mins_{selected_emp}")
-        else:
+        else: # "No Break Taken"
+            has_answered_break = True
             final_break_mins = 0
 
-        b_col1, b_col2 = st.columns(2)
-        with b_col1:
-            btn_finish_out = st.button("✅ CONFIRM & CLOCK OUT", key=f"kiosk_btn_finish_out_{selected_emp}", use_container_width=True)
-            if btn_finish_out:
+    with col_out:
+        is_out_disabled = bool(not c_in or c_out or not has_answered_break)
+        btn_out = st.button("🔴 CLOCK OUT NOW", key=f"kiosk_btn_out_{selected_emp}", use_container_width=True, disabled=is_out_disabled)
+        if btn_out:
+            clock_out_time_str = melbourne_now.strftime("%I:%M %p")
+            clock_in_str = today_punch.get("Clock In", "") if today_punch else ""
+            c_in_dec = parse_time_to_decimal(clock_in_str) if clock_in_str else 0.0
+            c_out_dec = parse_time_to_decimal(clock_out_time_str)
+            net_h = round(c_out_dec - c_in_dec, 2) if c_out_dec > c_in_dec else worked_hrs
+
+            if break_required:
                 break_status_str = f"Confirmed ({final_break_mins} mins)" if final_break_mins > 0 else "No Break (Worked Through)"
-                
-                if today_punch:
-                    today_punch["Clock Out"] = clock_out_time_str
-                    today_punch["Net Hours"] = str(net_h)
-                    today_punch["Break (Mins)"] = str(final_break_mins)
-                    today_punch["Break Status"] = break_status_str
-                    today_punch["Status"] = "Completed"
-                    rec_id = today_punch.get("Record ID")
-                    df_cards = df_cards[df_cards["Record ID"] != rec_id]
-                    df_updated = pd.concat([df_cards, pd.DataFrame([today_punch])], ignore_index=True)
-                else:
-                    rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
-                    loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
-                    new_rec = {
-                        "Record ID": rec_id,
-                        "Date": today_str,
-                        "Employee": selected_emp,
-                        "Scheduled Shift": scheduled_shift,
-                        "Clock In": clock_in_str if clock_in_str else clock_out_time_str,
-                        "Clock Out": clock_out_time_str,
-                        "Net Hours": str(net_h),
-                        "Break (Mins)": str(final_break_mins),
-                        "Break Status": break_status_str,
-                        "Variance (Mins)": "0",
-                        "GPS Lat": "",
-                        "GPS Lon": "",
-                        "Distance (m)": "0.0",
-                        "Location Verification": loc_badge,
-                        "Note": "✅ Store Terminal Punch",
-                        "Late Correction Status": "Normal",
-                        "Status": "Completed"
-                    }
-                    df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
+            else:
+                break_status_str = "No Break Required (< 5 hrs)"
 
-                save_timecard_records(df_updated)
-                st.session_state[confirm_key] = False
-                st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs, Break: {final_break_mins} mins)."
-                st.session_state.reset_kiosk_emp = True
-                st.rerun()
+            if today_punch:
+                today_punch["Clock Out"] = clock_out_time_str
+                today_punch["Net Hours"] = str(net_h)
+                today_punch["Break (Mins)"] = str(final_break_mins)
+                today_punch["Break Status"] = break_status_str
+                today_punch["Status"] = "Completed"
+                rec_id = today_punch.get("Record ID")
+                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_updated = pd.concat([df_cards, pd.DataFrame([today_punch])], ignore_index=True)
+            else:
+                rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
+                loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
+                new_rec = {
+                    "Record ID": rec_id,
+                    "Date": today_str,
+                    "Employee": selected_emp,
+                    "Scheduled Shift": scheduled_shift,
+                    "Clock In": clock_in_str if clock_in_str else clock_out_time_str,
+                    "Clock Out": clock_out_time_str,
+                    "Net Hours": str(net_h),
+                    "Break (Mins)": str(final_break_mins),
+                    "Break Status": break_status_str,
+                    "Variance (Mins)": "0",
+                    "GPS Lat": "",
+                    "GPS Lon": "",
+                    "Distance (m)": "0.0",
+                    "Location Verification": loc_badge,
+                    "Note": "✅ Store Terminal Punch",
+                    "Late Correction Status": "Normal",
+                    "Status": "Completed"
+                }
+                df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
 
-        with b_col2:
-            btn_cancel_out = st.button("❌ CANCEL", key=f"kiosk_btn_cancel_out_{selected_emp}", use_container_width=True)
-            if btn_cancel_out:
-                st.session_state[confirm_key] = False
-                st.rerun()
+            save_timecard_records(df_updated)
+            st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs, Break: {final_break_mins} mins)."
+            st.session_state.reset_kiosk_emp = True
+            st.rerun()
 
 def render_employee_current_roster_tab(user_key):
     user_info = user_profiles.get(user_key, {})
