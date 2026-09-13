@@ -5725,18 +5725,7 @@ if is_manager:
                             st.success(f"🗑️ Finalized Roster for {selected_info['date_str']} permanently deleted!")
                             st.rerun()
 
-                # Upload/Replace file for selected past roster week
-                st.markdown("<br>", unsafe_allow_html=True)
-                up_past_file = st.file_uploader(f"📤 Replace Roster File for Week {selected_info['date_str']} (.xlsx / .csv)", type=["xlsx", "csv"], key=f"up_home_{selected_info['date_str']}")
-                if up_past_file is not None:
-                    past_up_key = f"home_up_{up_past_file.name}_{up_past_file.size}_{selected_info['date_str']}"
-                    if st.session_state.get("last_home_upload_key") != past_up_key:
-                        df_p_up = read_excel_robust(up_past_file)
-                        if df_p_up is not None and not df_p_up.empty:
-                            save_finalized_roster(df_p_up, dt)
-                            st.session_state.last_home_upload_key = past_up_key
-                            st.success(f"🎉 Finalized roster for week {selected_info['date_str']} updated via file upload!")
-                            st.rerun()
+
 
                 # Real-Time Wage, Tax & Super Breakdown for Displayed Roster
                 st.markdown("<br>", unsafe_allow_html=True)
