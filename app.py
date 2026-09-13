@@ -2301,12 +2301,17 @@ def auto_import_reference_rosters(force_scan=False):
     return 0
 
 def list_finalized_rosters():
-    # 1. Fetch cloud rosters strictly from Firebase Firestore
+    merged_map = {}
+
+    # 1. Fetch cloud rosters from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
     if fs_rosters:
-        return fs_rosters
+        for r in fs_rosters:
+            raw_date = r.get("date_str")
+            if raw_date:
+                merged_map[raw_date] = r
     
-    # 2. Fallback to local disk rosters only if Cloud Firestore is empty / disconnected
+    # 2. Merge local disk rosters if missing from cloud list
     local_files = []
     if os.path.exists(FINALIZED_DIR):
         try:
@@ -2314,7 +2319,6 @@ def list_finalized_rosters():
         except Exception:
             pass
 
-    merged_map = {}
     for f in local_files:
         if f.endswith(".csv"):
             raw_date = f.replace("Roster_", "").replace(".csv", "")
