@@ -1052,6 +1052,69 @@ TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
 ANNOUNCEMENTS_FILE = os.path.join(DATA_DIR, "announcements.json")
+DELETED_ROSTERS_FILE = os.path.join(DATA_DIR, "deleted_rosters.json")
+
+def load_deleted_roster_dates():
+    dates = set()
+    if os.path.exists(DELETED_ROSTERS_FILE):
+        try:
+            with open(DELETED_ROSTERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    dates.update(data)
+        except Exception:
+            pass
+    db = get_firebase_db()
+    if db is not None:
+        try:
+            doc_ref = db.collection("system").document("deleted_rosters")
+            doc = doc_ref.get()
+            if doc.exists:
+                fs_dates = doc.to_dict().get("dates", [])
+                if isinstance(fs_dates, list):
+                    dates.update(fs_dates)
+        except Exception:
+            pass
+    return dates
+
+def save_deleted_roster_date(date_str):
+    if not date_str:
+        return
+    dates = load_deleted_roster_dates()
+    dates.add(str(date_str))
+    dates_list = list(dates)
+    try:
+        with open(DELETED_ROSTERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(dates_list, f, indent=2)
+    except Exception:
+        pass
+    db = get_firebase_db()
+    if db is not None:
+        try:
+            doc_ref = db.collection("system").document("deleted_rosters")
+            doc_ref.set({"dates": dates_list, "updated_at": datetime.now().isoformat()})
+        except Exception:
+            pass
+
+def remove_deleted_roster_date(date_str):
+    if not date_str:
+        return
+    dates = load_deleted_roster_dates()
+    if str(date_str) in dates:
+        dates.remove(str(date_str))
+        dates_list = list(dates)
+        try:
+            with open(DELETED_ROSTERS_FILE, "w", encoding="utf-8") as f:
+                json.dump(dates_list, f, indent=2)
+        except Exception:
+            pass
+        db = get_firebase_db()
+        if db is not None:
+            try:
+                doc_ref = db.collection("system").document("deleted_rosters")
+                doc_ref.set({"dates": dates_list, "updated_at": datetime.now().isoformat()})
+            except Exception:
+                pass
 
 BAKERY_LAT = -38.063557
 BAKERY_LON = 145.455262
@@ -2053,6 +2116,12 @@ def save_finalized_roster(df, start_date):
     except Exception:
         pass
         
+    # Remove date_str from deleted_rosters list if re-saving
+    try:
+        remove_deleted_roster_date(date_str)
+    except Exception:
+        pass
+        
     try:
         firestore_load_finalized_roster.clear()
         firestore_list_finalized_rosters.clear()
@@ -2190,81 +2259,9 @@ def find_all_old_roster_files():
     return found_files
 
 def auto_import_reference_rosters(force_scan=False):
-    """
-    Automatically scans reference roster candidate files (and files in FINALIZED_DIR),
-    extracts the week start date, and if that date is not yet saved in finalized rosters,
-    parses and saves it to FINALIZED_DIR and Firestore.
-    Returns the count of newly imported rosters.
-    """
-    imported_count = 0
-    try:
-        existing_dates = set()
-        if os.path.exists(FINALIZED_DIR):
-            for f in os.listdir(FINALIZED_DIR):
-                if f.startswith("Roster_") and f.endswith(".csv"):
-                    d_str = f.replace("Roster_", "").replace(".csv", "")
-                    existing_dates.add(d_str)
-        
-        fs_list = firestore_list_finalized_rosters()
-        for item in fs_list:
-            if item.get("date_str"):
-                existing_dates.add(item["date_str"])
-
-        candidate_files = find_all_old_roster_files()
-        if os.path.exists(FINALIZED_DIR):
-            for f in os.listdir(FINALIZED_DIR):
-                full_p = os.path.abspath(os.path.join(FINALIZED_DIR, f))
-                if os.path.isfile(full_p) and full_p not in candidate_files:
-                    candidate_files.append(full_p)
-
-        for filepath in candidate_files:
-            if not os.path.exists(filepath):
-                continue
-            fname = os.path.basename(filepath)
-            
-            if fname.startswith("~$") or fname.startswith("."):
-                continue
-
-            dt = extract_date_from_filename(fname)
-            if not dt:
-                continue
-
-            d_str = dt.strftime("%Y-%m-%d")
-            if d_str in existing_dates and not force_scan:
-                continue
-
-            try:
-                if filepath.endswith(".csv"):
-                    df_raw = pd.read_csv(filepath, dtype=str, keep_default_na=False)
-                else:
-                    df_raw = read_excel_robust(filepath)
-
-                if df_raw is not None and not df_raw.empty:
-                    df_clean = df_raw.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
-                    emp_c = find_column(df_clean, ["employee", "name", "staff"], df_clean.columns[0])
-                    if emp_c in df_clean.columns:
-                        df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
-                    df_clean = clean_roster_dataframe(df_clean)
-                    df_clean = sort_dataframe_by_team_and_age(df_clean)
-
-                    save_finalized_roster(df_clean, dt)
-                    existing_dates.add(d_str)
-                    imported_count += 1
-            except Exception:
-                pass
-
-    except Exception:
-        pass
-
-    return imported_count
+    return 0
 
 def list_finalized_rosters():
-    # 0. Auto-import any un-indexed reference rosters (e.g. Team_Roster_07.09.2026.xlsx)
-    try:
-        auto_import_reference_rosters(force_scan=False)
-    except Exception:
-        pass
-
     # 1. Fetch cloud rosters from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
     
@@ -2443,25 +2440,45 @@ def load_finalized_roster(csv_filename):
     return None
 
 def delete_finalized_roster(date_str):
-    firestore_delete_finalized_roster(date_str)
-    if not os.path.exists(FINALIZED_DIR):
-        return True
-    deleted = False
+    if not date_str:
+        return False
+        
+    # 1. Save to persistent deleted rosters list so auto_import won't revive it
+    try:
+        save_deleted_roster_date(date_str)
+    except Exception:
+        pass
+
+    # 2. Delete from cloud Firestore
+    try:
+        firestore_delete_finalized_roster(date_str)
+    except Exception:
+        pass
+
+    # 3. Clear Streamlit function caches
+    try:
+        firestore_load_finalized_roster.clear()
+        firestore_list_finalized_rosters.clear()
+    except Exception:
+        pass
+
+    # 4. Remove all matching local files from FINALIZED_DIR
     date_label = date_str
     try:
         dt = parse_date_robust(date_str)
         if dt:
             date_label = dt.strftime("%d.%m.%Y")
-    except:
+    except Exception:
         pass
-        
-    for f in os.listdir(FINALIZED_DIR):
-        if date_str in f or date_label in f:
-            try:
-                os.remove(os.path.join(FINALIZED_DIR, f))
-                deleted = True
-            except:
-                pass
+
+    if os.path.exists(FINALIZED_DIR):
+        for f in os.listdir(FINALIZED_DIR):
+            if date_str in f or date_label in f:
+                try:
+                    os.remove(os.path.join(FINALIZED_DIR, f))
+                except Exception:
+                    pass
+
     return True
 
 def calculate_roster_wages(edited_df):
