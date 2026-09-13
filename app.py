@@ -10,6 +10,22 @@ import json
 import re
 import math
 from datetime import datetime, timedelta
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
+
+def get_melbourne_now():
+    if ZoneInfo is not None:
+        try:
+            return datetime.now(ZoneInfo("Australia/Melbourne"))
+        except Exception:
+            pass
+    return datetime.utcnow() + timedelta(hours=10)
+
+def get_melbourne_today():
+    return get_melbourne_now().date()
+
 
 # --- FIREBASE AUTHENTICATION & CLOUD FIRESTORE STORAGE ENGINE ---
 FIREBASE_INITIALIZED = False
@@ -260,9 +276,13 @@ def firestore_list_finalized_rosters():
         for doc in docs:
             raw_date = doc.id
             try:
-                dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
-                end_dt = dt + timedelta(days=6)
-                label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+                dt = parse_date_robust(raw_date)
+                if dt:
+                    end_dt = dt + timedelta(days=6)
+                    label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+                else:
+                    dt = None
+                    label = f"Roster {raw_date}"
             except:
                 dt = None
                 label = f"Roster {raw_date}"
@@ -1125,7 +1145,7 @@ def find_matching_employee(raw_name, name_map):
 
 def get_week_start_date_str(dt_obj=None):
     if dt_obj is None:
-        dt_obj = datetime.now().date()
+        dt_obj = get_melbourne_today()
     if isinstance(dt_obj, datetime):
         dt_obj = dt_obj.date()
     mon_dt = dt_obj - timedelta(days=dt_obj.weekday())
@@ -1755,10 +1775,7 @@ def build_roster_excel_bytes(edited_final_df, start_date):
         edited_final_df = clean_roster_unavailability_display(edited_final_df)
         
     if isinstance(start_date, str):
-        try:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        except:
-            start_date = datetime.now().date()
+        start_date = parse_date_robust(start_date) or get_melbourne_today()
             
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1974,10 +1991,7 @@ def save_finalized_roster(df, start_date):
     if df is not None and isinstance(df, pd.DataFrame):
         df = reorder_roster_dataframe(df)
     if isinstance(start_date, str):
-        try:
-            start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        except:
-            start_date = datetime.now().date()
+        start_date = parse_date_robust(start_date) or get_melbourne_today()
             
     date_str = start_date.strftime("%Y-%m-%d")
     date_label = start_date.strftime("%d.%m.%Y")
@@ -2200,9 +2214,13 @@ def list_finalized_rosters():
         raw_date = f.replace("Roster_", "").replace(".csv", "")
         if raw_date not in merged_map:
             try:
-                dt = datetime.strptime(raw_date, "%Y-%m-%d").date()
-                end_dt = dt + timedelta(days=6)
-                label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+                dt = parse_date_robust(raw_date)
+                if dt:
+                    end_dt = dt + timedelta(days=6)
+                    label = f"Week of {dt.strftime('%d/%m/%Y')} (Mon {dt.strftime('%d/%m')} - Sun {end_dt.strftime('%d/%m')})"
+                else:
+                    dt = None
+                    label = f"Roster {raw_date}"
             except:
                 dt = None
                 label = f"Roster {raw_date}"
@@ -2361,8 +2379,9 @@ def delete_finalized_roster(date_str):
     deleted = False
     date_label = date_str
     try:
-        dt = datetime.strptime(date_str, "%Y-%m-%d").date()
-        date_label = dt.strftime("%d.%m.%Y")
+        dt = parse_date_robust(date_str)
+        if dt:
+            date_label = dt.strftime("%d.%m.%Y")
     except:
         pass
         
@@ -2845,8 +2864,10 @@ def build_payroll_historical_trend():
         if df is not None and not df.empty:
             w_sum = calculate_roster_wages(df)
             try:
-                dt = datetime.strptime(r["date_str"], "%Y-%m-%d").date()
-                week_label = dt.strftime("%d/%m/%Y")
+                dt = r.get("start_date") or parse_date_robust(r["date_str"])
+                week_label = dt.strftime("%d/%m/%Y") if dt else r["date_str"]
+                if not dt:
+                    dt = datetime.min.date()
             except:
                 dt = datetime.min.date()
                 week_label = r["date_str"]
@@ -3774,14 +3795,14 @@ def render_store_kiosk_timeclock():
     </div>
     """, unsafe_allow_html=True)
 
-    today_dt = datetime.utcnow() + timedelta(hours=10)
+    today_dt = get_melbourne_now()
     today_str = today_dt.strftime("%d/%m/%Y")
     day_name = today_dt.strftime("%A")
 
     st.markdown(f"""
     <div style="background: #0c2b25; padding: 14px 20px; border-radius: 12px; border: 1.5px solid #1f5c50; text-align: center; margin-bottom: 20px;">
         <div style="font-size: 2.2rem; font-weight: 900; color: #e5a93c; letter-spacing: 1px;">{today_dt.strftime('%I:%M:%S %p')}</div>
-        <div style="font-size: 0.95rem; color: #a0aec0; font-weight: 700; margin-top: 2px;">🗓️ {day_name}, {today_str} (Melbourne AEST)</div>
+        <div style="font-size: 0.95rem; color: #a0aec0; font-weight: 700; margin-top: 2px;">🗓️ {day_name}, {today_str} (Melbourne Local Time)</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -3839,18 +3860,17 @@ def render_store_kiosk_timeclock():
                 today_punch = r.to_dict()
                 break
 
-    scheduled_shift = "7:00am-3:30pm"
+    scheduled_shift = "Off"
     past_rosters = list_finalized_rosters()
     if past_rosters:
-        target_dt = parse_date_robust(today_str)
+        target_dt = today_dt.date()
         matching_rosters = []
-        if target_dt:
-            for r_item in past_rosters:
-                s_dt = r_item.get("start_date")
-                if s_dt and (s_dt <= target_dt <= s_dt + timedelta(days=6)):
-                    matching_rosters.append(r_item)
-                    
-        rosters_to_scan = matching_rosters if matching_rosters else past_rosters
+        for r_item in past_rosters:
+            s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
+            if s_dt and (s_dt <= target_dt <= s_dt + timedelta(days=6)):
+                matching_rosters.append(r_item)
+                
+        rosters_to_scan = matching_rosters if matching_rosters else (past_rosters[:1] if past_rosters else [])
         for r_item in rosters_to_scan:
             r_df = load_finalized_roster(r_item["csv_filename"])
             if r_df is not None and not r_df.empty and day_name in r_df.columns:
@@ -3859,10 +3879,10 @@ def render_store_kiosk_timeclock():
                     for _, r in r_df.iterrows():
                         if find_matching_employee(selected_emp, {str(r.get(emp_col, "")).strip().lower(): str(r.get(emp_col, "")).strip()}):
                             val = str(r.get(day_name, "")).strip()
-                            if val and val.lower() not in ["off", "nan", "unavailable"]:
+                            if val and val.lower() not in ["nan", "none", ""]:
                                 scheduled_shift = val
                                 break
-            if scheduled_shift != "7:00am-3:30pm":
+            if scheduled_shift != "Off":
                 break
 
     c_in = today_punch.get("Clock In", "") if today_punch else ""
@@ -3884,7 +3904,7 @@ def render_store_kiosk_timeclock():
     st.markdown("<br>", unsafe_allow_html=True)
     col_in, col_out = st.columns(2)
 
-    melbourne_now = datetime.utcnow() + timedelta(hours=10)
+    melbourne_now = get_melbourne_now()
 
     with col_in:
         is_in_disabled = bool(c_in and not c_out)
@@ -3972,21 +3992,22 @@ def render_employee_current_roster_tab(user_key):
     user_info = user_profiles.get(user_key, {})
     emp_name = user_info.get("employee_name", user_key)
     
-    today = datetime.now().date()
+    today = get_melbourne_today()
     
     past_rosters = list_finalized_rosters()
     matched_roster = None
     matched_start_date = None
     
-    # Compare current date against roster week periods (Monday to Sunday)
+    # Compare current Melbourne date against roster week periods (Monday to Sunday)
     for r in past_rosters:
         try:
-            s_dt = datetime.strptime(r["date_str"], "%Y-%m-%d").date()
-            e_dt = s_dt + timedelta(days=6)
-            if s_dt <= today <= e_dt:
-                matched_roster = r
-                matched_start_date = s_dt
-                break
+            s_dt = r.get("start_date") or parse_date_robust(r.get("date_str", ""))
+            if s_dt:
+                e_dt = s_dt + timedelta(days=6)
+                if s_dt <= today <= e_dt:
+                    matched_roster = r
+                    matched_start_date = s_dt
+                    break
         except:
             pass
             
@@ -3994,7 +4015,7 @@ def render_employee_current_roster_tab(user_key):
     if not matched_roster and past_rosters:
         matched_roster = past_rosters[0]
         try:
-            matched_start_date = datetime.strptime(matched_roster["date_str"], "%Y-%m-%d").date()
+            matched_start_date = matched_roster.get("start_date") or parse_date_robust(matched_roster.get("date_str", "")) or today
         except:
             matched_start_date = today
             
@@ -4601,7 +4622,7 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     # Parse week start and end dates
     mon_date_obj = parse_date_robust(selected_week_str)
     if not mon_date_obj:
-        mon_date_obj = datetime.now().date()
+        mon_date_obj = get_melbourne_today()
     if isinstance(mon_date_obj, datetime):
         mon_date_obj = mon_date_obj.date()
     sun_date_obj = mon_date_obj + timedelta(days=6)
@@ -4696,10 +4717,12 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
         for idx, row in df_cards.iterrows():
             d_obj = parse_date_robust(row.get("Date", ""))
-            if d_obj and get_week_start_date_str(d_obj) == selected_week_str:
-                row_dict = row.to_dict()
-                row_dict["_d_obj"] = d_obj
-                week_cards.append(row_dict)
+            if d_obj:
+                d_mon = d_obj - timedelta(days=d_obj.weekday())
+                if d_mon == mon_date_obj or get_week_start_date_str(d_obj) == selected_week_str:
+                    row_dict = row.to_dict()
+                    row_dict["_d_obj"] = d_obj
+                    week_cards.append(row_dict)
 
     # Sort chronologically by date
     week_cards.sort(key=lambda x: x["_d_obj"])
@@ -4725,7 +4748,11 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
             var_m = int(float(r_dict.get("Variance (Mins)", "0")))
         except:
             var_m = 0
-            
+
+        sched_r = parse_shift_range(r_dict.get("Scheduled Shift", ""))
+        sched_h = round(sched_r[2], 2) if sched_r else 0.0
+
+        emp_summary_map[emp]["sched_hrs"] += sched_h
         emp_summary_map[emp]["actual_hrs"] += actual_h
         emp_summary_map[emp]["var_mins"] += var_m
         if "Late" in r_dict.get("Late Correction Status", "") or "Late" in r_dict.get("Note", ""):
@@ -4788,13 +4815,16 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     # ----------------------------------------------------
     # 5. WRITE SUMMARY SHEET ROWS
     # ----------------------------------------------------
+    tot_sched_hrs = 0.0
     tot_hrs = 0.0
     for emp, s_data in emp_summary_map.items():
+        sch_h = round(s_data["sched_hrs"], 2)
         act_h = round(s_data["actual_hrs"], 2)
+        tot_sched_hrs += sch_h
         tot_hrs += act_h
         ws_summary.append([
             emp,
-            act_h,
+            sch_h,
             act_h,
             s_data["var_mins"],
             s_data["late_status"],
@@ -4812,7 +4842,7 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     # Total Summary Row
     ws_summary.append([
         "TOTAL WEEKLY AUDITED HOURS",
-        round(tot_hrs, 2),
+        round(tot_sched_hrs, 2),
         round(tot_hrs, 2),
         "",
         "",
@@ -4861,7 +4891,7 @@ def render_manager_timesheet_audit_dashboard():
     
     # Clean auto-generated "Missing" records for past historical dates (older than today)
     if df_cards is not None and not df_cards.empty:
-        today_dt = datetime.now().date()
+        today_dt = get_melbourne_today()
         valid_rows = []
         for idx, r in df_cards.iterrows():
             status = str(r.get("Status", "")).strip()
@@ -4876,12 +4906,12 @@ def render_manager_timesheet_audit_dashboard():
         save_timecard_records(df_cards)
 
     # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
-    today_dt = datetime.now().date()
+    today_dt = get_melbourne_today()
     past_rosters = list_finalized_rosters()
     if past_rosters:
         for r_item in past_rosters:
             r_df = load_finalized_roster(r_item["csv_filename"])
-            start_dt = r_item.get("start_date")
+            start_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
             if r_df is not None and not r_df.empty and start_dt:
                 if start_dt <= today_dt <= start_dt + timedelta(days=6):
                     emp_col = find_column(r_df, ["name", "employee", "staff"])
@@ -5429,7 +5459,7 @@ def render_home_dashboard():
     </div>
     """, unsafe_allow_html=True)
 
-    melbourne_now = datetime.utcnow() + timedelta(hours=10)
+    melbourne_now = get_melbourne_now()
     today_str = melbourne_now.strftime("%d/%m/%Y")
     
     # 1. Executive Operations & KPI Cards Bar
@@ -5701,10 +5731,7 @@ if is_manager:
                     key=f"edit_home_roster_{selected_info['date_str']}"
                 )
                 
-                try:
-                    dt = datetime.strptime(selected_info["date_str"], "%Y-%m-%d").date()
-                except:
-                    dt = datetime.now().date()
+                dt = parse_date_robust(selected_info["date_str"]) or get_melbourne_today()
                     
                 # Action Buttons Row (Save Edits, Download, Delete)
                 col_act1, col_act2, col_act3 = st.columns([1.2, 1.2, 1])
