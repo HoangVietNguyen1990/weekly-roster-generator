@@ -277,6 +277,7 @@ def firestore_load_finalized_roster(date_str):
     if db is None:
         return None
     try:
+        # 1. Direct document query by date_str
         doc_ref = db.collection("finalized_rosters").document(date_str)
         doc = doc_ref.get()
         if doc.exists:
@@ -284,6 +285,32 @@ def firestore_load_finalized_roster(date_str):
             records = data.get("records", [])
             if records:
                 return pd.DataFrame(records)
+
+        # 2. Query alternate date key variants (e.g. DD.MM.YYYY, YYYY-MM-DD, or swapped MM/DD)
+        dt = parse_date_robust(date_str)
+        if dt:
+            alt_keys = [
+                dt.strftime("%Y-%m-%d"),
+                dt.strftime("%d.%m.%Y"),
+                dt.strftime("%d-%m-%Y"),
+            ]
+            try:
+                dt_swapped = datetime(dt.year, dt.day, dt.month).date()
+                alt_keys.extend([
+                    dt_swapped.strftime("%Y-%m-%d"),
+                    dt_swapped.strftime("%d.%m.%Y"),
+                    dt_swapped.strftime("%d-%m-%Y"),
+                ])
+            except Exception:
+                pass
+
+            for key in alt_keys:
+                if key != date_str:
+                    doc = db.collection("finalized_rosters").document(key).get()
+                    if doc.exists:
+                        records = doc.to_dict().get("records", [])
+                        if records:
+                            return pd.DataFrame(records)
     except Exception:
         pass
     return None
@@ -293,7 +320,42 @@ def firestore_delete_finalized_roster(date_str):
     if db is None:
         return False
     try:
+        # Delete primary document ID
         db.collection("finalized_rosters").document(date_str).delete()
+
+        # Build list of potential document key variants
+        targets = {date_str}
+        dt = parse_date_robust(date_str)
+        if dt:
+            targets.add(dt.strftime("%Y-%m-%d"))
+            targets.add(dt.strftime("%d.%m.%Y"))
+            targets.add(dt.strftime("%d-%m-%Y"))
+            try:
+                dt_swapped = datetime(dt.year, dt.day, dt.month).date()
+                targets.add(dt_swapped.strftime("%Y-%m-%d"))
+                targets.add(dt_swapped.strftime("%d.%m.%Y"))
+                targets.add(dt_swapped.strftime("%d-%m-%Y"))
+            except Exception:
+                pass
+
+        for target in targets:
+            try:
+                db.collection("finalized_rosters").document(target).delete()
+            except Exception:
+                pass
+
+        # Stream all documents and delete any document with ID matching any target
+        try:
+            docs = db.collection("finalized_rosters").stream()
+            for doc in docs:
+                for target in targets:
+                    if target in doc.id:
+                        doc.reference.delete()
+                        break
+        except Exception:
+            pass
+
+        clear_roster_caches()
         return True
     except Exception:
         return False
@@ -2506,31 +2568,42 @@ def delete_finalized_roster(date_str):
     if not date_str:
         return False
 
-    # 1. Delete from cloud Firestore
+    # 1. Delete from cloud Firestore (handles exact doc ID + variants)
     try:
         firestore_delete_finalized_roster(date_str)
     except Exception:
         pass
 
-    # 2. Clear Streamlit function caches
+    # 2. Clear Streamlit function caches immediately
     clear_roster_caches()
 
-    # 4. Remove all matching local files from FINALIZED_DIR
-    date_label = date_str
+    # 3. Remove all matching local files from FINALIZED_DIR
+    targets = {date_str}
     try:
         dt = parse_date_robust(date_str)
         if dt:
-            date_label = dt.strftime("%d.%m.%Y")
+            targets.add(dt.strftime("%d.%m.%Y"))
+            targets.add(dt.strftime("%Y-%m-%d"))
+            targets.add(dt.strftime("%d-%m-%Y"))
+            try:
+                dt_swapped = datetime(dt.year, dt.day, dt.month).date()
+                targets.add(dt_swapped.strftime("%d.%m.%Y"))
+                targets.add(dt_swapped.strftime("%Y-%m-%d"))
+                targets.add(dt_swapped.strftime("%d-%m-%Y"))
+            except Exception:
+                pass
     except Exception:
         pass
 
     if os.path.exists(FINALIZED_DIR):
         for f in os.listdir(FINALIZED_DIR):
-            if date_str in f or date_label in f:
-                try:
-                    os.remove(os.path.join(FINALIZED_DIR, f))
-                except Exception:
-                    pass
+            for t in targets:
+                if t in f:
+                    try:
+                        os.remove(os.path.join(FINALIZED_DIR, f))
+                    except Exception:
+                        pass
+                    break
 
     return True
 
@@ -5974,6 +6047,15 @@ if is_manager:
                         if st.button("🔄 Load Historical Roster Data & Line Graph", key="btn_load_past_home_2", use_container_width=True):
                             auto_import_reference_rosters()
                             st.rerun()
+            else:
+                st.warning(f"⚠️ **Roster Schedule for `{selected_label}` is Empty or Unreadable in Database.**\n\n"
+                           f"The record key exists in the Firebase Cloud Firestore database, but contains 0 shift records (empty data).")
+                col_emp1, col_emp2 = st.columns([1.2, 1])
+                with col_emp1:
+                    if st.button(f"🗑️ Delete Empty Roster Entry ({selected_info['date_str']})", key=f"btn_del_empty_{selected_info['date_str']}", use_container_width=True):
+                        delete_finalized_roster(selected_info["date_str"])
+                        st.success(f"🗑️ Empty roster entry for {selected_info['date_str']} permanently deleted!")
+                        st.rerun()
         else:
             st.info("ℹ️ No finalized rosters displayed yet.")
             if st.button("🔄 Auto-Scan & Restore Published Master Rosters", key="btn_load_past_home_1", use_container_width=True):
