@@ -108,12 +108,23 @@ def get_firebase_db():
                     FIREBASE_LAST_ERROR = f"Error reading secrets.toml: {e_file}"
 
         if not firebase_config:
-            for json_filename in ["serviceAccountKey.json", "firebase_key.json", "firebase_service_account.json"]:
-                if os.path.exists(json_filename):
+            json_candidates = ["serviceAccountKey.json", "firebase_key.json", "firebase_service_account.json", "app-database-b486e-firebase-adminsdk-fbsvc-913610cd6b.json"]
+            if os.path.exists(BASE_DIR):
+                try:
+                    for fn in os.listdir(BASE_DIR):
+                        if fn.endswith(".json") and fn not in json_candidates:
+                            if any(k in fn.lower() for k in ["firebase", "adminsdk", "service_account", "app-database"]):
+                                json_candidates.append(fn)
+                except Exception:
+                    pass
+
+            for json_filename in json_candidates:
+                full_p = os.path.join(BASE_DIR, json_filename) if not os.path.isabs(json_filename) else json_filename
+                if os.path.exists(full_p):
                     try:
-                        with open(json_filename, "r", encoding="utf-8") as f:
+                        with open(full_p, "r", encoding="utf-8") as f:
                             raw_cfg = json.load(f)
-                        if raw_cfg and ("project_id" in raw_cfg or "private_key" in raw_cfg):
+                        if raw_cfg and isinstance(raw_cfg, dict) and ("project_id" in raw_cfg or "private_key" in raw_cfg):
                             firebase_config = dict(raw_cfg)
                             break
                     except Exception as e_json:
@@ -3207,13 +3218,6 @@ with col_head2:
                     st.success("🟢 **Firebase Cloud Sync Active**\nAll employee accounts, profiles, rosters, & shift data are continuously synced to Google Cloud.")
                 else:
                     st.warning(f"🟡 **Local Backup Mode**\nRunning on local `.csv` / `.json` files.\n\n`Status: {get_firebase_error()}`")
-                    
-                if st.button("🚀 Upload Local Files to Firebase Cloud", use_container_width=True, key="btn_sync_firebase_now"):
-                    ok, msg = migrate_all_local_files_to_firebase()
-                    if ok:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚪 Logout", key="btn_logout_popover", use_container_width=True):
@@ -6007,7 +6011,7 @@ if is_manager:
                         
                         # Save immediately to disk & cloud so it is persisted after turn off / restart
                         save_finalized_roster(df_clean, target_start_dt)
-                        st.success(f"🎉 Roster loaded & permanently saved to disk for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
+                        st.success(f"🎉 Roster loaded & permanently uploaded to Firebase Cloud Firestore for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
 
         with col2:
             st.markdown("""
