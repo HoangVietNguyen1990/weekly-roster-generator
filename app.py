@@ -5326,6 +5326,7 @@ def render_manager_timesheet_audit_dashboard():
             sched = str(r.get("Scheduled Shift", "")).strip()
             r_d_obj = parse_date_robust(r.get("Date", ""))
             is_today = (r_d_obj and r_d_obj == today_dt)
+            is_past_day = (r_d_obj and r_d_obj < today_dt)
             
             shift_r = parse_shift_range(sched) if (sched and "-" in sched) else None
             s_start_dec = shift_r[0] if shift_r else None
@@ -5344,17 +5345,20 @@ def render_manager_timesheet_audit_dashboard():
                     else:
                         calc_note = "⚠️ Missing Clock-In"
                         calc_status = "Missing"
-                elif existing_status == "Missing" or "Missing" in existing_note:
+                elif is_past_day or existing_status == "Missing" or "Missing" in existing_note:
                     calc_note = "⚠️ Missing Clock-In"
                     calc_status = "Missing"
                 else:
                     calc_note = "⏳ Scheduled Today"
                     calc_status = "Scheduled"
             elif c_in and not c_out:
-                if is_today and s_end_dec is not None and now_dec >= s_end_dec + 0.25:
+                if is_past_day:
+                    calc_note = "⚠️ Missing Clock-Out"
+                    calc_status = "Missing"
+                elif is_today and s_end_dec is not None and now_dec >= s_end_dec + 0.25:
                     calc_note = "⚠️ Missing Clock-Out"
                     calc_status = "Working"
-                elif sched and "-" in sched:
+                elif is_today and sched and "-" in sched:
                     sched_start_str = sched.split("-")[0].strip()
                     c_in_dec = parse_time_to_decimal(c_in)
                     s_in_dec = parse_time_to_decimal(sched_start_str)
@@ -5364,9 +5368,12 @@ def render_manager_timesheet_audit_dashboard():
                     else:
                         calc_note = "🟢 Working Now"
                     calc_status = "Working"
-                else:
+                elif is_today:
                     calc_note = "🟢 Working Now"
                     calc_status = "Working"
+                else:
+                    calc_note = "⚠️ Missing Clock-Out"
+                    calc_status = "Missing"
             elif c_in and c_out:
                 if sched and "-" in sched:
                     sched_start_str = sched.split("-")[0].strip()
