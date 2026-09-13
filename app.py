@@ -2258,14 +2258,53 @@ def find_all_old_roster_files():
 
     return found_files
 
+def sync_local_finalized_rosters_to_firestore():
+    """Syncs any unsynced local roster files in FINALIZED_DIR directly to Cloud Firestore."""
+    db = get_firebase_db()
+    if db is None or not os.path.exists(FINALIZED_DIR):
+        return
+    try:
+        fs_list = firestore_list_finalized_rosters()
+        fs_dates = {item["date_str"] for item in fs_list if item.get("date_str")}
+        
+        for f in os.listdir(FINALIZED_DIR):
+            if f.startswith("~$") or f.startswith("."):
+                continue
+            dt = extract_date_from_filename(f)
+            if not dt and f.startswith("Roster_"):
+                raw_date = f.replace("Roster_", "").replace(".csv", "").replace(".xlsx", "")
+                dt = parse_date_robust(raw_date)
+            if not dt:
+                continue
+            d_str = dt.strftime("%Y-%m-%d")
+            if d_str not in fs_dates:
+                file_p = os.path.join(FINALIZED_DIR, f)
+                try:
+                    if f.endswith(".xlsx"):
+                        df = read_excel_robust(file_p)
+                    else:
+                        df = pd.read_csv(file_p, dtype=str, keep_default_na=False)
+                    if df is not None and not df.empty:
+                        firestore_save_finalized_roster(d_str, df)
+                        fs_dates.add(d_str)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 def auto_import_reference_rosters(force_scan=False):
     return 0
 
 def list_finalized_rosters():
-    # 1. Fetch cloud rosters from Firebase Firestore
+    # 0. Sync any unsynced local disk files to Cloud Firestore
+    sync_local_finalized_rosters_to_firestore()
+
+    # 1. Fetch cloud rosters strictly from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
+    if fs_rosters:
+        return fs_rosters
     
-    # 2. Fetch local disk rosters (.csv and .xlsx)
+    # 2. Fallback to local disk rosters only if Cloud Firestore is empty / disconnected
     local_files = []
     if os.path.exists(FINALIZED_DIR):
         try:
@@ -2274,9 +2313,6 @@ def list_finalized_rosters():
             pass
 
     merged_map = {}
-    for r in fs_rosters:
-        merged_map[r["date_str"]] = r
-        
     for f in local_files:
         if f.endswith(".csv"):
             raw_date = f.replace("Roster_", "").replace(".csv", "")
@@ -2296,7 +2332,7 @@ def list_finalized_rosters():
             except:
                 dt = None
                 label = f"Roster {raw_date}"
-            merged_map[raw_date] = {"csv_filename": f, "date_str": raw_date, "start_date": dt, "label": label}
+            merged_map[raw_date] = {"csv_filename": f"Roster_{raw_date}.csv", "date_str": raw_date, "start_date": dt, "label": label}
             
     results = list(merged_map.values())
     results.sort(key=lambda x: x["date_str"], reverse=True)
