@@ -1316,6 +1316,8 @@ def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
     d_obj = parse_date_robust(date_val) if isinstance(date_val, str) else date_val
     if not d_obj:
         return ""
+    if isinstance(d_obj, datetime):
+        d_obj = d_obj.date()
         
     days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     day_name = days_list[d_obj.weekday()]
@@ -1330,6 +1332,8 @@ def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
         for r_item in past_rosters:
             s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
             if s_dt:
+                if isinstance(s_dt, datetime):
+                    s_dt = s_dt.date()
                 # Monday-align s_dt if needed
                 if s_dt.weekday() != 0 and 1 <= s_dt.day <= 12 and 1 <= s_dt.month <= 12:
                     try:
