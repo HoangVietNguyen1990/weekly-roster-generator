@@ -1143,6 +1143,37 @@ def find_matching_employee(raw_name, name_map):
             return display_name
     return None
 
+def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
+    if not emp_name or not date_val:
+        return "Off"
+    
+    d_obj = parse_date_robust(date_val) if isinstance(date_val, str) else date_val
+    if not d_obj:
+        return "Off"
+        
+    days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    day_name = days_list[d_obj.weekday()]
+    
+    past_rosters = list_finalized_rosters()
+    if past_rosters:
+        for r_item in past_rosters:
+            s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
+            if s_dt and (s_dt <= d_obj <= s_dt + timedelta(days=6)):
+                r_df = load_finalized_roster(r_item["csv_filename"])
+                if r_df is not None and not r_df.empty and day_name in r_df.columns:
+                    emp_col = find_column(r_df, ["name", "employee", "staff"])
+                    if emp_col in r_df.columns:
+                        for _, r in r_df.iterrows():
+                            raw_emp = str(r.get(emp_col, "")).strip()
+                            if find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
+                                val = str(r.get(day_name, "")).strip()
+                                if val and val.lower() not in ["off", "nan", "none", "unavailable", ""]:
+                                    return val
+                                else:
+                                    return "Off"
+                return "Off"
+    return "Off"
+
 def get_week_start_date_str(dt_obj=None):
     if dt_obj is None:
         dt_obj = get_melbourne_today()
@@ -3860,30 +3891,7 @@ def render_store_kiosk_timeclock():
                 today_punch = r.to_dict()
                 break
 
-    scheduled_shift = "Off"
-    past_rosters = list_finalized_rosters()
-    if past_rosters:
-        target_dt = today_dt.date()
-        matching_rosters = []
-        for r_item in past_rosters:
-            s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
-            if s_dt and (s_dt <= target_dt <= s_dt + timedelta(days=6)):
-                matching_rosters.append(r_item)
-                
-        rosters_to_scan = matching_rosters if matching_rosters else (past_rosters[:1] if past_rosters else [])
-        for r_item in rosters_to_scan:
-            r_df = load_finalized_roster(r_item["csv_filename"])
-            if r_df is not None and not r_df.empty and day_name in r_df.columns:
-                emp_col = find_column(r_df, ["name", "employee", "staff"])
-                if emp_col in r_df.columns:
-                    for _, r in r_df.iterrows():
-                        if find_matching_employee(selected_emp, {str(r.get(emp_col, "")).strip().lower(): str(r.get(emp_col, "")).strip()}):
-                            val = str(r.get(day_name, "")).strip()
-                            if val and val.lower() not in ["nan", "none", ""]:
-                                scheduled_shift = val
-                                break
-            if scheduled_shift != "Off":
-                break
+    scheduled_shift = get_scheduled_shift_for_employee_and_date(selected_emp, today_dt)
 
     c_in = today_punch.get("Clock In", "") if today_punch else ""
     c_out = today_punch.get("Clock Out", "") if today_punch else ""
@@ -4964,6 +4972,16 @@ def render_manager_timesheet_audit_dashboard():
                                             df_cards = pd.concat([df_cards, pd.DataFrame([missing_rec])], ignore_index=True)
                                         save_timecard_records(df_cards)
 
+    # Re-verify Scheduled Shift for all timecards against exact date & employee roster
+    if df_cards is not None and not df_cards.empty:
+        updated_shifts = []
+        for idx, r in df_cards.iterrows():
+            emp_n = str(r.get("Employee", "")).strip()
+            d_s = str(r.get("Date", "")).strip()
+            sc_shift = get_scheduled_shift_for_employee_and_date(emp_n, d_s)
+            updated_shifts.append(sc_shift)
+        df_cards["Scheduled Shift"] = updated_shifts
+
     # Re-calculate Note column for all rows
     if df_cards is not None and not df_cards.empty:
         notes = []
@@ -4980,7 +4998,9 @@ def render_manager_timesheet_audit_dashboard():
                 notes.append("⚠️ Missing Clock-In")
             elif c_in and not c_out and status == "Completed":
                 notes.append("⚠️ Missing Clock-Out")
-            elif c_in and sched and "-" in sched:
+            elif c_in and (not sched or sched.lower() == "off" or "-" not in sched):
+                notes.append("⏳ Waiting Verified")
+            elif c_in and sched and sched.lower() != "off" and "-" in sched:
                 sched_start_str = sched.split("-")[0].strip()
                 c_in_dec = parse_time_to_decimal(c_in)
                 s_in_dec = parse_time_to_decimal(sched_start_str)
@@ -4990,7 +5010,7 @@ def render_manager_timesheet_audit_dashboard():
                 else:
                     notes.append("✅ Verified / Normal")
             else:
-                notes.append(existing_note if existing_note else "✅ Verified / Normal")
+                notes.append("✅ Verified / Normal")
         df_cards["Note"] = notes
 
     # Metrics Bar
@@ -5154,6 +5174,22 @@ def render_manager_timesheet_audit_dashboard():
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
                             save_timecard_records(df_cards)
                             st.warning(f"⚠️ Rejected missing shift for **{sel_emp}**. Shift has been deleted (`OFF`) from the roster.")
+                            st.rerun()
+
+                elif "Waiting Verified" in sel_note or "Waiting" in sel_note:
+                    with act_col1:
+                        if st.button(f"✅ Approve Unscheduled Punch", key=f"btn_app_unsch_{rec_id}_{idx}", use_container_width=True):
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Unscheduled Punch)"
+                            save_timecard_records(df_cards)
+                            st.success(f"✅ Approved unscheduled punch for **{sel_emp}**!")
+                            st.rerun()
+
+                    with act_col2:
+                        if st.button(f"❌ Reject Unscheduled Punch", key=f"btn_rej_unsch_{rec_id}_{idx}", use_container_width=True):
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Unscheduled Punch)"
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
+                            save_timecard_records(df_cards)
+                            st.info(f"ℹ️ Rejected unscheduled punch for **{sel_emp}**.")
                             st.rerun()
                 else:
                     st.info("ℹ️ Selected row is verified and normal. No pending actions required.")
