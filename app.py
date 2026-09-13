@@ -265,7 +265,7 @@ def firestore_delete_finalized_roster(date_str):
     except Exception:
         return False
 
-@st.cache_data(ttl=15, show_spinner=False)
+@st.cache_data(ttl=3, show_spinner=False)
 def firestore_list_finalized_rosters():
     db = get_firebase_db()
     if db is None:
@@ -1145,34 +1145,42 @@ def find_matching_employee(raw_name, name_map):
 
 def get_scheduled_shift_for_employee_and_date(emp_name, date_val):
     if not emp_name or not date_val:
-        return "Off"
+        return ""
     
     d_obj = parse_date_robust(date_val) if isinstance(date_val, str) else date_val
     if not d_obj:
-        return "Off"
+        return ""
         
     days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     day_name = days_list[d_obj.weekday()]
     
     past_rosters = list_finalized_rosters()
+    matching_r_df = None
+    
     if past_rosters:
+        # Search ONLY for exact published week roster match covering date_val
         for r_item in past_rosters:
             s_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
             if s_dt and (s_dt <= d_obj <= s_dt + timedelta(days=6)):
-                r_df = load_finalized_roster(r_item["csv_filename"])
-                if r_df is not None and not r_df.empty and day_name in r_df.columns:
-                    emp_col = find_column(r_df, ["name", "employee", "staff"])
-                    if emp_col in r_df.columns:
-                        for _, r in r_df.iterrows():
-                            raw_emp = str(r.get(emp_col, "")).strip()
-                            if find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
-                                val = str(r.get(day_name, "")).strip()
-                                if val and val.lower() not in ["off", "nan", "none", "unavailable", ""]:
-                                    return val
-                                else:
-                                    return "Off"
-                return "Off"
-    return "Off"
+                matching_r_df = load_finalized_roster(r_item["csv_filename"])
+                break
+
+    # If an exact published roster exists for this week, extract employee shift
+    if matching_r_df is not None and not matching_r_df.empty and day_name in matching_r_df.columns:
+        emp_col = find_column(matching_r_df, ["name", "employee", "staff"])
+        if emp_col in matching_r_df.columns:
+            for _, r in matching_r_df.iterrows():
+                raw_emp = str(r.get(emp_col, "")).strip()
+                if find_matching_employee(emp_name, {raw_emp.lower(): raw_emp}):
+                    val = str(r.get(day_name, "")).strip()
+                    if val and val.lower() not in ["off", "nan", "none", "unavailable", ""]:
+                        return val
+                    else:
+                        return "Off"
+            return "Off"
+
+    # If no published roster exists for this target week date, leave scheduled shift empty
+    return ""
 
 def get_week_start_date_str(dt_obj=None):
     if dt_obj is None:
@@ -2134,6 +2142,8 @@ def find_all_old_roster_files():
     seen = set()
     
     known_candidates = [
+        os.path.join(DATA_DIR, "demo doc", "reference roster", "Team_Roster_07.09.2026.xlsx"),
+        os.path.join(os.path.expanduser(r"~\Downloads"), "Team_Roster_07.09.2026.xlsx"),
         os.path.join(BASE_DIR, "Team Roster 10.08.2026.xlsx"),
         os.path.join(DATA_DIR, "demo doc", "reference roster", "Team_Roster_24.08.2026 (1).xlsx"),
         os.path.join(DATA_DIR, "demo doc", "reference roster", "Roster 27.07.2026 Pakenham payroll_.xlsx"),
@@ -2180,47 +2190,7 @@ def find_all_old_roster_files():
     return found_files
 
 def auto_import_reference_rosters(force_scan=False):
-    if not os.path.exists(FINALIZED_DIR):
-        os.makedirs(FINALIZED_DIR, exist_ok=True)
-        
-    imported_count = 0
-    candidate_paths = find_all_old_roster_files()
-    
-    for file_path in candidate_paths:
-        fname = os.path.basename(file_path)
-        dt = extract_date_from_filename(fname)
-        if dt is None:
-            continue
-            
-        date_str = dt.strftime("%Y-%m-%d")
-        csv_filename = f"Roster_{date_str}.csv"
-        csv_path = os.path.join(FINALIZED_DIR, csv_filename)
-        
-        # Preserve existing user-saved rosters: only import if roster file does not exist or is empty
-        if not os.path.exists(csv_path) or os.path.getsize(csv_path) == 0:
-            try:
-                if file_path.endswith(".csv"):
-                    df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
-                else:
-                    df = read_excel_robust(file_path)
-                    
-                if df is not None and not df.empty:
-                    name_col = find_column(df, ["name", "employee", "staff"], "NAME")
-                    if name_col in df.columns:
-                        df = df.rename(columns={name_col: "NAME"})
-                        
-                    date_label = dt.strftime("%d.%m.%Y")
-                    xlsx_filename = f"Team_Roster_{date_label}.xlsx"
-                    xlsx_path = os.path.join(FINALIZED_DIR, xlsx_filename)
-                    
-                    df.astype(str).to_csv(csv_path, index=False)
-                    excel_bytes = build_roster_excel_bytes(df, dt)
-                    with open(xlsx_path, "wb") as f:
-                        f.write(excel_bytes)
-                    imported_count += 1
-            except Exception:
-                pass
-    return imported_count
+    return 0
 
 def list_finalized_rosters():
     # 1. Fetch cloud rosters from Firebase Firestore
@@ -2230,9 +2200,6 @@ def list_finalized_rosters():
     local_files = []
     if os.path.exists(FINALIZED_DIR):
         try:
-            if not st.session_state.get("auto_scanned_rosters_done"):
-                auto_import_reference_rosters()
-                st.session_state["auto_scanned_rosters_done"] = True
             local_files = [f for f in os.listdir(FINALIZED_DIR) if f.endswith(".csv") and f.startswith("Roster_")]
         except Exception:
             pass
@@ -5697,46 +5664,7 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
 
-        with st.expander("📥 Bulk Upload & System Auto-Scan for Old Rosters", expanded=False):
-            col_sc1, col_sc2 = st.columns([1, 1])
-            with col_sc1:
-                st.markdown("#### 🔍 Auto-Scan System Folders")
-                st.write("Scan Downloads, Desktop, and project folders to automatically import all historical roster files.")
-                if st.button("🚀 Start Deep System Scan for Rosters", key="btn_deep_scan_rosters", use_container_width=True):
-                    num_found = auto_import_reference_rosters(force_scan=True)
-                    st.success(f"🎉 Deep system scan complete! Imported / refreshed {num_found} old roster(s).")
-                    st.rerun()
-            with col_sc2:
-                st.markdown("#### 📤 Drag & Drop Old Roster Files")
-                st.write("Upload multiple past roster Excel (.xlsx) or CSV files directly to publish them in the app.")
-                uploaded_old_files = st.file_uploader(
-                    "Upload Old Roster Files",
-                    type=["xlsx", "csv"],
-                    accept_multiple_files=True,
-                    key="bulk_uploader_old_rosters"
-                )
-                if uploaded_old_files:
-                    bulk_count = 0
-                    for u_file in uploaded_old_files:
-                        u_key = f"bulk_file_done_{u_file.name}_{u_file.size}"
-                        if st.session_state.get(u_key) is not True:
-                            df_u = read_excel_robust(u_file) if u_file.name.endswith(".xlsx") else pd.read_csv(u_file, dtype=str)
-                            if df_u is not None and not df_u.empty:
-                                dt_u = extract_date_from_filename(u_file.name)
-                                if dt_u is None:
-                                    for col in df_u.columns:
-                                        dt_cand = extract_date_from_filename(str(col))
-                                        if dt_cand:
-                                            dt_u = dt_cand
-                                            break
-                                if dt_u is None:
-                                    dt_u = datetime.now().date()
-                                save_finalized_roster(df_u, dt_u)
-                                st.session_state[u_key] = True
-                                bulk_count += 1
-                    if bulk_count > 0:
-                        st.success(f"🎉 Successfully imported {bulk_count} uploaded roster file(s)!")
-                        st.rerun()
+
 
         past_rosters = list_finalized_rosters()
         if past_rosters:
