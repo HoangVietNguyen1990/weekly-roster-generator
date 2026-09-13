@@ -2190,9 +2190,81 @@ def find_all_old_roster_files():
     return found_files
 
 def auto_import_reference_rosters(force_scan=False):
-    return 0
+    """
+    Automatically scans reference roster candidate files (and files in FINALIZED_DIR),
+    extracts the week start date, and if that date is not yet saved in finalized rosters,
+    parses and saves it to FINALIZED_DIR and Firestore.
+    Returns the count of newly imported rosters.
+    """
+    imported_count = 0
+    try:
+        existing_dates = set()
+        if os.path.exists(FINALIZED_DIR):
+            for f in os.listdir(FINALIZED_DIR):
+                if f.startswith("Roster_") and f.endswith(".csv"):
+                    d_str = f.replace("Roster_", "").replace(".csv", "")
+                    existing_dates.add(d_str)
+        
+        fs_list = firestore_list_finalized_rosters()
+        for item in fs_list:
+            if item.get("date_str"):
+                existing_dates.add(item["date_str"])
+
+        candidate_files = find_all_old_roster_files()
+        if os.path.exists(FINALIZED_DIR):
+            for f in os.listdir(FINALIZED_DIR):
+                full_p = os.path.abspath(os.path.join(FINALIZED_DIR, f))
+                if os.path.isfile(full_p) and full_p not in candidate_files:
+                    candidate_files.append(full_p)
+
+        for filepath in candidate_files:
+            if not os.path.exists(filepath):
+                continue
+            fname = os.path.basename(filepath)
+            
+            if fname.startswith("~$") or fname.startswith("."):
+                continue
+
+            dt = extract_date_from_filename(fname)
+            if not dt:
+                continue
+
+            d_str = dt.strftime("%Y-%m-%d")
+            if d_str in existing_dates and not force_scan:
+                continue
+
+            try:
+                if filepath.endswith(".csv"):
+                    df_raw = pd.read_csv(filepath, dtype=str, keep_default_na=False)
+                else:
+                    df_raw = read_excel_robust(filepath)
+
+                if df_raw is not None and not df_raw.empty:
+                    df_clean = df_raw.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+                    emp_c = find_column(df_clean, ["employee", "name", "staff"], df_clean.columns[0])
+                    if emp_c in df_clean.columns:
+                        df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                    df_clean = clean_roster_dataframe(df_clean)
+                    df_clean = sort_dataframe_by_team_and_age(df_clean)
+
+                    save_finalized_roster(df_clean, dt)
+                    existing_dates.add(d_str)
+                    imported_count += 1
+            except Exception:
+                pass
+
+    except Exception:
+        pass
+
+    return imported_count
 
 def list_finalized_rosters():
+    # 0. Auto-import any un-indexed reference rosters (e.g. Team_Roster_07.09.2026.xlsx)
+    try:
+        auto_import_reference_rosters(force_scan=False)
+    except Exception:
+        pass
+
     # 1. Fetch cloud rosters from Firebase Firestore
     fs_rosters = firestore_list_finalized_rosters()
     
@@ -5894,9 +5966,14 @@ if is_manager:
                         df_clean = sort_dataframe_by_team_and_age(df_clean)
                         st.session_state.final_roster_df = df_clean
                         st.session_state.last_uploaded_roster_key = file_key
-                        # Save immediately to disk so it is persisted after turn off / restart
-                        save_finalized_roster(df_clean, start_date)
-                        st.success(f"🎉 Roster loaded & permanently saved to disk for week starting {start_date.strftime('%d/%m/%Y')}!")
+                        
+                        # Extract start date from filename if available, else fallback to selected start_date
+                        extracted_dt = extract_date_from_filename(upload_roster_file.name)
+                        target_start_dt = extracted_dt if extracted_dt else start_date
+                        
+                        # Save immediately to disk & cloud so it is persisted after turn off / restart
+                        save_finalized_roster(df_clean, target_start_dt)
+                        st.success(f"🎉 Roster loaded & permanently saved to disk for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
 
         with col2:
             st.markdown("""
