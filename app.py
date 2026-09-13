@@ -5236,6 +5236,9 @@ def render_manager_timesheet_audit_dashboard():
 
     # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
     today_dt = get_melbourne_today()
+    melbourne_now = get_melbourne_now()
+    now_dec = melbourne_now.hour + melbourne_now.minute / 60.0
+
     past_rosters = list_finalized_rosters()
     if past_rosters:
         for r_item in past_rosters:
@@ -5270,6 +5273,14 @@ def render_manager_timesheet_audit_dashboard():
                                             card_exists = True
                                             
                                     if not card_exists:
+                                        shift_r = parse_shift_range(shift_val)
+                                        s_start_dec = shift_r[0] if shift_r else 0.0
+                                        is_overdue = (now_dec >= s_start_dec + 0.25)
+                                        
+                                        init_note = "⚠️ Missing Clock-In" if is_overdue else "⏳ Scheduled Today"
+                                        init_status = "Missing" if is_overdue else "Scheduled"
+                                        init_loc = "⚠️ Missing Clocking" if is_overdue else "⏳ Scheduled Today"
+
                                         missing_rec = {
                                             "Record ID": rec_id,
                                             "Date": shift_date_str,
@@ -5282,10 +5293,10 @@ def render_manager_timesheet_audit_dashboard():
                                             "GPS Lat": str(BAKERY_LAT),
                                             "GPS Lon": str(BAKERY_LON),
                                             "Distance (m)": "0.0",
-                                            "Location Verification": "⚠️ Missing Clocking",
-                                            "Note": "⚠️ Missing Clock-In",
-                                            "Late Correction Status": "Missing Punch",
-                                            "Status": "Missing"
+                                            "Location Verification": init_loc,
+                                            "Note": init_note,
+                                            "Late Correction Status": "Normal",
+                                            "Status": init_status
                                         }
                                         if df_cards is None or df_cards.empty:
                                             df_cards = pd.DataFrame([missing_rec])
@@ -5303,36 +5314,80 @@ def render_manager_timesheet_audit_dashboard():
             updated_shifts.append(sc_shift)
         df_cards["Scheduled Shift"] = updated_shifts
 
-    # Re-calculate Note column for all rows
+    # Re-calculate Note column dynamically based on Melbourne current time
     if df_cards is not None and not df_cards.empty:
         notes = []
+        statuses = []
         for idx, r in df_cards.iterrows():
             existing_note = str(r.get("Note", "")).strip()
+            existing_status = str(r.get("Status", "")).strip()
             c_in = str(r.get("Clock In", "")).strip()
             c_out = str(r.get("Clock Out", "")).strip()
             sched = str(r.get("Scheduled Shift", "")).strip()
-            status = str(r.get("Status", "")).strip()
+            r_d_obj = parse_date_robust(r.get("Date", ""))
+            is_today = (r_d_obj and r_d_obj == today_dt)
             
+            shift_r = parse_shift_range(sched) if (sched and "-" in sched) else None
+            s_start_dec = shift_r[0] if shift_r else None
+            s_end_dec = shift_r[1] if shift_r else None
+            
+            calc_note = existing_note
+            calc_status = existing_status
+
             if "Approved" in existing_note or "Rejected" in existing_note:
-                notes.append(existing_note)
-            elif not c_in and status == "Missing":
-                notes.append("⚠️ Missing Clock-In")
-            elif c_in and not c_out and status == "Completed":
-                notes.append("⚠️ Missing Clock-Out")
-            elif c_in and (not sched or sched.lower() == "off" or "-" not in sched):
-                notes.append("⏳ Waiting Verified")
-            elif c_in and sched and sched.lower() != "off" and "-" in sched:
-                sched_start_str = sched.split("-")[0].strip()
-                c_in_dec = parse_time_to_decimal(c_in)
-                s_in_dec = parse_time_to_decimal(sched_start_str)
-                var_mins = round((c_in_dec - s_in_dec) * 60)
-                if var_mins >= 10:
-                    notes.append(f"⚠️ Late Clocking (+{var_mins} mins)")
+                calc_note = existing_note
+            elif not c_in:
+                if is_today and s_start_dec is not None:
+                    if now_dec < s_start_dec + 0.25:
+                        calc_note = "⏳ Scheduled Today"
+                        calc_status = "Scheduled"
+                    else:
+                        calc_note = "⚠️ Missing Clock-In"
+                        calc_status = "Missing"
+                elif existing_status == "Missing" or "Missing" in existing_note:
+                    calc_note = "⚠️ Missing Clock-In"
+                    calc_status = "Missing"
                 else:
-                    notes.append("✅ Verified / Normal")
-            else:
-                notes.append("✅ Verified / Normal")
+                    calc_note = "⏳ Scheduled Today"
+                    calc_status = "Scheduled"
+            elif c_in and not c_out:
+                if is_today and s_end_dec is not None and now_dec >= s_end_dec + 0.25:
+                    calc_note = "⚠️ Missing Clock-Out"
+                    calc_status = "Working"
+                elif sched and "-" in sched:
+                    sched_start_str = sched.split("-")[0].strip()
+                    c_in_dec = parse_time_to_decimal(c_in)
+                    s_in_dec = parse_time_to_decimal(sched_start_str)
+                    var_mins = round((c_in_dec - s_in_dec) * 60)
+                    if var_mins >= 10:
+                        calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
+                    else:
+                        calc_note = "🟢 Working Now"
+                    calc_status = "Working"
+                else:
+                    calc_note = "🟢 Working Now"
+                    calc_status = "Working"
+            elif c_in and c_out:
+                if sched and "-" in sched:
+                    sched_start_str = sched.split("-")[0].strip()
+                    c_in_dec = parse_time_to_decimal(c_in)
+                    s_in_dec = parse_time_to_decimal(sched_start_str)
+                    var_mins = round((c_in_dec - s_in_dec) * 60)
+                    if var_mins >= 10 and "Approved" not in existing_note and "Rejected" not in existing_note:
+                        calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
+                    elif "Approved" in existing_note or "Rejected" in existing_note:
+                        calc_note = existing_note
+                    else:
+                        calc_note = "✅ Verified / Normal"
+                else:
+                    calc_note = "✅ Verified / Normal"
+                calc_status = "Completed"
+
+            notes.append(calc_note)
+            statuses.append(calc_status)
+
         df_cards["Note"] = notes
+        df_cards["Status"] = statuses
 
     # Metrics Bar
     working_count = 0
