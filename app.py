@@ -27,6 +27,43 @@ def get_melbourne_now():
 def get_melbourne_today():
     return get_melbourne_now().date()
 
+def parse_date_robust(date_str):
+    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
+        return None
+    if isinstance(date_str, (datetime, pd.Timestamp)):
+        return date_str.date()
+    if hasattr(date_str, "year") and hasattr(date_str, "month") and hasattr(date_str, "day") and not isinstance(date_str, str):
+        return date_str
+
+    s = str(date_str).strip()
+
+    # 1. ISO format: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+    m_iso = re.match(r'^(\d{4})[-/\.](\d{1,2})[-/\.](\d{1,2})', s)
+    if m_iso:
+        y, m, d = map(int, m_iso.groups())
+        try:
+            return datetime(y, m, d).date()
+        except ValueError:
+            pass
+
+    # 2. AU / UK format: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+    m_dmy = re.match(r'^(\d{1,2})[-/\.](\d{1,2})[-/\.](\d{4})', s)
+    if m_dmy:
+        d, m, y = map(int, m_dmy.groups())
+        try:
+            return datetime(y, m, d).date()
+        except ValueError:
+            pass
+
+    # 3. Fallback using pandas
+    try:
+        dt = pd.to_datetime(s, dayfirst=True, errors='coerce')
+        if pd.notna(dt):
+            return dt.date()
+    except Exception:
+        pass
+    return None
+
 
 # --- FIREBASE AUTHENTICATION & CLOUD FIRESTORE STORAGE ENGINE ---
 FIREBASE_INITIALIZED = False
@@ -3573,14 +3610,39 @@ def reorder_requirements_dataframe(df):
 import re
 
 def parse_date_robust(date_str):
-    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", ""]:
+    if not date_str or str(date_str).strip().lower() in ["nan", "none", "nat", "null", ""]:
         return None
-    date_str = str(date_str).strip()
+    if isinstance(date_str, (datetime, pd.Timestamp)):
+        return date_str.date()
+    if hasattr(date_str, "year") and hasattr(date_str, "month") and hasattr(date_str, "day") and not isinstance(date_str, str):
+        return date_str
+
+    s = str(date_str).strip()
+
+    # 1. ISO format: YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+    m_iso = re.match(r'^(\d{4})[-/\.](\d{1,2})[-/\.](\d{1,2})', s)
+    if m_iso:
+        y, m, d = map(int, m_iso.groups())
+        try:
+            return datetime(y, m, d).date()
+        except ValueError:
+            pass
+
+    # 2. AU / UK format: DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+    m_dmy = re.match(r'^(\d{1,2})[-/\.](\d{1,2})[-/\.](\d{4})', s)
+    if m_dmy:
+        d, m, y = map(int, m_dmy.groups())
+        try:
+            return datetime(y, m, d).date()
+        except ValueError:
+            pass
+
+    # 3. Fallback using pandas
     try:
-        dt = pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+        dt = pd.to_datetime(s, dayfirst=True, errors='coerce')
         if pd.notna(dt):
             return dt.date()
-    except:
+    except Exception:
         pass
     return None
 
