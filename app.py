@@ -2032,19 +2032,27 @@ def send_announcement_broadcast_smtp(title, content, author="Store Management"):
     except Exception as e:
         return False, f"Failed to send email broadcast: {str(e)}"
 
+def sanitize_dataframe(df):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return df
+    df = df.reset_index(drop=True)
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.loc[:, ~df.columns.duplicated()]
+    return df
+
 @st.cache_data(ttl=60, show_spinner=False)
 def load_persisted_df(filename, default_df=None):
     collection_name = filename.replace(".csv", "")
     fs_df = firestore_load_df(collection_name)
     if fs_df is not None and isinstance(fs_df, pd.DataFrame) and not fs_df.empty:
-        return fs_df
+        return sanitize_dataframe(fs_df)
 
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
             if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
-                return df
+                return sanitize_dataframe(df)
         except Exception:
             pass
             
@@ -2066,11 +2074,12 @@ def load_persisted_df(filename, default_df=None):
                         excel_df.astype(str).to_csv(path, index=False)
                     except Exception:
                         pass
-                    return excel_df
+                    return sanitize_dataframe(excel_df)
             except Exception:
                 pass
                 
-    return default_df.copy() if (default_df is not None and hasattr(default_df, "copy")) else default_df
+    fallback = default_df.copy() if (default_df is not None and hasattr(default_df, "copy")) else default_df
+    return sanitize_dataframe(fallback)
 
 def clear_unavailability_widget_cache():
     for k in list(st.session_state.keys()):
@@ -7007,7 +7016,7 @@ if is_manager:
 
             if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
                 loaded_r = load_persisted_df("requirements.csv", default_req)
-                st.session_state.manual_requirements = loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy()
+                st.session_state.manual_requirements = sanitize_dataframe(loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy())
 
             upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
             
@@ -7016,9 +7025,11 @@ if is_manager:
                 if st.session_state.get("last_req_file") != file_key:
                     loaded = read_excel_robust(upload_req)
                     if loaded is not None:
-                        st.session_state.manual_requirements = loaded
+                        st.session_state.manual_requirements = sanitize_dataframe(loaded)
                         st.session_state.last_req_file = file_key
                         save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                        if "edit_requirements_v2" in st.session_state:
+                            del st.session_state["edit_requirements_v2"]
                         st.rerun()
                         
             st.markdown("""
@@ -7026,12 +7037,17 @@ if is_manager:
                 📋 Daily Shift Coverage Requirements (Mon-Sun)
             </div>
             """, unsafe_allow_html=True)
-            req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
-            requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
+            req_df_clean = sanitize_dataframe(st.session_state.manual_requirements)
+            req_cols = list(req_df_clean.columns) if req_df_clean is not None and not req_df_clean.empty else None
+            requirements_df = st.data_editor(req_df_clean, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
             if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
-                if not requirements_df.equals(st.session_state.manual_requirements):
-                    st.session_state.manual_requirements = requirements_df
-                    save_persisted_df(requirements_df, "requirements.csv")
+                clean_req = sanitize_dataframe(requirements_df)
+                if not clean_req.equals(req_df_clean):
+                    st.session_state.manual_requirements = clean_req
+                    save_persisted_df(clean_req, "requirements.csv")
+                    if "edit_requirements_v2" in st.session_state:
+                        del st.session_state["edit_requirements_v2"]
+                    st.rerun()
         except Exception as e:
             st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
             st.exception(e)
@@ -7043,7 +7059,7 @@ if is_manager:
 
             if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
                 loaded_f = load_persisted_df("fixed.csv", default_fixed)
-                st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
+                st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy())
 
             upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
             
@@ -7052,9 +7068,11 @@ if is_manager:
                 if st.session_state.get("last_fixed_file") != file_key:
                     loaded = read_excel_robust(upload_fixed)
                     if loaded is not None:
-                        st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded))
+                        st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded)))
                         st.session_state.last_fixed_file = file_key
                         save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                        if "edit_fixed_v2" in st.session_state:
+                            del st.session_state["edit_fixed_v2"]
                         st.rerun()
                         
             st.markdown("""
@@ -7062,12 +7080,17 @@ if is_manager:
                 📌 Fixed Baseline Staff Shifts
             </div>
             """, unsafe_allow_html=True)
-            fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
-            fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
+            fixed_df_clean = sanitize_dataframe(st.session_state.manual_fixed)
+            fixed_cols = list(fixed_df_clean.columns) if fixed_df_clean is not None and not fixed_df_clean.empty else None
+            fixed_df = st.data_editor(fixed_df_clean, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
             if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
-                if not fixed_df.equals(st.session_state.manual_fixed):
-                    st.session_state.manual_fixed = fixed_df
-                    save_persisted_df(fixed_df, "fixed.csv")
+                clean_f = sanitize_dataframe(fixed_df)
+                if not clean_f.equals(fixed_df_clean):
+                    st.session_state.manual_fixed = clean_f
+                    save_persisted_df(clean_f, "fixed.csv")
+                    if "edit_fixed_v2" in st.session_state:
+                        del st.session_state["edit_fixed_v2"]
+                    st.rerun()
         except Exception as e:
             st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
             st.exception(e)
