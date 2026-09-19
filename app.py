@@ -13,9 +13,20 @@ from datetime import datetime, timedelta
 import traceback
 try:
     from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
+except Exception:
+    try:
+        from vic_holidays import is_vic_public_holiday, is_vic_school_holiday
+    except Exception:
+        _base_dir = os.path.dirname(os.path.abspath(__file__))
+        if _base_dir not in sys.path:
+            sys.path.insert(0, _base_dir)
+        _data_dir = os.path.join(_base_dir, "data")
+        if _data_dir not in sys.path:
+            sys.path.insert(0, _data_dir)
+        try:
+            from vic_holidays import is_vic_public_holiday, is_vic_school_holiday
+        except Exception:
+            from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
 
 try:
     from zoneinfo import ZoneInfo
