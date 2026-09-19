@@ -4082,63 +4082,68 @@ def clean_win_display(win_str):
         return "All Day"
     return cleaned
 
-if 'manual_employees' not in st.session_state:
-    default_emp = pd.DataFrame([
-        {"NAME": "Aimi", "Team": "Service Staff", "DOB": "10/11/2006", "Commencing Date": "01/10/2023", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Ainsley Mactier", "Team": "Service Staff", "DOB": "14/08/2006", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Aroha", "Team": "Bakery Staff", "DOB": "24/05/2005", "Commencing Date": "27/09/2021", "status": "part time", "position": "baker assitant"},
-        {"NAME": "Elizabeth", "Team": "Service Staff", "DOB": "30/07/2004", "Commencing Date": "03/06/2024", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Olivia", "Team": "Service Staff", "DOB": "15/01/2007", "Commencing Date": "27/05/2024", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Robert", "Team": "Bakery Staff", "DOB": "19/02/2004", "Commencing Date": "22/01/2024", "status": "part time", "position": "baker"},
-        {"NAME": "Stella", "Team": "Service Staff", "DOB": "03/07/2007", "Commencing Date": "09/01/2024", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Violet", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Esther Amataiti", "Team": "Service Staff", "DOB": "20/09/2001", "Commencing Date": "20/09/2021", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Anastasia", "Team": "Service Staff", "DOB": "02/03/2000", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Jude", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Jack", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Jane", "Team": "Store Owners", "DOB": "", "Commencing Date": "", "status": "owner", "position": "Service Staff"},
-        {"NAME": "Amy", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
-        {"NAME": "Viet", "Team": "Bakery Staff", "DOB": "", "Commencing Date": "", "status": "owner", "position": "baker"},
-        {"NAME": "Shaelyn", "Team": "Service Staff", "DOB": "25/02/2011", "Commencing Date": "01/08/2026", "status": "casual", "position": "Service Staff"}
-    ])
-    st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
+# --- GLOBAL DEFAULT DATASETS ---
+default_emp = pd.DataFrame([
+    {"NAME": "Aimi", "Team": "Service Staff", "DOB": "10/11/2006", "Commencing Date": "01/10/2023", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Ainsley Mactier", "Team": "Service Staff", "DOB": "14/08/2006", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Aroha", "Team": "Bakery Staff", "DOB": "24/05/2005", "Commencing Date": "27/09/2021", "status": "part time", "position": "baker assitant"},
+    {"NAME": "Elizabeth", "Team": "Service Staff", "DOB": "30/07/2004", "Commencing Date": "03/06/2024", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Olivia", "Team": "Service Staff", "DOB": "15/01/2007", "Commencing Date": "27/05/2024", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Robert", "Team": "Bakery Staff", "DOB": "19/02/2004", "Commencing Date": "22/01/2024", "status": "part time", "position": "baker"},
+    {"NAME": "Stella", "Team": "Service Staff", "DOB": "03/07/2007", "Commencing Date": "09/01/2024", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Violet", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Esther Amataiti", "Team": "Service Staff", "DOB": "20/09/2001", "Commencing Date": "20/09/2021", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Anastasia", "Team": "Service Staff", "DOB": "02/03/2000", "Commencing Date": "04/10/2021", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Jude", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Jack", "Team": "Service Staff", "DOB": "28/04/2011", "Commencing Date": "27/07/2026", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Jane", "Team": "Store Owners", "DOB": "", "Commencing Date": "", "status": "owner", "position": "Service Staff"},
+    {"NAME": "Amy", "Team": "Service Staff", "DOB": "27/02/2010", "Commencing Date": "25/05/2026", "status": "casual", "position": "Service Staff"},
+    {"NAME": "Viet", "Team": "Bakery Staff", "DOB": "", "Commencing Date": "", "status": "owner", "position": "baker"},
+    {"NAME": "Shaelyn", "Team": "Service Staff", "DOB": "25/02/2011", "Commencing Date": "01/08/2026", "status": "casual", "position": "Service Staff"}
+])
 
 default_unavail = pd.DataFrame(columns=["Employee", "Day", "Time Window"])
+
+default_req = pd.DataFrame([
+    {"Shift": "12:00pm-5:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "7:00am-10:00am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+    {"Shift": "7:00am-12:00pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "7:30am-10:30am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+    {"Shift": "7:30am-12:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "7:30am-3:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "8:30am-1:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
+    {"Shift": "9:00am-5:00pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "11:30am-2:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"},
+    {"Shift": "12:00pm-7:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "12:30pm-5:30pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "1"},
+    {"Shift": "4:00pm-7:00pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "1", "Friday": "0", "Saturday": "0", "Sunday": "0"},
+    {"Shift": "2:30pm-5:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"}
+])
+
+default_fixed = pd.DataFrame([
+    {"Employee": "Viet Nguyen", "Monday": "off", "Tuesday": "4:00am-12:00pm", "Wednesday": "off", "Thursday": "5:30am-12:30pm", "Friday": "5:30am-12:30pm", "Saturday": "4:00am-12:00pm", "Sunday": "5:30am-12:30pm"},
+    {"Employee": "Anastasia", "Monday": "12:00am-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
+    {"Employee": "Esther Amataiti", "Monday": "7:00am-12:00pm", "Tuesday": "7:00am-12:00pm", "Wednesday": "off", "Thursday": "7:30am-12:30pm", "Friday": "7:00am-12:00pm", "Saturday": "off", "Sunday": "off"},
+    {"Employee": "Jane", "Monday": "off", "Tuesday": "12:00pm-5:00pm", "Wednesday": "12:30pm-5:30pm", "Thursday": "12:30pm-5:30pm", "Friday": "off", "Saturday": "10:00am-3:00pm", "Sunday": "9:00am-2:00am"},
+    {"Employee": "Amy", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
+    {"Employee": "Olivia", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
+    {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
+    {"Employee": "Robert", "Monday": "4:00am-12:00pm", "Tuesday": "off", "Wednesday": "4:00am-12:00pm", "Thursday": "4:00pm-12:00pm", "Friday": "4:00am-12:00pm", "Saturday": "off", "Sunday": "4:00am-12:00pm"}
+])
+
+if 'manual_employees' not in st.session_state or st.session_state.manual_employees is None or st.session_state.manual_employees.empty:
+    st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
 if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None:
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
 
 if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
-    default_req = pd.DataFrame([
-        {"Shift": "12:00pm-5:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "7:00am-10:00am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
-        {"Shift": "7:00am-12:00pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "7:30am-10:30am", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
-        {"Shift": "7:30am-12:30pm", "Monday": "1", "Tuesday": "1", "Wednesday": "1", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "7:30am-3:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "8:30am-1:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "0"},
-        {"Shift": "9:00am-5:00pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "1", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "11:30am-2:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"},
-        {"Shift": "12:00pm-7:00pm", "Monday": "1", "Tuesday": "0", "Wednesday": "1", "Thursday": "1", "Friday": "1", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "12:30pm-5:30pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "1", "Sunday": "1"},
-        {"Shift": "4:00pm-7:00pm", "Monday": "0", "Tuesday": "1", "Wednesday": "0", "Thursday": "1", "Friday": "0", "Saturday": "0", "Sunday": "0"},
-        {"Shift": "2:30pm-5:30pm", "Monday": "0", "Tuesday": "0", "Wednesday": "0", "Thursday": "0", "Friday": "0", "Saturday": "0", "Sunday": "1"}
-    ])
     st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
 if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
-    default_fixed = pd.DataFrame([
-        {"Employee": "Viet Nguyen", "Monday": "off", "Tuesday": "4:00am-12:00pm", "Wednesday": "off", "Thursday": "5:30am-12:30pm", "Friday": "5:30am-12:30pm", "Saturday": "4:00am-12:00pm", "Sunday": "5:30am-12:30pm"},
-        {"Employee": "Anastasia", "Monday": "12:00am-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
-        {"Employee": "Esther Amataiti", "Monday": "7:00am-12:00pm", "Tuesday": "7:00am-12:00pm", "Wednesday": "off", "Thursday": "7:30am-12:30pm", "Friday": "7:00am-12:00pm", "Saturday": "off", "Sunday": "off"},
-        {"Employee": "Jane", "Monday": "off", "Tuesday": "12:00pm-5:00pm", "Wednesday": "12:30pm-5:30pm", "Thursday": "12:30pm-5:30pm", "Friday": "off", "Saturday": "10:00am-3:00pm", "Sunday": "9:00am-2:00am"},
-        {"Employee": "Amy", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
-        {"Employee": "Olivia", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
-        {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
-        {"Employee": "Robert", "Monday": "4:00am-12:00pm", "Tuesday": "off", "Wednesday": "4:00am-12:00pm", "Thursday": "4:00pm-12:00pm", "Friday": "4:00am-12:00pm", "Saturday": "off", "Sunday": "4:00am-12:00pm"}
-    ])
     st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
-if st.session_state.manual_fixed is not None:
+
+if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
     st.session_state.manual_fixed = st.session_state.manual_fixed.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "")
 def render_store_kiosk_timeclock():
     st.markdown("""
@@ -6987,8 +6992,9 @@ if is_manager:
     with tab_req:
         st.subheader("Daily Bakery Shift Requirements")
 
-        if st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
-            st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
+        if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
+            loaded_r = load_persisted_df("requirements.csv", default_req)
+            st.session_state.manual_requirements = loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy()
 
         upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
         
@@ -7008,7 +7014,10 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
         if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty:
-            st.session_state.manual_requirements = reorder_requirements_dataframe(st.session_state.manual_requirements)
+            try:
+                st.session_state.manual_requirements = reorder_requirements_dataframe(st.session_state.manual_requirements)
+            except Exception:
+                pass
         req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
         requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
         st.session_state.manual_requirements = requirements_df
@@ -7018,8 +7027,9 @@ if is_manager:
     with tab_fixed:
         st.subheader("Fixed Baseline Shifts")
 
-        if st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
-            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
+        if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
+            loaded_f = load_persisted_df("fixed.csv", default_fixed)
+            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(loaded_f) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
 
         upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
         
@@ -7039,7 +7049,10 @@ if is_manager:
         </div>
         """, unsafe_allow_html=True)
         if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
-            st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(st.session_state.manual_fixed))
+            try:
+                st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(st.session_state.manual_fixed))
+            except Exception:
+                pass
         fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
         fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
         st.session_state.manual_fixed = fixed_df
