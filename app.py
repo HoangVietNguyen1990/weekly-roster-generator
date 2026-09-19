@@ -1487,6 +1487,8 @@ def normalize_shift_time_str(shift_str):
     if not shift_str:
         return ""
     s = str(shift_str).strip()
+    # Fix single-digit zero minute typo: 12:0pm -> 12:00pm, 7:0am -> 7:00am
+    s = re.sub(r':0(?=[ap]m\b)', ':00', s, flags=re.I)
     s_low = s.lower().replace(" ", "")
     # Fix midday start typo: 12:00am -> 12:00pm (noon)
     if s_low.startswith("12:00am-") or s_low.startswith("12am-"):
@@ -6757,14 +6759,15 @@ if is_manager:
             with col1:
                 start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
 
-                # Auto-load existing local draft for the chosen date if session roster is not set or date changed
+                # Auto-load existing local draft for the chosen date ONLY if session roster is not yet initialized or date was explicitly changed
                 date_str_cur = start_date.strftime("%Y-%m-%d")
-                if st.session_state.get("active_roster_week_date") != start_date:
-                    loaded_draft, draft_time = load_local_draft_roster(start_date)
-                    if loaded_draft is not None and not loaded_draft.empty:
-                        st.session_state.final_roster_df = loaded_draft
-                        st.session_state["active_roster_week_date"] = start_date
-                        st.session_state[f"last_saved_draft_{date_str_cur}"] = draft_time
+                if ('final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty or st.session_state.get("active_roster_week_date") != date_str_cur):
+                    st.session_state["active_roster_week_date"] = date_str_cur
+                    if 'final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty:
+                        loaded_draft, draft_time = load_local_draft_roster(start_date)
+                        if loaded_draft is not None and not loaded_draft.empty:
+                            st.session_state.final_roster_df = loaded_draft
+                            st.session_state[f"last_saved_draft_{date_str_cur}"] = draft_time
 
                 # Check for VIC Holidays in selected week
                 week_pubs = []
@@ -6839,9 +6842,9 @@ if is_manager:
                     <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.95rem; color: #ffffff !important;">
                         <li><b>First Guide (Rule 1):</b> Fixed Baseline Shifts are assigned first</li>
                         <li>Respects staff unavailability constraints</li>
-                        <li>Fulfills daily shift requirements</li>
-                        <li>Ensures mandatory award break times</li>
-                        <li>Enforces minimum rest periods between shifts</li>
+                        <li><b>Daily Shift Requirements:</b> Used as suggestion guide to generate initial draft</li>
+                        <li><b>Full Editor Freedom:</b> Editors can freely adjust, swap, or enter any custom shift</li>
+                        <li>Ensures mandatory award break times & rest periods</li>
                         <li>Optimizes total wage costs (junior rate prioritization & penalty minimization)</li>
                         <li>Organizes table layout: Baking Team first, followed by Service Team (Age Descending)</li>
                     </ul>
@@ -6939,8 +6942,20 @@ if is_manager:
                     use_container_width=(zoom_pct == 100)
                 )
                 edited_final_df = strip_daily_gross_row(edited_display_df)
-                if edited_final_df is not None and not edited_final_df.empty:
-                    st.session_state.final_roster_df = edited_final_df.copy()
+                if edited_final_df is not None and isinstance(edited_final_df, pd.DataFrame) and not edited_final_df.empty:
+                    cleaned_edited = clean_roster_dataframe(edited_final_df)
+                    days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                    for d in days_list:
+                        if d in cleaned_edited.columns:
+                            cleaned_edited[d] = cleaned_edited[d].apply(normalize_shift_time_str)
+                    
+                    current_clean = clean_roster_dataframe(st.session_state.final_roster_df)
+                    if not cleaned_edited.equals(current_clean):
+                        st.session_state.final_roster_df = cleaned_edited.copy()
+                        save_local_draft_roster(cleaned_edited, start_date)
+                        if "edit_generated_roster" in st.session_state:
+                            del st.session_state["edit_generated_roster"]
+                        st.rerun()
 
                 # Real-Time Financial Breakdown for Generated Roster
                 wages_summary_gen = calculate_roster_wages(edited_final_df)
