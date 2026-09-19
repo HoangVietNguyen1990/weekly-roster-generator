@@ -212,9 +212,14 @@ def repair_pem_private_key(pk_str):
     if not body_clean:
         return s
         
-    missing_padding = len(body_clean) % 4
-    if missing_padding:
-        body_clean += '=' * (4 - missing_padding)
+    body_unpadded = body_clean.rstrip('=')
+    rem = len(body_unpadded) % 4
+    if rem == 2:
+        body_clean = body_unpadded + '=='
+    elif rem == 3:
+        body_clean = body_unpadded + '='
+    else:
+        body_clean = body_unpadded
         
     lines = [body_clean[i:i+64] for i in range(0, len(body_clean), 64)]
     return header + "\n" + "\n".join(lines) + "\n" + footer + "\n"
@@ -295,8 +300,8 @@ def get_firebase_db():
             raw_pk = str(firebase_config.get("private_key", "")).strip()
             repaired_pk = repair_pem_private_key(raw_pk)
             pk_candidates = [
+                raw_pk.replace("\\n", "\n").replace("\r", "").strip(),
                 repaired_pk,
-                raw_pk.replace("\\n", "\n"),
                 raw_pk
             ]
             
@@ -315,6 +320,30 @@ def get_firebase_db():
                 except Exception as ex_cert:
                     last_cert_err = str(ex_cert)
                     
+            # Fallback: if secrets config failed to initialize Certificate, try any local JSON service account file
+            if not init_success and not firebase_admin._apps:
+                fallback_json_list = ["serviceAccountKey.json", "firebase_key.json", "app-database-b486e-firebase-adminsdk-fbsvc-913610cd6b.json"]
+                if os.path.exists(BASE_DIR):
+                    try:
+                        for fn in os.listdir(BASE_DIR):
+                            if fn.endswith(".json") and any(k in fn.lower() for k in ["firebase", "adminsdk", "service_account", "app-database"]):
+                                if fn not in fallback_json_list:
+                                    fallback_json_list.append(fn)
+                    except Exception:
+                        pass
+                for jf in fallback_json_list:
+                    fp = os.path.join(BASE_DIR, jf) if not os.path.isabs(jf) else jf
+                    if os.path.exists(fp):
+                        try:
+                            cred = credentials.Certificate(fp)
+                            firebase_admin.initialize_app(cred)
+                            init_success = True
+                            with open(fp, "r", encoding="utf-8") as f_fb:
+                                firebase_config = json.load(f_fb)
+                            break
+                        except Exception as e_jf:
+                            last_cert_err = str(e_jf)
+
             if not init_success and not firebase_admin._apps:
                 FIREBASE_LAST_ERROR = f"Firebase Certificate init failed: {last_cert_err}"
                 return None
@@ -356,16 +385,47 @@ def firestore_load_df(collection_name):
     db = get_firebase_db()
     if db is None:
         return None
-    try:
-        doc_ref = db.collection(collection_name).document("master_list")
-        doc = doc_ref.get()
-        if doc.exists:
-            data = doc.to_dict()
-            records = data.get("records", [])
-            if records:
-                return pd.DataFrame(records)
-    except Exception:
-        pass
+    
+    # Candidate collection names to ensure compatibility with various naming conventions
+    candidate_collections = [collection_name]
+    if collection_name == "unavailability":
+        candidate_collections.extend(["unavailabilities", "staff_unavailability", "availability"])
+    elif collection_name.endswith("s"):
+        candidate_collections.append(collection_name[:-1])
+    else:
+        candidate_collections.append(collection_name + "s")
+
+    for coll in candidate_collections:
+        try:
+            col_ref = db.collection(coll)
+            
+            # 1. Try master_list document first
+            master_doc = col_ref.document("master_list").get()
+            if master_doc.exists:
+                data = master_doc.to_dict()
+                records = data.get("records", [])
+                if records and isinstance(records, list) and len(records) > 0:
+                    return pd.DataFrame(records)
+
+            # 2. Check if documents are stored individually or via auto-ID in the collection
+            docs = list(col_ref.stream())
+            if docs:
+                records = []
+                for d in docs:
+                    if d.id == "master_list":
+                        continue
+                    d_dict = d.to_dict()
+                    if not d_dict:
+                        continue
+                    if "records" in d_dict and isinstance(d_dict["records"], list):
+                        records.extend(d_dict["records"])
+                    else:
+                        records.append(d_dict)
+                if records:
+                    return pd.DataFrame(records)
+        except Exception:
+            pass
+            
     return None
 
 def firestore_save_profiles(profiles):
@@ -1421,10 +1481,27 @@ def parse_time_to_decimal(time_str):
     except:
         return 0.0
 
+def normalize_shift_time_str(shift_str):
+    if not shift_str:
+        return ""
+    s = str(shift_str).strip()
+    s_low = s.lower().replace(" ", "")
+    # Fix midday start typo: 12:00am -> 12:00pm (noon)
+    if s_low.startswith("12:00am-") or s_low.startswith("12am-"):
+        s = re.sub(r"(?i)\b12(?::00)?\s*am\b", "12:00pm", s)
+    # Fix afternoon end typo: -2:00am -> -2:00pm
+    if s_low.endswith("-2:00am") or s_low.endswith("-2am"):
+        s = re.sub(r"(?i)\b2(?::00)?\s*am\b", "2:00pm", s)
+    # Fix Robert baker morning start typo: 4:00pm-12:00pm -> 4:00am-12:00pm
+    if s_low.startswith("4:00pm-12:") or s_low.startswith("4pm-12:"):
+        s = re.sub(r"(?i)\b4(?::00)?\s*pm\b", "4:00am", s)
+    return s
+
 def parse_shift_range(shift_str):
     if not shift_str or "unavailable" in str(shift_str).strip().lower() or str(shift_str).strip().lower() in ["off", "nan", ""]:
         return None
     try:
+        shift_str = normalize_shift_time_str(shift_str)
         parts = str(shift_str).split("-")
         start = parse_time_to_decimal(parts[0])
         end = parse_time_to_decimal(parts[1])
@@ -4274,13 +4351,13 @@ default_req = pd.DataFrame([
 
 default_fixed = pd.DataFrame([
     {"Employee": "Viet Nguyen", "Monday": "off", "Tuesday": "4:00am-12:00pm", "Wednesday": "off", "Thursday": "5:30am-12:30pm", "Friday": "5:30am-12:30pm", "Saturday": "4:00am-12:00pm", "Sunday": "5:30am-12:30pm"},
-    {"Employee": "Anastasia", "Monday": "12:00am-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
+    {"Employee": "Anastasia", "Monday": "12:00pm-5:00pm", "Tuesday": "off", "Wednesday": "off", "Thursday": "", "Friday": "9:00am-5:00pm", "Saturday": "12:30pm-5:30pm", "Sunday": "12:30pm-5:30pm"},
     {"Employee": "Esther Amataiti", "Monday": "7:00am-12:00pm", "Tuesday": "7:00am-12:00pm", "Wednesday": "off", "Thursday": "7:30am-12:30pm", "Friday": "7:00am-12:00pm", "Saturday": "off", "Sunday": "off"},
-    {"Employee": "Jane", "Monday": "off", "Tuesday": "12:00pm-5:00pm", "Wednesday": "12:30pm-5:30pm", "Thursday": "12:30pm-5:30pm", "Friday": "off", "Saturday": "10:00am-3:00pm", "Sunday": "9:00am-2:00am"},
+    {"Employee": "Jane", "Monday": "off", "Tuesday": "12:00pm-5:00pm", "Wednesday": "12:30pm-5:30pm", "Thursday": "12:30pm-5:30pm", "Friday": "off", "Saturday": "10:00am-3:00pm", "Sunday": "9:00am-2:00pm"},
     {"Employee": "Amy", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
     {"Employee": "Olivia", "Monday": "unavailable", "Tuesday": "unavailable", "Wednesday": "unavailable", "Thursday": "unavailable", "Friday": "unavailable", "Saturday": "", "Sunday": ""},
     {"Employee": "Aroha", "Monday": "6:00am-1:00pm", "Tuesday": "6:00am-1:00pm", "Wednesday": "6:00am-1:00pm", "Thursday": "off", "Friday": "off", "Saturday": "6:00am-2:00pm", "Sunday": "6:00am-11:00am"},
-    {"Employee": "Robert", "Monday": "4:00am-12:00pm", "Tuesday": "off", "Wednesday": "4:00am-12:00pm", "Thursday": "4:00pm-12:00pm", "Friday": "4:00am-12:00pm", "Saturday": "off", "Sunday": "4:00am-12:00pm"}
+    {"Employee": "Robert", "Monday": "4:00am-12:00pm", "Tuesday": "off", "Wednesday": "4:00am-12:00pm", "Thursday": "4:00am-12:00pm", "Friday": "4:00am-12:00pm", "Saturday": "off", "Sunday": "4:00am-12:00pm"}
 ])
 
 if 'manual_employees' not in st.session_state or st.session_state.manual_employees is None or st.session_state.manual_employees.empty:
@@ -5013,14 +5090,39 @@ def render_team_monthly_calendar_grid():
     """, unsafe_allow_html=True)
         
     # Month / Year Selection Controls
-    col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+    month_options = ["August 2026", "September 2026", "October 2026", "November 2026", "December 2026", "January 2027"]
+    cur_m_str = get_melbourne_now().strftime("%B %Y")
+    default_m_idx = month_options.index(cur_m_str) if cur_m_str in month_options else 1
+
+    col_nav1, col_nav2, col_nav3 = st.columns([1.2, 1.8, 1.2])
+    with col_nav1:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if is_firebase_active():
+            st.markdown('<div style="background: rgba(44, 168, 108, 0.18); border: 1.5px solid #2ca86c; border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; color: #76eec6; font-weight: 700; text-align: center;">🟢 Firebase Cloud Connected</div>', unsafe_allow_html=True)
+        else:
+            fb_err = get_firebase_error()
+            st.markdown(f'<div style="background: rgba(229, 62, 62, 0.18); border: 1.5px solid #e53e3e; border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; color: #fc8181; font-weight: 700; text-align: center;" title="{fb_err}">🔴 Local Mode (No Firebase)</div>', unsafe_allow_html=True)
+
     with col_nav2:
         selected_month_str = st.selectbox(
             "Select Month & Year View", 
-            ["August 2026", "September 2026", "October 2026", "November 2026", "December 2026", "January 2027"],
-            index=0,
+            month_options,
+            index=default_m_idx,
             key="cal_grid_month_picker"
         )
+
+    with col_nav3:
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        if st.button("🔄 Sync from Firebase", key="btn_sync_unavail_firebase", use_container_width=True):
+            try:
+                firestore_load_df.clear()
+            except:
+                pass
+            try:
+                load_persisted_df.clear()
+            except:
+                pass
+            st.rerun()
         
     month_names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
     parts = selected_month_str.split()
@@ -5039,8 +5141,21 @@ def render_team_monthly_calendar_grid():
     cal = calendar.Calendar(firstweekday=0)
     month_days = cal.monthdayscalendar(sel_year, sel_month)
     
-    # Always load fresh data from disk so calendar grid & breakdown table are 100% in sync with file
-    unavail_df = standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail))
+    # Load data from Firebase Firestore (with local fallback)
+    loaded_unavail = standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail))
+    
+    # Preserve any newly added unavailabilities in session state if loaded_unavail is smaller
+    sess_unavail = st.session_state.get("manual_unavailability", None)
+    if sess_unavail is not None and isinstance(sess_unavail, pd.DataFrame) and not sess_unavail.empty:
+        if loaded_unavail is None or loaded_unavail.empty:
+            unavail_df = sess_unavail
+        elif len(sess_unavail) > len(loaded_unavail):
+            unavail_df = sess_unavail
+        else:
+            unavail_df = loaded_unavail
+    else:
+        unavail_df = loaded_unavail
+
     st.session_state.manual_unavailability = unavail_df
 
     emp_col = find_column(unavail_df, ["employee", "name", "staff", "user", "person", "employee name", "staff name"], "Employee")
@@ -5948,6 +6063,7 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                     day_col = find_column(fixed, [day.lower(), day.lower()[:3]])
                     if day_col:
                         val = str(fix_row.get(day_col, "")).strip()
+                        val = normalize_shift_time_str(val)
                         if val.lower() not in ["off", "nan", "none", ""]:
                             roster_output[name][day] = val
                             weekly_shifts_count[name] += 1
@@ -6054,10 +6170,15 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
         remaining_shifts_to_fill = []
         for shift_req in shifts_to_fill:
             filled_idx = -1
-            req_clean = shift_req["shift"].strip().lower().replace(" ", "")
+            req_clean = normalize_shift_time_str(shift_req["shift"]).strip().lower().replace(" ", "")
+            req_parsed = parse_shift_range(shift_req["shift"])
             for idx, fixed_shift in enumerate(fixed_shifts_today):
-                fixed_clean = str(fixed_shift).strip().lower().replace(" ", "")
+                fixed_clean = normalize_shift_time_str(fixed_shift).strip().lower().replace(" ", "")
                 if req_clean == fixed_clean:
+                    filled_idx = idx
+                    break
+                f_parsed = parse_shift_range(fixed_shift)
+                if req_parsed and f_parsed and abs(req_parsed[0] - f_parsed[0]) < 0.01 and abs(req_parsed[1] - f_parsed[1]) < 0.01:
                     filled_idx = idx
                     break
             if filled_idx >= 0:
@@ -6626,6 +6747,7 @@ if is_manager:
                 <div style="background: rgba(9, 32, 28, 0.5); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 14px; padding: 15px; height: 100%;">
                     <h4 style="color: #e5a93c !important; margin-top: 0;">📋 Generator Rules Summary</h4>
                     <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.95rem; color: #ffffff !important;">
+                        <li><b>First Guide (Rule 1):</b> Fixed Baseline Shifts are assigned first</li>
                         <li>Respects staff unavailability constraints</li>
                         <li>Fulfills daily shift requirements</li>
                         <li>Ensures mandatory award break times</li>
@@ -6779,13 +6901,34 @@ if is_manager:
 
                 # Finalize & Export Section
                 st.markdown("<br>", unsafe_allow_html=True)
-                col_fin1, col_fin2 = st.columns([1.2, 1])
+                col_fin1, col_fin2, col_fin3 = st.columns([1.1, 1.3, 1])
                 with col_fin1:
                     if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True):
                         date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
                         st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and saved online!")
 
                 with col_fin2:
+                    if st.button("📌 SAVE AS FIXED BASELINE SHIFTS", key="btn_save_table_as_fixed", use_container_width=True, help="Permanently save the shifts in this table as your new Fixed Baseline Shifts (First Guide) in fixed.csv and Cloud Firestore."):
+                        cleaned_for_fixed = clean_roster_unavailability_display(edited_final_df)
+                        days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                        emp_col_name = find_column(cleaned_for_fixed, ["employee", "name", "staff", "staff name"], cleaned_for_fixed.columns[0])
+                        cols_to_keep = [emp_col_name] + [d for d in days_list if d in cleaned_for_fixed.columns]
+                        new_fixed = cleaned_for_fixed[cols_to_keep].copy()
+                        new_fixed.rename(columns={emp_col_name: "Employee"}, inplace=True)
+                        for d in days_list:
+                            if d in new_fixed.columns:
+                                new_fixed[d] = new_fixed[d].apply(normalize_shift_time_str)
+                        new_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(new_fixed)))
+                        st.session_state.manual_fixed = new_fixed
+                        save_persisted_df(new_fixed, "fixed.csv")
+                        if "edit_fixed_v2" in st.session_state:
+                            del st.session_state["edit_fixed_v2"]
+                        if "edit_fixed_in_generator" in st.session_state:
+                            del st.session_state["edit_fixed_in_generator"]
+                        st.success("✅ Fixed Baseline Shifts (First Guide) successfully updated and synced with Cloud Firestore! Future roster generations will follow these shifts.")
+                        st.rerun()
+
+                with col_fin3:
                     excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
                     file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
                     st.download_button(
