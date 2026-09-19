@@ -6768,6 +6768,7 @@ if is_manager:
                         if loaded_draft is not None and not loaded_draft.empty:
                             st.session_state.final_roster_df = loaded_draft
                             st.session_state[f"last_saved_draft_{date_str_cur}"] = draft_time
+                            st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
 
                 # Check for VIC Holidays in selected week
                 week_pubs = []
@@ -6805,6 +6806,7 @@ if is_manager:
                             st.session_state.final_roster_df = df_clean
                             st.session_state["active_roster_week_date"] = start_date
                             save_local_draft_roster(df_clean, start_date)
+                            st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
                             st.success("🎉 Weekly Roster successfully generated & saved as local editing draft!")
                         except Exception as e:
                             st.error(f"Failed to generate roster: {e}")
@@ -6833,6 +6835,7 @@ if is_manager:
 
                             # Save strictly as local draft (DO NOT upload to cloud until finalized)
                             save_local_draft_roster(df_clean, target_start_dt)
+                            st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
                             st.success(f"📂 Roster loaded as local editing draft for week starting {target_start_dt.strftime('%d/%m/%Y')}! (Not uploaded to cloud until you click Finalize).")
 
             with col2:
@@ -6864,6 +6867,15 @@ if is_manager:
                 with col_tbl_h2:
                     show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
 
+                # If editor explicitly toggles unavailability view, preserve current table edits
+                if "prev_show_unavail" not in st.session_state:
+                    st.session_state.prev_show_unavail = show_unavail
+                if st.session_state.prev_show_unavail != show_unavail:
+                    st.session_state.prev_show_unavail = show_unavail
+                    if "current_editing_roster" in st.session_state and st.session_state.current_editing_roster is not None:
+                        st.session_state.final_roster_df = st.session_state.current_editing_roster.copy()
+                        st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+
                 # Zoom Level Control
                 roster_zoom_val = st.select_slider(
                     "🔍 Table Zoom Level:",
@@ -6881,12 +6893,8 @@ if is_manager:
                 else:
                     display_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
 
-                # Calculate wages & daily gross breakdown
-                wages_summary_gen = calculate_roster_wages(st.session_state.final_roster_df)
-                daily_gross_map = wages_summary_gen.get("daily_gross", {})
-
-                # Attach bottom summary row for visual display in data_editor
-                df_for_editor = reorder_roster_dataframe(attach_daily_gross_row(display_roster_df, daily_gross_map))
+                # Pure staff rows only! DO NOT inject calculated summary rows into editable dataframe
+                df_for_editor = reorder_roster_dataframe(display_roster_df)
 
                 # Calculate zoom factor and dynamic column width / height scaling
                 zoom_pct = int(roster_zoom_val.replace("%", ""))
@@ -6932,33 +6940,57 @@ if is_manager:
                 """, unsafe_allow_html=True)
 
                 gen_cols = list(df_for_editor.columns)
+                editor_nonce = st.session_state.get("roster_editor_nonce", 0)
+                editor_key = f"edit_generated_roster_{cur_date_str}_{editor_nonce}"
+
                 edited_display_df = st.data_editor(
                     df_for_editor,
                     column_order=gen_cols,
                     num_rows="dynamic",
-                    key="edit_generated_roster",
+                    key=editor_key,
                     height=roster_table_height,
                     column_config=dynamic_col_config,
                     use_container_width=(zoom_pct == 100)
                 )
-                edited_final_df = strip_daily_gross_row(edited_display_df)
-                if edited_final_df is not None and isinstance(edited_final_df, pd.DataFrame) and not edited_final_df.empty:
-                    cleaned_edited = clean_roster_dataframe(edited_final_df)
+
+                if edited_display_df is not None and isinstance(edited_display_df, pd.DataFrame) and not edited_display_df.empty:
+                    cleaned_edited = clean_roster_dataframe(strip_daily_gross_row(edited_display_df))
                     days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
                     for d in days_list:
                         if d in cleaned_edited.columns:
                             cleaned_edited[d] = cleaned_edited[d].apply(normalize_shift_time_str)
-                    
-                    current_clean = clean_roster_dataframe(st.session_state.final_roster_df)
-                    if not cleaned_edited.equals(current_clean):
-                        st.session_state.final_roster_df = cleaned_edited.copy()
-                        save_local_draft_roster(cleaned_edited, start_date)
-                        if "edit_generated_roster" in st.session_state:
-                            del st.session_state["edit_generated_roster"]
-                        st.rerun()
+                    edited_final_df = cleaned_edited
+                    st.session_state["current_editing_roster"] = cleaned_edited
+                else:
+                    edited_final_df = clean_roster_dataframe(df_for_editor)
+                    st.session_state["current_editing_roster"] = edited_final_df
 
-                # Real-Time Financial Breakdown for Generated Roster
+                # Real-Time Financial Breakdown for Generated Roster (Live from edited_final_df)
                 wages_summary_gen = calculate_roster_wages(edited_final_df)
+                daily_gross_map = wages_summary_gen.get("daily_gross", {})
+
+                # Daily Gross Breakdown Bar directly under the editor table
+                days_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                daily_gross_cards_html = "".join([
+                    f"""<div style="flex: 1; min-width: 95px; background: #0c2923; border: 1px solid rgba(229, 169, 60, 0.6); border-radius: 8px; padding: 8px 4px; text-align: center;">
+                        <div style="font-size: 0.75rem; color: #a3f7bf; font-weight: 800; text-transform: uppercase;">{day[:3]}</div>
+                        <div style="font-size: 1.05rem; color: #ffffff; font-weight: 900; margin-top: 2px;">${daily_gross_map.get(day, 0.0):,.2f}</div>
+                    </div>"""
+                    for day in days_order
+                ])
+
+                st.markdown(f"""
+                <div style="background: rgba(8, 29, 25, 0.92); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 12px 16px; margin-top: -6px; margin-bottom: 20px;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                        <div style="font-size: 0.95rem; font-weight: 800; color: #e5a93c; min-width: 140px;">
+                            💵 DAILY GROSS ($):
+                        </div>
+                        <div style="display: flex; flex: 1; gap: 8px; flex-wrap: wrap;">
+                            {daily_gross_cards_html}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("""
@@ -7024,6 +7056,9 @@ if is_manager:
                     if st.button("💾 SAVE DRAFT (LOCAL)", key="btn_save_draft_local", use_container_width=True, help="Save your current edits locally on this device/server without uploading to cloud. Safe for mobile phone work."):
                         ok_d, time_d = save_local_draft_roster(edited_final_df, start_date)
                         if ok_d:
+                            st.session_state.final_roster_df = edited_final_df.copy()
+                            st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+                            st.session_state[f"last_saved_draft_{cur_date_str}"] = time_d
                             st.success(f"💾 Working draft saved locally at {time_d}! Safe to close or switch apps on mobile.")
                             st.rerun()
                         else:
@@ -7032,6 +7067,8 @@ if is_manager:
                 with col_btn2:
                     if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True, help="Officially finalize this roster, publish it to staff, and upload permanently to Firebase Cloud Firestore."):
                         date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
+                        st.session_state.final_roster_df = edited_final_df.copy()
+                        st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
                         st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and uploaded to Firebase Cloud Firestore!")
                         st.rerun()
 
