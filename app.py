@@ -6760,14 +6760,15 @@ if is_manager:
                 start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
 
                 # Auto-load existing local draft for the chosen date ONLY if session roster is not yet initialized or date was explicitly changed
-                date_str_cur = start_date.strftime("%Y-%m-%d")
-                if ('final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty or st.session_state.get("active_roster_week_date") != date_str_cur):
-                    st.session_state["active_roster_week_date"] = date_str_cur
+                cur_date_str = start_date.strftime("%Y-%m-%d")
+                date_str_cur = cur_date_str
+                if ('final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty or st.session_state.get("active_roster_week_date") != cur_date_str):
+                    st.session_state["active_roster_week_date"] = cur_date_str
                     if 'final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty:
                         loaded_draft, draft_time = load_local_draft_roster(start_date)
                         if loaded_draft is not None and not loaded_draft.empty:
                             st.session_state.final_roster_df = loaded_draft
-                            st.session_state[f"last_saved_draft_{date_str_cur}"] = draft_time
+                            st.session_state[f"last_saved_draft_{cur_date_str}"] = draft_time
                             st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
 
                 # Check for VIC Holidays in selected week
