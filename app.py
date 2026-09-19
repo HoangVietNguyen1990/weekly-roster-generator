@@ -2666,7 +2666,7 @@ def clean_roster_unavailability_display(df):
 
     return df_out
 
-def format_roster_with_unavailability_badges(df, unavail_data=None):
+def format_roster_with_unavailability_badges(df, unavail_data=None, start_dt=None):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return df
 
@@ -2688,6 +2688,13 @@ def format_roster_with_unavailability_badges(df, unavail_data=None):
                 except:
                     unavail_data = pd.DataFrame()
 
+    if start_dt is None:
+        start_dt = st.session_state.get("gen_start_date", None)
+    if isinstance(start_dt, str):
+        start_dt = parse_date_robust(start_dt)
+    if hasattr(start_dt, "date"):
+        start_dt = start_dt.date()
+
     # Build name_map for robust employee name matching across table rows
     roster_emp_names = [str(r.get(emp_col, "")).strip() for _, r in df_out.iterrows() if str(r.get(emp_col, "")).strip()]
     name_map = {n.lower(): n for n in roster_emp_names}
@@ -2699,17 +2706,41 @@ def format_roster_with_unavailability_badges(df, unavail_data=None):
         un_win_c = find_column(unavail_data, ["time window", "window", "time", "unavailability", "reason"])
         
         if un_name_c and un_day_c and un_win_c:
+            parsed_entries = []
             for _, u_row in unavail_data.iterrows():
                 raw_u_emp = str(u_row.get(un_name_c, "")).strip()
-                u_day = str(u_row.get(un_day_c, "")).strip().lower()
+                raw_u_day = str(u_row.get(un_day_c, "")).strip()
                 u_win = str(u_row.get(un_win_c, "Full Day")).strip()
                 
                 matched_emp = find_matching_employee(raw_u_emp, name_map)
-                if matched_emp and u_day:
-                    key = (matched_emp.lower(), u_day)
-                    if key not in unavail_map:
-                        unavail_map[key] = []
-                    unavail_map[key].append(u_win)
+                if matched_emp and raw_u_day:
+                    parsed_entries.append((matched_emp.lower(), raw_u_day, u_win))
+
+            if start_dt:
+                for emp_lower, raw_u_day, u_win in parsed_entries:
+                    for idx, day_name in enumerate(days_of_week):
+                        try:
+                            day_date = start_dt + timedelta(days=idx)
+                            if is_unavail_applicable_to_date(day_date, raw_u_day, u_win):
+                                key = (emp_lower, day_name.lower())
+                                if key not in unavail_map:
+                                    unavail_map[key] = []
+                                if u_win not in unavail_map[key]:
+                                    unavail_map[key].append(u_win)
+                        except:
+                            pass
+            else:
+                # Only when no date is provided at all, match weekday strings
+                for emp_lower, raw_u_day, u_win in parsed_entries:
+                    clean_day = re.sub(r'\(.*?\)', '', raw_u_day).strip().lower()
+                    for day_name in days_of_week:
+                        day_lower = day_name.lower()
+                        if day_lower == clean_day or day_lower in clean_day:
+                            key = (emp_lower, day_lower)
+                            if key not in unavail_map:
+                                unavail_map[key] = []
+                            if u_win not in unavail_map[key]:
+                                unavail_map[key].append(u_win)
 
     for idx, row in df_out.iterrows():
         emp_name = str(row.get(emp_col, "")).strip()
@@ -6631,7 +6662,7 @@ if is_manager:
                 st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
 
                 if show_unavail:
-                    display_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
+                    display_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df, start_dt=start_date)
                 else:
                     display_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
 
