@@ -791,6 +791,16 @@ st.markdown("""
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
     }
 
+    /* ENSURE TAB PANELS ARE NEVER COLLAPSED OR RENDERED BLANK */
+    .stTabs [data-baseweb="tab-panel"],
+    div[role="tabpanel"],
+    [data-testid="stTabContent"] {
+        min-height: 180px !important;
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    }
+
     /* UNIFIED HIGH-CONTRAST 3D BUTTON STYLING MATCHING THEME PALETTE */
     button,
     .stButton > button,
@@ -6318,13 +6328,15 @@ if is_manager:
                     st.markdown(f"#### 👥 Staff Earnings & Super Breakdown Table ({selected_label})")
                     if not wages_summary["breakdown_df"].empty:
                         st.dataframe(wages_summary["breakdown_df"], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("ℹ️ No staff wage breakdown records found for this roster.")
 
                 with sub_tab2:
                     st.markdown(f"#### 📊 Hour Rate Breakdown for Selected Roster Week: `{selected_label}`")
                     home_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_archived_df)
                     if not home_hour_breakdown_df.empty:
                         st.dataframe(home_hour_breakdown_df, use_container_width=True, hide_index=True)
-                        
+
                         st.markdown("<br>", unsafe_allow_html=True)
                         st.markdown("""
                         <div style="background: rgba(8, 29, 25, 0.95); border: 2px solid #e5a93c; border-radius: 12px; padding: 14px 20px; margin-top: 10px;">
@@ -6366,6 +6378,8 @@ if is_manager:
                             st.markdown("Copy the script code below, open your Xero Pay Run page in your web browser (`F12` -> `Console`), and paste it to auto-fill all staff hours in 1 second:")
                             js_autofill_code = generate_xero_autofill_js(home_hour_breakdown_df)
                             st.code(js_autofill_code, language="javascript")
+                    else:
+                        st.info("ℹ️ No shift hours logged to calculate hourly rate breakdown.")
 
                 with sub_tab3:
                     st.markdown("#### 📈 Payroll, Tax & Super Progress Over Time (Historical Trend Graph)")
@@ -7000,6 +7014,8 @@ if is_manager:
                                 st.rerun()
                             else:
                                 st.error("Please check the confirmation box first.")
+        else:
+            st.info("ℹ️ No active employee accounts registered under 'Employee' role.")
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
