@@ -12,6 +12,12 @@ import math
 from datetime import datetime, timedelta
 import traceback
 try:
+    from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
+except ImportError:
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
+
+try:
     from zoneinfo import ZoneInfo
 except ImportError:
     ZoneInfo = None
@@ -4792,7 +4798,8 @@ def render_employee_availability_manager(user_key):
     day_col = find_column(df_curr, ["day", "date", "weekday"], "Day")
     win_col = find_column(df_curr, ["time window", "window", "time", "unavailability"], "Time Window")
     
-    mask = df_curr[emp_col].astype(str).str.strip().str.lower() == emp_name.lower()
+    emp_name_clean = str(emp_name or "").strip().lower()
+    mask = df_curr[emp_col].astype(str).str.strip().str.lower() == emp_name_clean
     user_rows = df_curr[mask].copy()
     
     if user_rows.empty:
@@ -5813,6 +5820,22 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     has_day_cols = any(find_column(requirements, [day.lower(), day.lower()[:3]]) for day in days_of_week)
 
     for day in days_of_week:
+        day_idx = days_of_week.index(day)
+        day_date = start_dt + timedelta(days=day_idx)
+        is_pub, pub_name = is_vic_public_holiday(day_date)
+        is_school_hol, school_hol_name = is_vic_school_holiday(day_date)
+
+        if is_pub:
+            for emp in active_employees:
+                name = emp["Name"]
+                norm_name = emp["NormalizedName"]
+                key = (norm_name, day.lower())
+                if key in unavail_map:
+                    roster_output[name][day] = " unavailable"
+                else:
+                    roster_output[name][day] = " off"
+            continue
+
         shifts_to_fill = []
         
         if has_day_cols and req_shift_col:
@@ -5904,7 +5927,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
                     if elizabeth_weekday_shifts >= 2:
                         continue
 
-                if age < 18 and day not in ["Saturday", "Sunday"]:
+                # Lift school hour ban during Victorian School Holidays
+                if age < 18 and day not in ["Saturday", "Sunday"] and not is_school_hol:
                     if max(shift_info["start"], 9.0) < min(shift_info["end"], 15.5):
                         continue
 
@@ -6356,6 +6380,23 @@ if is_manager:
         with col1:
             start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
             
+            # Check for VIC Holidays in selected week
+            week_pubs = []
+            week_sch_hols = set()
+            for idx_d in range(7):
+                cur_d = start_date + timedelta(days=idx_d)
+                is_p, p_name = is_vic_public_holiday(cur_d)
+                if is_p:
+                    week_pubs.append(f"{p_name} ({cur_d.strftime('%d/%m/%Y')})")
+                is_s, s_name = is_vic_school_holiday(cur_d)
+                if is_s:
+                    week_sch_hols.add(s_name)
+
+            if week_pubs:
+                st.info(f"🎉 **Public Holiday(s) in Target Week**: {', '.join(week_pubs)}. Store closed by default (editors can manually edit table).")
+            if week_sch_hols:
+                st.success(f"🏫 **Victorian School Holiday Active**: {', '.join(week_sch_hols)}. Junior staff daytime roster restriction lifted (portal unavailabilities respected).")
+
             st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
             if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
                 with st.spinner("Calculating optimal bakery roster locally..."):
