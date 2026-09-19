@@ -4136,13 +4136,13 @@ default_fixed = pd.DataFrame([
 if 'manual_employees' not in st.session_state or st.session_state.manual_employees is None or st.session_state.manual_employees.empty:
     st.session_state.manual_employees = sync_user_profiles_to_employees(load_persisted_df("employees.csv", default_emp))
 
-if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None:
+if 'manual_unavailability' not in st.session_state or st.session_state.manual_unavailability is None or st.session_state.manual_unavailability.empty:
     st.session_state.manual_unavailability = sort_dataframe_by_team_and_age(standardize_unavailability_df(load_persisted_df("unavailability.csv", default_unavail)))
 
-if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or len(st.session_state.manual_requirements) <= 2:
+if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
     st.session_state.manual_requirements = load_persisted_df("requirements.csv", default_req)
 
-if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or len(st.session_state.manual_fixed) <= 2:
+if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
     st.session_state.manual_fixed = sort_dataframe_by_team_and_age(load_persisted_df("fixed.csv", default_fixed))
 
 if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
@@ -4185,12 +4185,14 @@ def render_store_kiosk_timeclock():
                     if name_str not in emp_list:
                         emp_list.append(name_str)
 
-    for u_k, u_v in user_profiles.items():
-        if u_k.startswith("demo.") or "demo" in u_k.lower():
-            continue
-        ename = u_v.get("employee_name", u_k).strip()
-        if ename and ename.lower() not in ["viet", "jane"] and ename not in emp_list:
-            emp_list.append(ename)
+    k_profs = get_active_user_profiles() or {}
+    if isinstance(k_profs, dict):
+        for u_k, u_v in k_profs.items():
+            if u_k.startswith("demo.") or "demo" in u_k.lower():
+                continue
+            ename = u_v.get("employee_name", u_k).strip() if isinstance(u_v, dict) else ""
+            if ename and ename.lower() not in ["viet", "jane"] and ename not in emp_list:
+                emp_list.append(ename)
 
     emp_list = sorted(list(set(emp_list)))
     
@@ -5357,10 +5359,12 @@ def render_manager_timesheet_audit_dashboard():
                                 shift_val = str(r_row.get(day_name, "")).strip()
                                 
                                 is_owner = emp_name.lower() in ["viet", "jane"]
-                                for u_k, u_v in user_profiles.items():
-                                    if u_v.get("employee_name", "").strip().lower() == emp_name.lower():
-                                        if u_v.get("profile", {}).get("classification", "").lower() == "owner":
-                                            is_owner = True
+                                u_profs = get_active_user_profiles() or {}
+                                if isinstance(u_profs, dict):
+                                    for u_k, u_v in u_profs.items():
+                                        if isinstance(u_v, dict) and u_v.get("employee_name", "").strip().lower() == emp_name.lower():
+                                            if u_v.get("profile", {}).get("classification", "").lower() == "owner":
+                                                is_owner = True
 
                                 if not is_owner and emp_name and shift_val and shift_val.lower() not in ["off", "nan", "unavailable"]:
                                     rec_id = f"TC_{shift_date_str.replace('/', '')}_{emp_name.replace(' ', '')}"
@@ -6990,81 +6994,108 @@ if is_manager:
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
-        # Bakery Team Monthly Calendar Grid & Monthly Unavailability Breakdown
-        render_team_monthly_calendar_grid()
+        try:
+            render_team_monthly_calendar_grid()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Unavailability Tab: {e}")
+            st.exception(e)
 
     # --- TAB 4: DAILY REQUIREMENTS ---
     with tab_req:
-        st.subheader("Daily Bakery Shift Requirements")
+        try:
+            st.subheader("Daily Bakery Shift Requirements")
 
-        if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
-            loaded_r = load_persisted_df("requirements.csv", default_req)
-            st.session_state.manual_requirements = loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy()
+            if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
+                loaded_r = load_persisted_df("requirements.csv", default_req)
+                st.session_state.manual_requirements = loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy()
 
-        upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
-        
-        if upload_req is not None:
-            file_key = f"processed_{upload_req.name}_{upload_req.size}"
-            if st.session_state.get("last_req_file") != file_key:
-                loaded = read_excel_robust(upload_req)
-                if loaded is not None:
-                    st.session_state.manual_requirements = loaded
-                    st.session_state.last_req_file = file_key
-                    save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
-                    st.rerun()
-                    
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-            📋 Daily Shift Coverage Requirements (Mon-Sun)
-        </div>
-        """, unsafe_allow_html=True)
-        req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
-        requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
-        if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
-            if not requirements_df.equals(st.session_state.manual_requirements):
-                st.session_state.manual_requirements = requirements_df
-                save_persisted_df(requirements_df, "requirements.csv")
+            upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+            
+            if upload_req is not None:
+                file_key = f"processed_{upload_req.name}_{upload_req.size}"
+                if st.session_state.get("last_req_file") != file_key:
+                    loaded = read_excel_robust(upload_req)
+                    if loaded is not None:
+                        st.session_state.manual_requirements = loaded
+                        st.session_state.last_req_file = file_key
+                        save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                        st.rerun()
+                        
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+                📋 Daily Shift Coverage Requirements (Mon-Sun)
+            </div>
+            """, unsafe_allow_html=True)
+            req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
+            requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
+            if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
+                if not requirements_df.equals(st.session_state.manual_requirements):
+                    st.session_state.manual_requirements = requirements_df
+                    save_persisted_df(requirements_df, "requirements.csv")
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
+            st.exception(e)
 
     # --- TAB 5: FIXED SHIFTS ---
     with tab_fixed:
-        st.subheader("Fixed Baseline Shifts")
+        try:
+            st.subheader("Fixed Baseline Shifts")
 
-        if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
-            loaded_f = load_persisted_df("fixed.csv", default_fixed)
-            st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
+            if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
+                loaded_f = load_persisted_df("fixed.csv", default_fixed)
+                st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
 
-        upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
-        
-        if upload_fixed is not None:
-            file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
-            if st.session_state.get("last_fixed_file") != file_key:
-                loaded = read_excel_robust(upload_fixed)
-                if loaded is not None:
-                    st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded))
-                    st.session_state.last_fixed_file = file_key
-                    save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
-                    st.rerun()
-                    
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-            📌 Fixed Baseline Staff Shifts
-        </div>
-        """, unsafe_allow_html=True)
-        fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
-        fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
-        if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
-            if not fixed_df.equals(st.session_state.manual_fixed):
-                st.session_state.manual_fixed = fixed_df
-                save_persisted_df(fixed_df, "fixed.csv")
+            upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+            
+            if upload_fixed is not None:
+                file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
+                if st.session_state.get("last_fixed_file") != file_key:
+                    loaded = read_excel_robust(upload_fixed)
+                    if loaded is not None:
+                        st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded))
+                        st.session_state.last_fixed_file = file_key
+                        save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                        st.rerun()
+                        
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                📌 Fixed Baseline Staff Shifts
+            </div>
+            """, unsafe_allow_html=True)
+            fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
+            fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
+            if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
+                if not fixed_df.equals(st.session_state.manual_fixed):
+                    st.session_state.manual_fixed = fixed_df
+                    save_persisted_df(fixed_df, "fixed.csv")
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
+            st.exception(e)
 
     # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
     with tab_timesheets:
-        render_manager_timesheet_audit_dashboard()
+        try:
+            render_manager_timesheet_audit_dashboard()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Timesheet Audit Tab: {e}")
+            st.exception(e)
 else:
     # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
     with tab_my_current_roster:
-        render_employee_current_roster_tab(st.session_state.logged_in_user)
+        try:
+            render_employee_current_roster_tab(st.session_state.logged_in_user)
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Current Roster: {e}")
+            st.exception(e)
     with tab_my_info:
-        render_confidential_profile_form(st.session_state.logged_in_user)
+        try:
+            render_confidential_profile_form(st.session_state.logged_in_user)
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Personal Profile: {e}")
+            st.exception(e)
     with tab_my_avail:
-        render_employee_availability_manager(st.session_state.logged_in_user)
+        try:
+            render_employee_availability_manager(st.session_state.logged_in_user)
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Availability: {e}")
+            st.exception(e)
