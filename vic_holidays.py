@@ -57,7 +57,7 @@ def to_date_obj(dt_val):
     if isinstance(dt_val, date):
         return dt_val
     try:
-        dt_p = pd.to_datetime(dt_val)
+        dt_p = pd.to_datetime(dt_val, dayfirst=True)
         if pd.notna(dt_p):
             return dt_p.date()
     except Exception:

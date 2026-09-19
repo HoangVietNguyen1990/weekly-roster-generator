@@ -28,6 +28,36 @@ except Exception:
         except Exception:
             from data.vic_holidays import is_vic_public_holiday, is_vic_school_holiday
 
+def safe_is_vic_public_holiday(dt_val):
+    try:
+        res = is_vic_public_holiday(dt_val)
+        if isinstance(res, tuple) and len(res) >= 2:
+            return bool(res[0]), str(res[1]) if res[1] else ""
+        elif isinstance(res, (list, tuple)) and len(res) == 1:
+            return bool(res[0]), "Public Holiday" if res[0] else ""
+        elif isinstance(res, bool):
+            return res, "Public Holiday" if res else ""
+        elif isinstance(res, str) and res.strip():
+            return True, res.strip()
+        return False, ""
+    except Exception:
+        return False, ""
+
+def safe_is_vic_school_holiday(dt_val):
+    try:
+        res = is_vic_school_holiday(dt_val)
+        if isinstance(res, tuple) and len(res) >= 2:
+            return bool(res[0]), str(res[1]) if res[1] else ""
+        elif isinstance(res, (list, tuple)) and len(res) == 1:
+            return bool(res[0]), "School Holiday" if res[0] else ""
+        elif isinstance(res, bool):
+            return res, "School Holiday" if res else ""
+        elif isinstance(res, str) and res.strip():
+            return True, res.strip()
+        return False, ""
+    except Exception:
+        return False, ""
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -5863,8 +5893,8 @@ def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw,
     for day in days_of_week:
         day_idx = days_of_week.index(day)
         day_date = start_dt + timedelta(days=day_idx)
-        is_pub, pub_name = is_vic_public_holiday(day_date)
-        is_school_hol, school_hol_name = is_vic_school_holiday(day_date)
+        is_pub, pub_name = safe_is_vic_public_holiday(day_date)
+        is_school_hol, school_hol_name = safe_is_vic_school_holiday(day_date)
 
         if is_pub:
             for emp in active_employees:
@@ -6414,257 +6444,263 @@ if is_manager:
 
     # --- TAB 2: WEEKLY ROSTER GENERATOR ---
     with tab_gen:
-        st.markdown("""
-        <div style="background: rgba(9, 32, 28, 0.7); border: 2px solid #e5a93c; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
-            <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">⚡ Weekly Roster Generator</h2>
-            <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Configure your target week period below and hit the <b>Generate Weekly Roster</b> button to instantly build an award-compliant bakery schedule.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
-            
-            # Check for VIC Holidays in selected week
-            week_pubs = []
-            week_sch_hols = set()
-            for idx_d in range(7):
-                cur_d = start_date + timedelta(days=idx_d)
-                is_p, p_name = is_vic_public_holiday(cur_d)
-                if is_p:
-                    week_pubs.append(f"{p_name} ({cur_d.strftime('%d/%m/%Y')})")
-                is_s, s_name = is_vic_school_holiday(cur_d)
-                if is_s:
-                    week_sch_hols.add(s_name)
+        try:
 
-            if week_pubs:
-                st.info(f"🎉 **Public Holiday(s) in Target Week**: {', '.join(week_pubs)}. Store closed by default (editors can manually edit table).")
-            if week_sch_hols:
-                st.success(f"🏫 **Victorian School Holiday Active**: {', '.join(week_sch_hols)}. Junior staff daytime roster restriction lifted (portal unavailabilities respected).")
-
-            st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
-            if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
-                with st.spinner("Calculating optimal bakery roster locally..."):
-                    try:
-                        emp_data = st.session_state.manual_employees
-                        unavail_data = st.session_state.manual_unavailability
-                        req_data = st.session_state.manual_requirements
-                        fixed_data = st.session_state.manual_fixed
-                        
-                        roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
-                        df_clean = roster_out_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
-                        emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
-                        if emp_c in df_clean.columns:
-                            df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
-                        df_clean = clean_roster_dataframe(df_clean)
-                        df_clean = sort_dataframe_by_team_and_age(df_clean)
-                        st.session_state.final_roster_df = df_clean
-                        st.success("🎉 Weekly Roster successfully generated!")
-                    except Exception as e:
-                        st.error(f"Failed to generate roster: {e}")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            upload_roster_file = st.file_uploader("📤 OR Upload Existing Roster File (.xlsx / .csv)", type=["xlsx", "csv"], key="upload_roster_selected_week")
-            if upload_roster_file is not None:
-                file_key = f"roster_up_{upload_roster_file.name}_{upload_roster_file.size}_{start_date}"
-                if st.session_state.get("last_uploaded_roster_key") != file_key:
-                    df_up = read_excel_robust(upload_roster_file)
-                    if df_up is not None and not df_up.empty:
-                        df_clean = df_up.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
-                        emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
-                        if emp_c in df_clean.columns:
-                            df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
-                        df_clean = clean_roster_dataframe(df_clean)
-                        df_clean = sort_dataframe_by_team_and_age(df_clean)
-                        st.session_state.final_roster_df = df_clean
-                        st.session_state.last_uploaded_roster_key = file_key
-                        
-                        # Extract start date from filename if available, else fallback to selected start_date
-                        extracted_dt = extract_date_from_filename(upload_roster_file.name)
-                        target_start_dt = extracted_dt if extracted_dt else start_date
-                        
-                        # Save immediately to disk & cloud so it is persisted after turn off / restart
-                        save_finalized_roster(df_clean, target_start_dt)
-                        st.success(f"🎉 Roster loaded & permanently uploaded to Firebase Cloud Firestore for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
-
-        with col2:
             st.markdown("""
-            <div style="background: rgba(9, 32, 28, 0.5); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 14px; padding: 15px; height: 100%;">
-                <h4 style="color: #e5a93c !important; margin-top: 0;">📋 Generator Rules Summary</h4>
-                <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.95rem; color: #ffffff !important;">
-                    <li>Respects staff unavailability constraints</li>
-                    <li>Fulfills daily shift requirements</li>
-                    <li>Ensures mandatory award break times</li>
-                    <li>Enforces minimum rest periods between shifts</li>
-                    <li>Optimizes total wage costs (junior rate prioritization & penalty minimization)</li>
-                    <li>Organizes table layout: Baking Team first, followed by Service Team (Age Descending)</li>
-                </ul>
+            <div style="background: rgba(9, 32, 28, 0.7); border: 2px solid #e5a93c; border-radius: 16px; padding: 25px; margin-bottom: 25px; box-shadow: 0 8px 30px rgba(0,0,0,0.4);">
+                <h2 style="color: #f7d594 !important; margin-top: 0; font-size: 1.8rem; font-weight: 800;">⚡ Weekly Roster Generator</h2>
+                <p style="color: #ffffff !important; font-size: 1.05rem; margin-bottom: 0;">Configure your target week period below and hit the <b>Generate Weekly Roster</b> button to instantly build an award-compliant bakery schedule.</p>
             </div>
             """, unsafe_allow_html=True)
 
-        if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            col_tbl_h1, col_tbl_h2 = st.columns([2, 1])
-            with col_tbl_h1:
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
+
+                # Check for VIC Holidays in selected week
+                week_pubs = []
+                week_sch_hols = set()
+                for idx_d in range(7):
+                    cur_d = start_date + timedelta(days=idx_d)
+                    is_p, p_name = safe_is_vic_public_holiday(cur_d)
+                    if is_p:
+                        week_pubs.append(f"{p_name} ({cur_d.strftime('%d/%m/%Y')})")
+                    is_s, s_name = safe_is_vic_school_holiday(cur_d)
+                    if is_s:
+                        week_sch_hols.add(s_name)
+
+                if week_pubs:
+                    st.info(f"🎉 **Public Holiday(s) in Target Week**: {', '.join(week_pubs)}. Store closed by default (editors can manually edit table).")
+                if week_sch_hols:
+                    st.success(f"🏫 **Victorian School Holiday Active**: {', '.join(week_sch_hols)}. Junior staff daytime roster restriction lifted (portal unavailabilities respected).")
+
+                st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
+                if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
+                    with st.spinner("Calculating optimal bakery roster locally..."):
+                            emp_data = st.session_state.manual_employees
+                            unavail_data = st.session_state.manual_unavailability
+                            req_data = st.session_state.manual_requirements
+                            fixed_data = st.session_state.manual_fixed
+
+                            roster_out_df = solve_roster(emp_data, unavail_data, req_data, fixed_data, start_date)
+                            df_clean = roster_out_df.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+                            emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
+                            if emp_c in df_clean.columns:
+                                df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                            df_clean = clean_roster_dataframe(df_clean)
+                            df_clean = sort_dataframe_by_team_and_age(df_clean)
+                            st.session_state.final_roster_df = df_clean
+                            st.success("🎉 Weekly Roster successfully generated!")
+                            st.error(f"Failed to generate roster: {e}")
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                upload_roster_file = st.file_uploader("📤 OR Upload Existing Roster File (.xlsx / .csv)", type=["xlsx", "csv"], key="upload_roster_selected_week")
+                if upload_roster_file is not None:
+                    file_key = f"roster_up_{upload_roster_file.name}_{upload_roster_file.size}_{start_date}"
+                    if st.session_state.get("last_uploaded_roster_key") != file_key:
+                        df_up = read_excel_robust(upload_roster_file)
+                        if df_up is not None and not df_up.empty:
+                            df_clean = df_up.replace(["off", "Off", "OFF", "None", "none", "nan", "NaN", None], "").fillna("")
+                            emp_c = find_column(df_clean, ["employee", "name", "staff"], "Employee")
+                            if emp_c in df_clean.columns:
+                                df_clean = df_clean[~df_clean[emp_c].astype(str).str.strip().str.lower().isin(["", "none", "nan"])].reset_index(drop=True)
+                            df_clean = clean_roster_dataframe(df_clean)
+                            df_clean = sort_dataframe_by_team_and_age(df_clean)
+                            st.session_state.final_roster_df = df_clean
+                            st.session_state.last_uploaded_roster_key = file_key
+
+                            # Extract start date from filename if available, else fallback to selected start_date
+                            extracted_dt = extract_date_from_filename(upload_roster_file.name)
+                            target_start_dt = extracted_dt if extracted_dt else start_date
+
+                            # Save immediately to disk & cloud so it is persisted after turn off / restart
+                            save_finalized_roster(df_clean, target_start_dt)
+                            st.success(f"🎉 Roster loaded & permanently uploaded to Firebase Cloud Firestore for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
+
+            with col2:
                 st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
-                    📅 Generated Weekly Roster Schedule (Editable)
+                <div style="background: rgba(9, 32, 28, 0.5); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 14px; padding: 15px; height: 100%;">
+                    <h4 style="color: #e5a93c !important; margin-top: 0;">📋 Generator Rules Summary</h4>
+                    <ul style="margin-bottom: 0; padding-left: 20px; font-size: 0.95rem; color: #ffffff !important;">
+                        <li>Respects staff unavailability constraints</li>
+                        <li>Fulfills daily shift requirements</li>
+                        <li>Ensures mandatory award break times</li>
+                        <li>Enforces minimum rest periods between shifts</li>
+                        <li>Optimizes total wage costs (junior rate prioritization & penalty minimization)</li>
+                        <li>Organizes table layout: Baking Team first, followed by Service Team (Age Descending)</li>
+                    </ul>
                 </div>
                 """, unsafe_allow_html=True)
-            with col_tbl_h2:
-                show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
-            
-            # Zoom Level Control
-            roster_zoom_val = st.select_slider(
-                "🔍 Table Zoom Level:",
-                options=["60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%"],
-                value="100%",
-                key="roster_zoom_slider"
-            )
 
-            # Strip out any existing summary row first to get pure staff dataframe
-            st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
-            st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
-            
-            if show_unavail:
-                display_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
-            else:
-                display_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
+            if 'final_roster_df' in st.session_state and st.session_state.final_roster_df is not None and not st.session_state.final_roster_df.empty:
+                st.markdown("<br>", unsafe_allow_html=True)
 
-            # Calculate wages & daily gross breakdown
-            wages_summary_gen = calculate_roster_wages(st.session_state.final_roster_df)
-            daily_gross_map = wages_summary_gen.get("daily_gross", {})
+                col_tbl_h1, col_tbl_h2 = st.columns([2, 1])
+                with col_tbl_h1:
+                    st.markdown("""
+                    <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.2rem; letter-spacing: 0.5px; border: 2px solid #e5a93c; border-bottom: none;">
+                        📅 Generated Weekly Roster Schedule (Editable)
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_tbl_h2:
+                    show_unavail = st.checkbox("👁️ Show Staff Unavailability", value=True, key="chk_show_unavailability")
 
-            # Attach bottom summary row for visual display in data_editor
-            df_for_editor = reorder_roster_dataframe(attach_daily_gross_row(display_roster_df, daily_gross_map))
-
-            # Calculate zoom factor and dynamic column width / height scaling
-            zoom_pct = int(roster_zoom_val.replace("%", ""))
-            zoom_factor = zoom_pct / 100.0
-            
-            # Calculate pixel widths for Employee and Monday..Sunday columns
-            emp_col_width = int(170 * zoom_factor)
-            day_col_width = int(135 * zoom_factor)
-            
-            # Dynamic Column Configuration for Zoom Sizing
-            dynamic_col_config = {}
-            if df_for_editor is not None and not df_for_editor.empty:
-                first_col = df_for_editor.columns[0]
-                dynamic_col_config[first_col] = st.column_config.Column(
-                    label=first_col,
-                    width=emp_col_width
+                # Zoom Level Control
+                roster_zoom_val = st.select_slider(
+                    "🔍 Table Zoom Level:",
+                    options=["60%", "65%", "70%", "75%", "80%", "85%", "90%", "95%", "100%", "105%", "110%"],
+                    value="100%",
+                    key="roster_zoom_slider"
                 )
-                for c in df_for_editor.columns[1:]:
-                    dynamic_col_config[c] = st.column_config.Column(
-                        label=c,
-                        width=day_col_width
+
+                # Strip out any existing summary row first to get pure staff dataframe
+                st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
+                st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
+
+                if show_unavail:
+                    display_roster_df = format_roster_with_unavailability_badges(st.session_state.final_roster_df)
+                else:
+                    display_roster_df = clean_roster_unavailability_display(st.session_state.final_roster_df)
+
+                # Calculate wages & daily gross breakdown
+                wages_summary_gen = calculate_roster_wages(st.session_state.final_roster_df)
+                daily_gross_map = wages_summary_gen.get("daily_gross", {})
+
+                # Attach bottom summary row for visual display in data_editor
+                df_for_editor = reorder_roster_dataframe(attach_daily_gross_row(display_roster_df, daily_gross_map))
+
+                # Calculate zoom factor and dynamic column width / height scaling
+                zoom_pct = int(roster_zoom_val.replace("%", ""))
+                zoom_factor = zoom_pct / 100.0
+
+                # Calculate pixel widths for Employee and Monday..Sunday columns
+                emp_col_width = int(170 * zoom_factor)
+                day_col_width = int(135 * zoom_factor)
+
+                # Dynamic Column Configuration for Zoom Sizing
+                dynamic_col_config = {}
+                if df_for_editor is not None and not df_for_editor.empty:
+                    first_col = df_for_editor.columns[0]
+                    dynamic_col_config[first_col] = st.column_config.Column(
+                        label=first_col,
+                        width=emp_col_width
+                    )
+                    for c in df_for_editor.columns[1:]:
+                        dynamic_col_config[c] = st.column_config.Column(
+                            label=c,
+                            width=day_col_width
+                        )
+
+                # Compute dynamic zoom-scaled table height
+                num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
+                roster_table_height = max(int(250 * zoom_factor), int((num_roster_rows + 1) * (38 * zoom_factor) + 30))
+
+                # CSS font & canvas variable scaling
+                font_size_px = max(9, round(14 * zoom_factor, 1))
+                header_font_size_px = max(10, round(15 * zoom_factor, 1))
+
+                st.markdown(f"""
+                <style>
+                    div[data-testid="stDataEditor"] {{
+                        font-size: {font_size_px}px !important;
+                        --gdg-font-size: {font_size_px}px !important;
+                    }}
+                    div[data-testid="stDataEditor"] th,
+                    div[data-testid="stDataEditor"] div[role="columnheader"] {{
+                        font-size: {header_font_size_px}px !important;
+                    }}
+                </style>
+                """, unsafe_allow_html=True)
+
+                gen_cols = list(df_for_editor.columns)
+                edited_display_df = st.data_editor(
+                    df_for_editor,
+                    column_order=gen_cols,
+                    num_rows="dynamic",
+                    key="edit_generated_roster",
+                    height=roster_table_height,
+                    column_config=dynamic_col_config,
+                    use_container_width=(zoom_pct == 100)
+                )
+                edited_final_df = strip_daily_gross_row(edited_display_df)
+                if edited_final_df is not None and not edited_final_df.empty:
+                    st.session_state.final_roster_df = edited_final_df.copy()
+
+                # Real-Time Financial Breakdown for Generated Roster
+                wages_summary_gen = calculate_roster_wages(edited_final_df)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 2px solid #e5a93c; border-bottom: none;">
+                    💰 Real-Time Wage, Tax & Super Summary
+                </div>
+                """, unsafe_allow_html=True)
+
+                gen_summary_cards_html = f"""
+                <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 18px;">
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #e5a93c; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">💵 Total Gross Payroll</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_gross']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏛️ Est. PAYG Tax</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_tax']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #76eec6; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">👛 Total Net Take-Home</div>
+                            <div style="color: #76eec6; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_net']:,.2f}</div>
+                        </div>
+                        <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
+                            <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (12.5% SG)</div>
+                            <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_super']:,.2f}</div>
+                        </div>
+                    </div>
+                    <div style="background: rgba(229, 169, 60, 0.12); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 8px; padding: 10px 16px; text-align: center; color: #ffffff; font-size: 1.05rem;">
+                        ⏱️ <b>Total Paid Hours:</b> <span style="color:#e5a93c; font-weight:800;">{wages_summary_gen['total_hours']} hrs</span> &nbsp;&nbsp;|&nbsp;&nbsp; 📊 <b>Average Hourly Rate:</b> <span style="color:#e5a93c; font-weight:800;">${wages_summary_gen['avg_hourly_rate']:.2f} / hr</span>
+                    </div>
+                </div>
+                """
+                st.markdown(gen_summary_cards_html, unsafe_allow_html=True)
+
+                st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
+                if not wages_summary_gen["breakdown_df"].empty:
+                    st.dataframe(wages_summary_gen["breakdown_df"], use_container_width=True, hide_index=True)
+
+                gen_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
+                if not gen_hour_breakdown_df.empty:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("#### 📊 Hour Rate Breakdown Table (Generated Roster)")
+                    st.dataframe(gen_hour_breakdown_df, use_container_width=True, hide_index=True)
+
+                # Finalize & Export Section
+                st.markdown("<br>", unsafe_allow_html=True)
+                col_fin1, col_fin2 = st.columns([1.2, 1])
+                with col_fin1:
+                    if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True):
+                        date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
+                        st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and saved online!")
+
+                with col_fin2:
+                    excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
+                    file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
+                    st.download_button(
+                        label="📥 DOWNLOAD CURRENT ROSTER (.XLSX)",
+                        data=excel_bytes,
+                        file_name=file_name_out,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="btn_export_excel",
+                        use_container_width=True
                     )
 
-            # Compute dynamic zoom-scaled table height
-            num_roster_rows = len(df_for_editor) if df_for_editor is not None else 0
-            roster_table_height = max(int(250 * zoom_factor), int((num_roster_rows + 1) * (38 * zoom_factor) + 30))
-            
-            # CSS font & canvas variable scaling
-            font_size_px = max(9, round(14 * zoom_factor, 1))
-            header_font_size_px = max(10, round(15 * zoom_factor, 1))
-            
-            st.markdown(f"""
-            <style>
-                div[data-testid="stDataEditor"] {{
-                    font-size: {font_size_px}px !important;
-                    --gdg-font-size: {font_size_px}px !important;
-                }}
-                div[data-testid="stDataEditor"] th, 
-                div[data-testid="stDataEditor"] div[role="columnheader"] {{
-                    font-size: {header_font_size_px}px !important;
-                }}
-            </style>
-            """, unsafe_allow_html=True)
+                # --- TAB 2: STAFF MEMBERS ---
 
-            gen_cols = list(df_for_editor.columns)
-            edited_display_df = st.data_editor(
-                df_for_editor,
-                column_order=gen_cols,
-                num_rows="dynamic",
-                key="edit_generated_roster",
-                height=roster_table_height,
-                column_config=dynamic_col_config,
-                use_container_width=(zoom_pct == 100)
-            )
-            edited_final_df = strip_daily_gross_row(edited_display_df)
-            if edited_final_df is not None and not edited_final_df.empty:
-                st.session_state.final_roster_df = edited_final_df.copy()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Weekly Roster Generator: {e}")
+            st.exception(e)
 
-            # Real-Time Financial Breakdown for Generated Roster
-            wages_summary_gen = calculate_roster_wages(edited_final_df)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #0e2b26 0%, #1a4d43 100%); padding: 14px 20px; border-radius: 12px 12px 0 0; color: #e5a93c !important; font-weight: 800; font-size: 1.25rem; border: 2px solid #e5a93c; border-bottom: none;">
-                💰 Real-Time Wage, Tax & Super Summary
-            </div>
-            """, unsafe_allow_html=True)
-            
-            gen_summary_cards_html = f"""
-            <div style="background: rgba(8, 29, 25, 0.85); border: 2px solid #e5a93c; border-top: none; border-radius: 0 0 12px 12px; padding: 16px; margin-bottom: 20px;">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 12px; margin-bottom: 18px;">
-                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
-                        <div style="color: #e5a93c; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">💵 Total Gross Payroll</div>
-                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_gross']:,.2f}</div>
-                    </div>
-                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
-                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏛️ Est. PAYG Tax</div>
-                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_tax']:,.2f}</div>
-                    </div>
-                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
-                        <div style="color: #76eec6; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">👛 Total Net Take-Home</div>
-                        <div style="color: #76eec6; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_net']:,.2f}</div>
-                    </div>
-                    <div style="background: #0d332b; border: 1.5px solid #e5a93c; border-radius: 10px; padding: 14px; text-align: center;">
-                        <div style="color: #f7d594; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">🏦 Super (12.5% SG)</div>
-                        <div style="color: #ffffff; font-size: 1.75rem; font-weight: 900; margin-top: 6px;">${wages_summary_gen['total_super']:,.2f}</div>
-                    </div>
-                </div>
-                <div style="background: rgba(229, 169, 60, 0.12); border: 1px solid rgba(229, 169, 60, 0.4); border-radius: 8px; padding: 10px 16px; text-align: center; color: #ffffff; font-size: 1.05rem;">
-                    ⏱️ <b>Total Paid Hours:</b> <span style="color:#e5a93c; font-weight:800;">{wages_summary_gen['total_hours']} hrs</span> &nbsp;&nbsp;|&nbsp;&nbsp; 📊 <b>Average Hourly Rate:</b> <span style="color:#e5a93c; font-weight:800;">${wages_summary_gen['avg_hourly_rate']:.2f} / hr</span>
-                </div>
-            </div>
-            """
-            st.markdown(gen_summary_cards_html, unsafe_allow_html=True)
-            
-            st.markdown("#### 👥 Staff Earnings & Super Breakdown Table")
-            if not wages_summary_gen["breakdown_df"].empty:
-                st.dataframe(wages_summary_gen["breakdown_df"], use_container_width=True, hide_index=True)
-
-            gen_hour_breakdown_df = calculate_weekly_hour_rate_breakdown(edited_final_df)
-            if not gen_hour_breakdown_df.empty:
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("#### 📊 Hour Rate Breakdown Table (Generated Roster)")
-                st.dataframe(gen_hour_breakdown_df, use_container_width=True, hide_index=True)
-
-            # Finalize & Export Section
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_fin1, col_fin2 = st.columns([1.2, 1])
-            with col_fin1:
-                if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True):
-                    date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
-                    st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and saved online!")
-            
-            with col_fin2:
-                excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
-                file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
-                st.download_button(
-                    label="📥 DOWNLOAD CURRENT ROSTER (.XLSX)",
-                    data=excel_bytes,
-                    file_name=file_name_out,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="btn_export_excel",
-                    use_container_width=True
-                )
-            
-            # --- TAB 2: STAFF MEMBERS ---
-    with tab_emp:
+    # --- TAB 3: STAFF MEMBERS ---
+    
         try:
 
                 st.subheader("Manage Bakery Employees")
