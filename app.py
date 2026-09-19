@@ -6564,6 +6564,7 @@ if is_manager:
                             st.success("🎉 Weekly Roster successfully generated!")
                         except Exception as e:
                             st.error(f"Failed to generate roster: {e}")
+                            st.exception(e)
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 upload_roster_file = st.file_uploader("📤 OR Upload Existing Roster File (.xlsx / .csv)", type=["xlsx", "csv"], key="upload_roster_selected_week")
