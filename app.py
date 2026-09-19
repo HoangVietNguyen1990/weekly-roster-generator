@@ -6665,476 +6665,492 @@ if is_manager:
             
             # --- TAB 2: STAFF MEMBERS ---
     with tab_emp:
-        st.subheader("Manage Bakery Employees")
-        if "email_notice_success" in st.session_state:
-            st.success(st.session_state.pop("email_notice_success"))
-        if "email_notice_warning" in st.session_state:
-            st.warning(st.session_state.pop("email_notice_warning"))
+        try:
 
-        upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
-        
-        if upload_emp is not None:
-            file_key = f"processed_{upload_emp.name}_{upload_emp.size}"
-            if st.session_state.get("last_emp_file") != file_key:
-                loaded = read_excel_robust(upload_emp)
-                if loaded is not None:
-                    loaded = cleanup_duplicate_employee_columns(loaded)
-                    st.session_state.manual_employees = sync_user_profiles_to_employees(loaded)
-                    st.session_state.last_emp_file = file_key
-                    save_persisted_df(st.session_state.manual_employees, "employees.csv")
-                    if "edit_employees" in st.session_state:
-                        del st.session_state["edit_employees"]
-                    st.rerun()
-                    
-        if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
-            st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
-        
-        # Prepare dataframe for data_editor
-        df_for_editor = sort_dataframe_by_team_and_age(st.session_state.manual_employees.copy()) if st.session_state.manual_employees is not None else pd.DataFrame()
-        if "Select" in df_for_editor.columns:
-            df_for_editor.drop(columns=["Select"], inplace=True)
-        if "🗑️ Delete" in df_for_editor.columns:
-            df_for_editor.drop(columns=["🗑️ Delete"], inplace=True)
+                st.subheader("Manage Bakery Employees")
+                if "email_notice_success" in st.session_state:
+                    st.success(st.session_state.pop("email_notice_success"))
+                if "email_notice_warning" in st.session_state:
+                    st.warning(st.session_state.pop("email_notice_warning"))
 
-        name_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME") if (st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty) else "NAME"
+                upload_emp = st.file_uploader("Upload EMPLOYEE LIST.xlsx (Optional)", type=["xlsx"], key="emp_upload")
 
-        # Check if any employee checkbox is currently checked in session state
-        selected_names_pre = []
-        if "edit_employees" in st.session_state and isinstance(st.session_state.edit_employees, dict):
-            edited_rows = st.session_state.edit_employees.get("edited_rows", {})
-            for r_idx_str, changes in edited_rows.items():
-                if changes.get("Select") is True:
-                    try:
-                        r_idx = int(r_idx_str)
-                        if st.session_state.manual_employees is not None and 0 <= r_idx < len(st.session_state.manual_employees):
-                            val = str(st.session_state.manual_employees.iloc[r_idx][name_col]).strip()
-                            if val:
-                                selected_names_pre.append(val)
-                    except:
-                        pass
-
-        # UNIFIED TABLE HEADER CONTAINER WITH INTEGRATED DELETE BUTTON
-        st.markdown("""
-        <style>
-        /* Style the stHorizontalBlock to be the single unified header bar */
-        div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) {
-            background: linear-gradient(135deg, #081d19 0%, #16443c 100%) !important;
-            border: 2px solid #e5a93c !important;
-            border-bottom: none !important;
-            border-radius: 12px 12px 0 0 !important;
-            margin-top: 15px !important;
-            padding: 8px 16px !important;
-            min-height: 54px !important;
-            align-items: center !important;
-        }
-        #staff-table-hdr-mark {
-            color: #ffffff !important;
-            font-weight: 800 !important;
-            font-size: 1.1rem !important;
-            letter-spacing: 0.3px !important;
-            display: flex !important;
-            align-items: center !important;
-        }
-        div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) div[data-testid="stColumn"]:nth-child(2) {
-            display: flex !important;
-            justify-content: flex-end !important;
-            align-items: center !important;
-        }
-        button[key="btn_header_tiny_trash"] {
-            background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%) !important;
-            color: #ffffff !important;
-            border: 1px solid #ff7875 !important;
-            border-radius: 6px !important;
-            border-radius: 6px !important;
-            font-weight: 700 !important;
-            font-size: 0.85rem !important;
-            padding: 4px 14px !important;
-            height: 36px !important;
-            margin: 0 !important;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-        c_hdr_left, c_hdr_right = st.columns([7.5, 2.5])
-        with c_hdr_left:
-            st.markdown('<div id="staff-table-hdr-mark">👥 Bakery Staff Members List (Editable Table)</div>', unsafe_allow_html=True)
-        with c_hdr_right:
-            if selected_names_pre:
-                trigger_delete = st.button(f"🗑️ Delete ({len(selected_names_pre)})", key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
-            else:
-                trigger_delete = False
-
-        if not df_for_editor.empty:
-            df_for_editor.insert(0, "Select", False)
-
-        employees_df = st.data_editor(
-            df_for_editor,
-            num_rows="dynamic",
-            hide_index=True,
-            key="edit_employees",
-            column_config={
-                "Select": st.column_config.CheckboxColumn("", help="Check box to select employee for deletion", default=False)
-            }
-        )
-
-        if employees_df is not None:
-            # Check selected names from employees_df
-            selected_names = []
-            if "Select" in employees_df.columns:
-                selected_rows = employees_df[employees_df["Select"] == True]
-                if not selected_rows.empty and name_col in selected_rows.columns:
-                    selected_names = [str(n).strip() for n in selected_rows[name_col].dropna().tolist() if str(n).strip()]
-
-            # Execute deletion if tiny header trash icon was clicked
-            if trigger_delete and (selected_names or selected_names_pre):
-                target_del_names = selected_names if selected_names else selected_names_pre
-                target_lower = [n.lower() for n in target_del_names]
-
-                # 1. Remove from user_profiles.json (if account exists)
-                profiles_to_update = get_active_user_profiles()
-                profiles_changed = False
-                for del_name in target_del_names:
-                    keys_to_del = []
-                    for u_k, u_v in profiles_to_update.items():
-                        emp_n = u_v.get("employee_name", u_k).strip()
-                        full_n = u_v.get("profile", {}).get("full_name", "").strip()
-                        if emp_n.lower() == del_name.lower() or full_n.lower() == del_name.lower() or u_k.lower() == del_name.lower():
-                            keys_to_del.append(u_k)
-                    for k in keys_to_del:
-                        del profiles_to_update[k]
-                        profiles_changed = True
-                if profiles_changed:
-                    save_user_profiles(profiles_to_update)
-
-                # 2. Explicitly remove selected employees from manual_employees table (works even if they don't have an account!)
-                if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
-                    emp_df = st.session_state.manual_employees.copy()
-                    n_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
-                    if n_col in emp_df.columns:
-                        emp_df = emp_df[~emp_df[n_col].astype(str).str.strip().str.lower().isin(target_lower)].reset_index(drop=True)
-                        st.session_state.manual_employees = emp_df
-                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
-
-                # 3. Clear widget cache and rerun
-                if "edit_employees" in st.session_state:
-                    del st.session_state["edit_employees"]
-
-                st.success(f"✅ Deleted selected employee(s): {', '.join(target_del_names)}")
-                st.rerun()
-
-            # Normal table edits save (only if data actually changed)
-            clean_df = employees_df.drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
-            if clean_df is not None and isinstance(clean_df, pd.DataFrame) and not clean_df.empty:
-                cleaned_emp = cleanup_duplicate_employee_columns(clean_df)
-                if not cleaned_emp.equals(st.session_state.manual_employees):
-                    st.session_state.manual_employees = cleaned_emp
-                    save_persisted_df(cleaned_emp, "employees.csv")
-
-        # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM & MISSING ACCOUNTS TOOL ---
-        with st.expander("➕ Add New Staff Account / Auto-Create Missing Logins", expanded=False):
-            # Check for employees in table without an account
-            if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
-                n_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME")
-                if n_col in st.session_state.manual_employees.columns:
-                    all_names = [str(n).strip() for n in st.session_state.manual_employees[n_col].dropna().tolist() if str(n).strip()]
-                    current_profiles = get_active_user_profiles()
-                    account_names = set()
-                    for u_k, u_v in current_profiles.items():
-                        if u_v.get("role") == "Employee":
-                            account_names.add(u_v.get("employee_name", u_k).strip().lower())
-                            account_names.add(u_v.get("profile", {}).get("full_name", "").strip().lower())
-                            account_names.add(u_k.lower())
-
-                    unlinked = [name for name in set(all_names) if name.lower() not in account_names and "demo" not in name.lower()]
-                    if unlinked:
-                        st.info(f"💡 Found **{len(unlinked)} staff member(s)** in the table without a login account: **{', '.join(unlinked)}**")
-                        if st.button("⚡ Auto-Create Login Accounts for All Missing Staff", key="btn_autocreate_missing_logins"):
-                            created_count = 0
-                            for un_name in unlinked:
-                                base_user = un_name.lower().replace(" ", ".")
-                                u_username = base_user
-                                counter = 1
-                                while u_username in current_profiles:
-                                    u_username = f"{base_user}{counter}"
-                                    counter += 1
-                                
-                                current_profiles[u_username] = {
-                                    "username": u_username,
-                                    "password": "TempPass123!",
-                                    "role": "Employee",
-                                    "employee_name": un_name,
-                                    "profile": {
-                                        "full_name": un_name,
-                                        "email": "",
-                                        "store": "Brumby's Pakenham",
-                                        "classification": "Casual",
-                                        "employment_level": "Service Staff",
-                                        "commencement_date": datetime.now().strftime("%Y-%m-%d")
-                                    }
-                                }
-                                created_count += 1
-                            
-                            save_user_profiles(current_profiles)
-                            st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                if upload_emp is not None:
+                    file_key = f"processed_{upload_emp.name}_{upload_emp.size}"
+                    if st.session_state.get("last_emp_file") != file_key:
+                        loaded = read_excel_robust(upload_emp)
+                        if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
+                            loaded = cleanup_duplicate_employee_columns(loaded)
+                            st.session_state.manual_employees = sync_user_profiles_to_employees(loaded)
+                            st.session_state.last_emp_file = file_key
                             save_persisted_df(st.session_state.manual_employees, "employees.csv")
                             if "edit_employees" in st.session_state:
                                 del st.session_state["edit_employees"]
-                            st.success(f"🎉 Successfully created {created_count} user login accounts! Initial Password: `TempPass123!`")
                             st.rerun()
-
-            st.markdown("---")
-            send_email_chk = st.checkbox("☑️ Send Welcome Email automatically", value=True, key="chk_send_welcome_email")
-            
-            emp_email_val = ""
-            if send_email_chk:
-                emp_email_val = st.text_input("Employee Email Address", placeholder="e.g. jack.smith@outlook.com", key="input_emp_email").strip()
-
-            with st.form(key="form_create_new_employee_account"):
-                st.markdown("#### 👤 New Employee Credentials & Information")
-                c1, c2 = st.columns(2)
-                with c1:
-                    new_name = st.text_input("Employee Full Name", placeholder="e.g. Jack Smith").strip()
-                    new_user = st.text_input("Username for Login", placeholder="e.g. jack.smith or jack").strip().lower()
-                    new_pass = st.text_input("Initial Password", value="TempPass123!", type="password")
-                with c2:
-                    new_role_level = st.text_input("Role / Position", value="Junior Team Member")
-                    new_emp_type = st.selectbox("Employment Classification", ["Casual", "Part-Time", "Full-Time"], index=0)
-                    new_age = st.number_input("Age", min_value=14, max_value=80, value=18)
-
-                submit_new_emp = st.form_submit_button("🚀 Create Employee Account")
-
-                if submit_new_emp:
-                    if not new_name:
-                        st.error("❌ Employee name cannot be empty.")
-                    elif not new_user:
-                        st.error("❌ Username cannot be empty.")
-                    elif new_user in user_profiles:
-                        st.error(f"❌ Username '{new_user}' already exists. Please choose a different username.")
-                    elif send_email_chk and not emp_email_val:
-                        st.error("❌ Please enter the Employee Email Address or uncheck 'Send Welcome Email automatically'.")
-                    else:
-                        user_profiles[new_user] = {
-                            "username": new_user,
-                            "password": new_pass if new_pass else "TempPass123!",
-                            "role": "Employee",
-                            "employee_name": new_name,
-                            "profile": {
-                                "full_name": new_name,
-                                "email": emp_email_val,
-                                "store": "Brumby's Pakenham",
-                                "classification": new_emp_type,
-                                "employment_level": new_role_level,
-                                "commencement_date": datetime.now().strftime("%Y-%m-%d")
-                            }
-                        }
-                        save_user_profiles(user_profiles)
-
-                        st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
-                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
-
-                        if "edit_employees" in st.session_state:
-                            del st.session_state["edit_employees"]
-
-                        subj, body_text = build_welcome_email_content(new_name, new_user, new_pass)
-                        
-                        email_sent = False
-                        email_msg = ""
-                        if send_email_chk and emp_email_val:
-                            email_sent, email_msg = send_welcome_email_smtp(emp_email_val, new_name, new_user, new_pass)
-
-                        if email_sent:
-                            st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! {email_msg}"
                         else:
-                            if send_email_chk and emp_email_val:
-                                st.session_state["email_notice_warning"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`\n\n⚠️ Email Status: {email_msg}"
+                            st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
+
+                if 'manual_employees' not in st.session_state or st.session_state.manual_employees is None or st.session_state.manual_employees.empty:
+                    loaded_emp = load_persisted_df("employees.csv", default_employees)
+                    st.session_state.manual_employees = sanitize_dataframe(loaded_emp if (loaded_emp is not None and not loaded_emp.empty) else default_employees.copy())
+
+                if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                    st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                else:
+                    st.session_state.manual_employees = default_employees.copy()
+
+                # Prepare dataframe for data_editor
+                df_for_editor = sort_dataframe_by_team_and_age(st.session_state.manual_employees.copy()) if (st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty) else default_employees.copy()
+
+                # Safely drop any existing 'Select' or '🗑️ Delete' columns to prevent duplicate column insertion errors
+                cols_to_drop = [c for c in df_for_editor.columns if c in ["Select", "🗑️ Delete"]]
+                if cols_to_drop:
+                    df_for_editor = df_for_editor.drop(columns=cols_to_drop)
+
+                name_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME") if (st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty) else "NAME"
+
+                # Check if any employee checkbox is currently checked in session state
+                selected_names_pre = []
+                if "edit_employees" in st.session_state and isinstance(st.session_state.edit_employees, dict):
+                    edited_rows = st.session_state.edit_employees.get("edited_rows", {})
+                    for r_idx_str, changes in edited_rows.items():
+                        if changes.get("Select") is True:
+                            try:
+                                r_idx = int(r_idx_str)
+                                if st.session_state.manual_employees is not None and 0 <= r_idx < len(st.session_state.manual_employees):
+                                    val = str(st.session_state.manual_employees.iloc[r_idx][name_col]).strip()
+                                    if val:
+                                        selected_names_pre.append(val)
+                            except:
+                                pass
+
+                # UNIFIED TABLE HEADER CONTAINER WITH INTEGRATED DELETE BUTTON
+                st.markdown("""
+                <style>
+                /* Style the stHorizontalBlock to be the single unified header bar */
+                div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) {
+                background: linear-gradient(135deg, #081d19 0%, #16443c 100%) !important;
+                border: 2px solid #e5a93c !important;
+                border-bottom: none !important;
+                border-radius: 12px 12px 0 0 !important;
+                margin-top: 15px !important;
+                padding: 8px 16px !important;
+                min-height: 54px !important;
+                align-items: center !important;
+                }
+                #staff-table-hdr-mark {
+                color: #ffffff !important;
+                font-weight: 800 !important;
+                font-size: 1.1rem !important;
+                letter-spacing: 0.3px !important;
+                display: flex !important;
+                align-items: center !important;
+                }
+                div[data-testid="stHorizontalBlock"]:has(#staff-table-hdr-mark) div[data-testid="stColumn"]:nth-child(2) {
+                display: flex !important;
+                justify-content: flex-end !important;
+                align-items: center !important;
+                }
+                button[key="btn_header_tiny_trash"] {
+                background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%) !important;
+                color: #ffffff !important;
+                border: 1px solid #ff7875 !important;
+                border-radius: 6px !important;
+                border-radius: 6px !important;
+                font-weight: 700 !important;
+                font-size: 0.85rem !important;
+                padding: 4px 14px !important;
+                height: 36px !important;
+                margin: 0 !important;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+
+                c_hdr_left, c_hdr_right = st.columns([7.5, 2.5])
+                with c_hdr_left:
+                    st.markdown('<div id="staff-table-hdr-mark">👥 Bakery Staff Members List (Editable Table)</div>', unsafe_allow_html=True)
+                with c_hdr_right:
+                    if selected_names_pre:
+                        trigger_delete = st.button(f"🗑️ Delete ({len(selected_names_pre)})", key="btn_header_tiny_trash", help=f"Delete selected staff: {', '.join(selected_names_pre)}", type="primary")
+                    else:
+                        trigger_delete = False
+
+                if not df_for_editor.empty:
+                    df_for_editor.insert(0, "Select", False)
+
+                employees_df = st.data_editor(
+                    df_for_editor,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    key="edit_employees",
+                    column_config={
+                        "Select": st.column_config.CheckboxColumn("", help="Check box to select employee for deletion", default=False)
+                    }
+                )
+
+                if employees_df is not None:
+                    # Check selected names from employees_df
+                    selected_names = []
+                    if "Select" in employees_df.columns:
+                        selected_rows = employees_df[employees_df["Select"] == True]
+                    if not selected_rows.empty and name_col in selected_rows.columns:
+                        selected_names = [str(n).strip() for n in selected_rows[name_col].dropna().tolist() if str(n).strip()]
+
+                # Execute deletion if tiny header trash icon was clicked
+                if trigger_delete and (selected_names or selected_names_pre):
+                    target_del_names = selected_names if selected_names else selected_names_pre
+                    target_lower = [n.lower() for n in target_del_names]
+
+                    # 1. Remove from user_profiles.json (if account exists)
+                    profiles_to_update = get_active_user_profiles()
+                    profiles_changed = False
+                    for del_name in target_del_names:
+                        keys_to_del = []
+                        for u_k, u_v in profiles_to_update.items():
+                            emp_n = u_v.get("employee_name", u_k).strip()
+                            full_n = u_v.get("profile", {}).get("full_name", "").strip()
+                            if emp_n.lower() == del_name.lower() or full_n.lower() == del_name.lower() or u_k.lower() == del_name.lower():
+                                keys_to_del.append(u_k)
+                        for k in keys_to_del:
+                            del profiles_to_update[k]
+                            profiles_changed = True
+                    if profiles_changed:
+                        save_user_profiles(profiles_to_update)
+
+                    # 2. Explicitly remove selected employees from manual_employees table (works even if they don't have an account!)
+                    if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                        emp_df = st.session_state.manual_employees.copy()
+                        n_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
+                        if n_col in emp_df.columns:
+                            emp_df = emp_df[~emp_df[n_col].astype(str).str.strip().str.lower().isin(target_lower)].reset_index(drop=True)
+                            st.session_state.manual_employees = emp_df
+                            save_persisted_df(st.session_state.manual_employees, "employees.csv")
+
+                    # 3. Clear widget cache and rerun
+                    if "edit_employees" in st.session_state:
+                        del st.session_state["edit_employees"]
+
+                    st.success(f"✅ Deleted selected employee(s): {', '.join(target_del_names)}")
+                    st.rerun()
+
+                # Normal table edits save (only if data actually changed)
+                clean_df = employees_df.drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
+                if clean_df is not None and isinstance(clean_df, pd.DataFrame) and not clean_df.empty:
+                    cleaned_emp = cleanup_duplicate_employee_columns(clean_df)
+                    if not cleaned_emp.equals(st.session_state.manual_employees):
+                        st.session_state.manual_employees = cleaned_emp
+                        save_persisted_df(cleaned_emp, "employees.csv")
+
+                # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM & MISSING ACCOUNTS TOOL ---
+                with st.expander("➕ Add New Staff Account / Auto-Create Missing Logins", expanded=False):
+                    # Check for employees in table without an account
+                    if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                        n_col = find_column(st.session_state.manual_employees, ["name", "employee", "staff"], "NAME")
+                        if n_col in st.session_state.manual_employees.columns:
+                            all_names = [str(n).strip() for n in st.session_state.manual_employees[n_col].dropna().tolist() if str(n).strip()]
+                            current_profiles = get_active_user_profiles()
+                            account_names = set()
+                            for u_k, u_v in current_profiles.items():
+                                if u_v.get("role") == "Employee":
+                                    account_names.add(u_v.get("employee_name", u_k).strip().lower())
+                                    account_names.add(u_v.get("profile", {}).get("full_name", "").strip().lower())
+                                    account_names.add(u_k.lower())
+
+                            unlinked = [name for name in set(all_names) if name.lower() not in account_names and "demo" not in name.lower()]
+                            if unlinked:
+                                st.info(f"💡 Found **{len(unlinked)} staff member(s)** in the table without a login account: **{', '.join(unlinked)}**")
+                                if st.button("⚡ Auto-Create Login Accounts for All Missing Staff", key="btn_autocreate_missing_logins"):
+                                    created_count = 0
+                                    for un_name in unlinked:
+                                        base_user = un_name.lower().replace(" ", ".")
+                                        u_username = base_user
+                                        counter = 1
+                                        while u_username in current_profiles:
+                                            u_username = f"{base_user}{counter}"
+                                            counter += 1
+
+                                        current_profiles[u_username] = {
+                                            "username": u_username,
+                                            "password": "TempPass123!",
+                                            "role": "Employee",
+                                            "employee_name": un_name,
+                                            "profile": {
+                                                "full_name": un_name,
+                                                "email": "",
+                                                "store": "Brumby's Pakenham",
+                                                "classification": "Casual",
+                                                "employment_level": "Service Staff",
+                                                "commencement_date": datetime.now().strftime("%Y-%m-%d")
+                                            }
+                                        }
+                                        created_count += 1
+
+                                    save_user_profiles(current_profiles)
+                                    st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                                    save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                                    if "edit_employees" in st.session_state:
+                                        del st.session_state["edit_employees"]
+                                    st.success(f"🎉 Successfully created {created_count} user login accounts! Initial Password: `TempPass123!`")
+                                    st.rerun()
+
+                    st.markdown("---")
+                    send_email_chk = st.checkbox("☑️ Send Welcome Email automatically", value=True, key="chk_send_welcome_email")
+
+                    emp_email_val = ""
+                    if send_email_chk:
+                        emp_email_val = st.text_input("Employee Email Address", placeholder="e.g. jack.smith@outlook.com", key="input_emp_email").strip()
+
+                    with st.form(key="form_create_new_employee_account"):
+                        st.markdown("#### 👤 New Employee Credentials & Information")
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            new_name = st.text_input("Employee Full Name", placeholder="e.g. Jack Smith").strip()
+                            new_user = st.text_input("Username for Login", placeholder="e.g. jack.smith or jack").strip().lower()
+                            new_pass = st.text_input("Initial Password", value="TempPass123!", type="password")
+                        with c2:
+                            new_role_level = st.text_input("Role / Position", value="Junior Team Member")
+                            new_emp_type = st.selectbox("Employment Classification", ["Casual", "Part-Time", "Full-Time"], index=0)
+                            new_age = st.number_input("Age", min_value=14, max_value=80, value=18)
+
+                        submit_new_emp = st.form_submit_button("🚀 Create Employee Account")
+
+                        if submit_new_emp:
+                            if not new_name:
+                                st.error("❌ Employee name cannot be empty.")
+                            elif not new_user:
+                                st.error("❌ Username cannot be empty.")
+                            elif new_user in user_profiles:
+                                st.error(f"❌ Username '{new_user}' already exists. Please choose a different username.")
+                            elif send_email_chk and not emp_email_val:
+                                st.error("❌ Please enter the Employee Email Address or uncheck 'Send Welcome Email automatically'.")
                             else:
-                                st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`"
-
-                        st.rerun()
-
-        # --- INTEGRATED CONFIDENTIAL EMPLOYEE PROFILE VIEWER ---
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 20px;">
-            📜 Click / Select Employee to Open Confidential Profile Form
-        </div>
-        """, unsafe_allow_html=True)
-
-        emp_options = {k: v.get("employee_name", k) for k, v in user_profiles.items() if v.get("role") == "Employee"}
-        if emp_options:
-            selected_user_key = st.selectbox(
-                "👇 Select staff member from table above to open their confidential profile page:",
-                options=list(emp_options.keys()),
-                format_func=lambda x: f"👤 {emp_options[x]} (Username: {x})",
-                key="select_emp_profile_in_tab"
-            )
-            
-            if selected_user_key:
-                render_confidential_profile_form(selected_user_key, is_admin=True)
-                
-                c_pw, c_del = st.columns(2)
-                with c_pw:
-                    with st.expander(f"🔑 Reset Password for {emp_options[selected_user_key]}"):
-                        new_pw = st.text_input("New Password", type="password", key=f"tab_reset_pw_{selected_user_key}")
-                        if st.button("Update Employee Password", key=f"tab_btn_reset_pw_{selected_user_key}"):
-                            if new_pw.strip():
-                                user_profiles[selected_user_key]["password"] = new_pw.strip()
+                                user_profiles[new_user] = {
+                                    "username": new_user,
+                                    "password": new_pass if new_pass else "TempPass123!",
+                                    "role": "Employee",
+                                    "employee_name": new_name,
+                                    "profile": {
+                                        "full_name": new_name,
+                                        "email": emp_email_val,
+                                        "store": "Brumby's Pakenham",
+                                        "classification": new_emp_type,
+                                        "employment_level": new_role_level,
+                                        "commencement_date": datetime.now().strftime("%Y-%m-%d")
+                                    }
+                                }
                                 save_user_profiles(user_profiles)
-                                st.success(f"✅ Password for {emp_options[selected_user_key]} updated successfully!")
-                            else:
-                                st.error("Password cannot be empty.")
 
-                with c_del:
-                    with st.expander(f"🗑️ Delete Account for {emp_options[selected_user_key]}"):
-                        st.warning(f"⚠️ Deleting this account will permanently remove **{emp_options[selected_user_key]}**'s login credentials, confidential profile, and roster records.")
-                        confirm_del = st.checkbox(f"I understand, delete account for {emp_options[selected_user_key]}", key=f"chk_del_{selected_user_key}")
-                        if st.button(f"🚨 Permanently Delete {emp_options[selected_user_key]}", key=f"btn_del_emp_{selected_user_key}"):
-                            if confirm_del:
-                                target_name = emp_options[selected_user_key]
-                                # 1. Remove from user_profiles.json
-                                if selected_user_key in user_profiles:
-                                    del user_profiles[selected_user_key]
-                                    save_user_profiles(user_profiles)
-                                
-                                # 2. Remove from manual_employees table
-                                if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
-                                    emp_df = st.session_state.manual_employees.copy()
-                                    name_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
-                                    if name_col in emp_df.columns:
-                                        emp_df = emp_df[emp_df[name_col].astype(str).str.strip().str.lower() != target_name.strip().lower()].reset_index(drop=True)
-                                        st.session_state.manual_employees = emp_df
-                                        save_persisted_df(st.session_state.manual_employees, "employees.csv")
-                                
-                                # 3. Clear widget cache
+                                st.session_state.manual_employees = sync_user_profiles_to_employees(st.session_state.manual_employees)
+                                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+
                                 if "edit_employees" in st.session_state:
                                     del st.session_state["edit_employees"]
-                                    
-                                st.success(f"✅ Account for **{target_name}** has been permanently deleted.")
+
+                                subj, body_text = build_welcome_email_content(new_name, new_user, new_pass)
+
+                                email_sent = False
+                                email_msg = ""
+                                if send_email_chk and emp_email_val:
+                                    email_sent, email_msg = send_welcome_email_smtp(emp_email_val, new_name, new_user, new_pass)
+
+                                if email_sent:
+                                    st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! {email_msg}"
+                                else:
+                                    if send_email_chk and emp_email_val:
+                                        st.session_state["email_notice_warning"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`\n\n⚠️ Email Status: {email_msg}"
+                                    else:
+                                        st.session_state["email_notice_success"] = f"🎉 Account created for **{new_name}**! Username: `{new_user}` | Initial Password: `{new_pass}`"
+
                                 st.rerun()
-                            else:
-                                st.error("Please check the confirmation box first.")
-        else:
-            st.info("ℹ️ No active employee accounts registered under 'Employee' role.")
+
+                # --- INTEGRATED CONFIDENTIAL EMPLOYEE PROFILE VIEWER ---
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 20px;">
+                📜 Click / Select Employee to Open Confidential Profile Form
+                </div>
+                """, unsafe_allow_html=True)
+
+                emp_options = {k: v.get("employee_name", k) for k, v in user_profiles.items() if v.get("role") == "Employee"}
+                if emp_options:
+                    selected_user_key = st.selectbox(
+                    "👇 Select staff member from table above to open their confidential profile page:",
+                    options=list(emp_options.keys()),
+                    format_func=lambda x: f"👤 {emp_options[x]} (Username: {x})",
+                    key="select_emp_profile_in_tab"
+                    )
+
+                    if selected_user_key:
+                        render_confidential_profile_form(selected_user_key, is_admin=True)
+
+                        c_pw, c_del = st.columns(2)
+                        with c_pw:
+                            with st.expander(f"🔑 Reset Password for {emp_options[selected_user_key]}"):
+                                new_pw = st.text_input("New Password", type="password", key=f"tab_reset_pw_{selected_user_key}")
+                                if st.button("Update Employee Password", key=f"tab_btn_reset_pw_{selected_user_key}"):
+                                    if new_pw.strip():
+                                        user_profiles[selected_user_key]["password"] = new_pw.strip()
+                                        save_user_profiles(user_profiles)
+                                        st.success(f"✅ Password for {emp_options[selected_user_key]} updated successfully!")
+                                    else:
+                                        st.error("Password cannot be empty.")
+
+                        with c_del:
+                            with st.expander(f"🗑️ Delete Account for {emp_options[selected_user_key]}"):
+                                st.warning(f"⚠️ Deleting this account will permanently remove **{emp_options[selected_user_key]}**'s login credentials, confidential profile, and roster records.")
+                                confirm_del = st.checkbox(f"I understand, delete account for {emp_options[selected_user_key]}", key=f"chk_del_{selected_user_key}")
+                                if st.button(f"🚨 Permanently Delete {emp_options[selected_user_key]}", key=f"btn_del_emp_{selected_user_key}"):
+                                    if confirm_del:
+                                        target_name = emp_options[selected_user_key]
+                                        # 1. Remove from user_profiles.json
+                                        if selected_user_key in user_profiles:
+                                            del user_profiles[selected_user_key]
+                                            save_user_profiles(user_profiles)
+
+                                        # 2. Remove from manual_employees table
+                                        if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
+                                            emp_df = st.session_state.manual_employees.copy()
+                                            name_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
+                                            if name_col in emp_df.columns:
+                                                emp_df = emp_df[emp_df[name_col].astype(str).str.strip().str.lower() != target_name.strip().lower()].reset_index(drop=True)
+                                                st.session_state.manual_employees = emp_df
+                                                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+
+                                        # 3. Clear widget cache
+                                        if "edit_employees" in st.session_state:
+                                            del st.session_state["edit_employees"]
+
+                                        st.success(f"✅ Account for **{target_name}** has been permanently deleted.")
+                                    else:
+                                        st.error("Please check the confirmation box first.")
+                else:
+                    st.info("ℹ️ No active employee accounts registered under 'Employee' role.")
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Staff Members Tab: {e}")
+            st.exception(e)
 
     # --- TAB 3: UNAVAILABILITY ---
     with tab_unavail:
         try:
             render_team_monthly_calendar_grid()
         except Exception as e:
-            st.error(f"⚠️ Error rendering Unavailability Tab: {e}")
-            st.exception(e)
+                st.error(f"⚠️ Error rendering Unavailability Tab: {e}")
+                st.exception(e)
 
-    # --- TAB 4: DAILY REQUIREMENTS ---
-    with tab_req:
-        try:
-            st.subheader("Daily Bakery Shift Requirements")
+        # --- TAB 4: DAILY REQUIREMENTS ---
+        with tab_req:
+            try:
+                st.subheader("Daily Bakery Shift Requirements")
 
-            if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
-                loaded_r = load_persisted_df("requirements.csv", default_req)
-                st.session_state.manual_requirements = sanitize_dataframe(loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy())
+                if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
+                    loaded_r = load_persisted_df("requirements.csv", default_req)
+                    st.session_state.manual_requirements = sanitize_dataframe(loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy())
 
-            upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+                upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
             
-            if upload_req is not None:
-                file_key = f"processed_{upload_req.name}_{upload_req.size}"
-                if st.session_state.get("last_req_file") != file_key:
-                    loaded = read_excel_robust(upload_req)
-                    if loaded is not None:
-                        st.session_state.manual_requirements = sanitize_dataframe(loaded)
-                        st.session_state.last_req_file = file_key
-                        save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                if upload_req is not None:
+                    file_key = f"processed_{upload_req.name}_{upload_req.size}"
+                    if st.session_state.get("last_req_file") != file_key:
+                        loaded = read_excel_robust(upload_req)
+                        if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
+                            st.session_state.manual_requirements = sanitize_dataframe(loaded)
+                            st.session_state.last_req_file = file_key
+                            save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
+                            if "edit_requirements_v2" in st.session_state:
+                                del st.session_state["edit_requirements_v2"]
+                            st.rerun()
+                        else:
+                            st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
+                        
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+                    📋 Daily Shift Coverage Requirements (Mon-Sun)
+                </div>
+                """, unsafe_allow_html=True)
+                req_df_clean = sanitize_dataframe(st.session_state.manual_requirements)
+                req_cols = list(req_df_clean.columns) if req_df_clean is not None and not req_df_clean.empty else None
+                requirements_df = st.data_editor(req_df_clean, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
+                if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
+                    clean_req = sanitize_dataframe(requirements_df)
+                    if not clean_req.equals(req_df_clean):
+                        st.session_state.manual_requirements = clean_req
+                        save_persisted_df(clean_req, "requirements.csv")
                         if "edit_requirements_v2" in st.session_state:
                             del st.session_state["edit_requirements_v2"]
                         st.rerun()
-                        
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-                📋 Daily Shift Coverage Requirements (Mon-Sun)
-            </div>
-            """, unsafe_allow_html=True)
-            req_df_clean = sanitize_dataframe(st.session_state.manual_requirements)
-            req_cols = list(req_df_clean.columns) if req_df_clean is not None and not req_df_clean.empty else None
-            requirements_df = st.data_editor(req_df_clean, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
-            if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
-                clean_req = sanitize_dataframe(requirements_df)
-                if not clean_req.equals(req_df_clean):
-                    st.session_state.manual_requirements = clean_req
-                    save_persisted_df(clean_req, "requirements.csv")
-                    if "edit_requirements_v2" in st.session_state:
-                        del st.session_state["edit_requirements_v2"]
-                    st.rerun()
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
-            st.exception(e)
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
+                st.exception(e)
 
-    # --- TAB 5: FIXED SHIFTS ---
-    with tab_fixed:
-        try:
-            st.subheader("Fixed Baseline Shifts")
+        # --- TAB 5: FIXED SHIFTS ---
+        with tab_fixed:
+            try:
+                st.subheader("Fixed Baseline Shifts")
 
-            if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
-                loaded_f = load_persisted_df("fixed.csv", default_fixed)
-                st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy())
+                if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
+                    loaded_f = load_persisted_df("fixed.csv", default_fixed)
+                    st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy())
 
-            upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+                upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
             
-            if upload_fixed is not None:
-                file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
-                if st.session_state.get("last_fixed_file") != file_key:
-                    loaded = read_excel_robust(upload_fixed)
-                    if loaded is not None:
-                        st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded)))
-                        st.session_state.last_fixed_file = file_key
-                        save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                if upload_fixed is not None:
+                    file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
+                    if st.session_state.get("last_fixed_file") != file_key:
+                        loaded = read_excel_robust(upload_fixed)
+                        if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
+                            st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded)))
+                            st.session_state.last_fixed_file = file_key
+                            save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
+                            if "edit_fixed_v2" in st.session_state:
+                                del st.session_state["edit_fixed_v2"]
+                            st.rerun()
+                        else:
+                            st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
+                        
+                st.markdown("""
+                <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    📌 Fixed Baseline Staff Shifts
+                </div>
+                """, unsafe_allow_html=True)
+                fixed_df_clean = sanitize_dataframe(st.session_state.manual_fixed)
+                fixed_cols = list(fixed_df_clean.columns) if fixed_df_clean is not None and not fixed_df_clean.empty else None
+                fixed_df = st.data_editor(fixed_df_clean, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
+                if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
+                    clean_f = sanitize_dataframe(fixed_df)
+                    if not clean_f.equals(fixed_df_clean):
+                        st.session_state.manual_fixed = clean_f
+                        save_persisted_df(clean_f, "fixed.csv")
                         if "edit_fixed_v2" in st.session_state:
                             del st.session_state["edit_fixed_v2"]
                         st.rerun()
-                        
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                📌 Fixed Baseline Staff Shifts
-            </div>
-            """, unsafe_allow_html=True)
-            fixed_df_clean = sanitize_dataframe(st.session_state.manual_fixed)
-            fixed_cols = list(fixed_df_clean.columns) if fixed_df_clean is not None and not fixed_df_clean.empty else None
-            fixed_df = st.data_editor(fixed_df_clean, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
-            if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
-                clean_f = sanitize_dataframe(fixed_df)
-                if not clean_f.equals(fixed_df_clean):
-                    st.session_state.manual_fixed = clean_f
-                    save_persisted_df(clean_f, "fixed.csv")
-                    if "edit_fixed_v2" in st.session_state:
-                        del st.session_state["edit_fixed_v2"]
-                    st.rerun()
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
-            st.exception(e)
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
+                st.exception(e)
 
-    # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
-    with tab_timesheets:
-        try:
-            render_manager_timesheet_audit_dashboard()
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Timesheet Audit Tab: {e}")
-            st.exception(e)
+        # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
+        with tab_timesheets:
+            try:
+                render_manager_timesheet_audit_dashboard()
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Timesheet Audit Tab: {e}")
 else:
-    # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
-    with tab_my_current_roster:
-        try:
-            render_employee_current_roster_tab(st.session_state.logged_in_user)
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Current Roster: {e}")
-            st.exception(e)
-    with tab_my_info:
-        try:
-            render_confidential_profile_form(st.session_state.logged_in_user)
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Personal Profile: {e}")
-            st.exception(e)
-    with tab_my_avail:
-        try:
-            render_employee_availability_manager(st.session_state.logged_in_user)
-        except Exception as e:
-            st.error(f"⚠️ Error rendering Availability: {e}")
-            st.exception(e)
+        # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
+        with tab_my_current_roster:
+            try:
+                render_employee_current_roster_tab(st.session_state.logged_in_user)
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Current Roster: {e}")
+                st.exception(e)
+        with tab_my_info:
+            try:
+                render_confidential_profile_form(st.session_state.logged_in_user)
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Personal Profile: {e}")
+                st.exception(e)
+        with tab_my_avail:
+            try:
+                render_employee_availability_manager(st.session_state.logged_in_user)
+            except Exception as e:
+                st.error(f"⚠️ Error rendering Availability: {e}")
+                st.exception(e)
