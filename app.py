@@ -7107,12 +7107,10 @@ if is_manager:
                             if st.button(f"🚨 Permanently Delete {emp_options[selected_user_key]}", key=f"btn_del_emp_{selected_user_key}"):
                                 if confirm_del:
                                     target_name = emp_options[selected_user_key]
-                                    # 1. Remove from user_profiles.json
                                     if selected_user_key in user_profiles:
                                         del user_profiles[selected_user_key]
                                         save_user_profiles(user_profiles)
 
-                                    # 2. Remove from manual_employees table
                                     if st.session_state.manual_employees is not None and not st.session_state.manual_employees.empty:
                                         emp_df = st.session_state.manual_employees.copy()
                                         name_col = find_column(emp_df, ["name", "employee", "staff"], "NAME")
@@ -7121,7 +7119,6 @@ if is_manager:
                                             st.session_state.manual_employees = emp_df
                                             save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
-                                    # 3. Clear widget cache
                                     if "edit_employees" in st.session_state:
                                         del st.session_state["edit_employees"]
 
@@ -7131,10 +7128,9 @@ if is_manager:
             else:
                 st.info("ℹ️ No active employee accounts registered under 'Employee' role.")
 
-            # --- TAB 3: UNAVAILABILITY ---
-
         except Exception as e:
             st.error(f"⚠️ Error rendering Staff Members Tab: {e}")
+
     # --- TAB 5: UNAVAILABILITY ---
     with tab_unavail:
         try:
@@ -7144,101 +7140,103 @@ if is_manager:
             st.exception(e)
 
     # --- TAB 6: DAILY REQUIREMENTS ---
-        with tab_req:
-            try:
-                st.subheader("Daily Bakery Shift Requirements")
+    with tab_req:
+        try:
+            st.subheader("Daily Bakery Shift Requirements")
 
-                if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
-                    loaded_r = load_persisted_df("requirements.csv", default_req)
-                    st.session_state.manual_requirements = sanitize_dataframe(loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy())
+            if 'manual_requirements' not in st.session_state or st.session_state.manual_requirements is None or st.session_state.manual_requirements.empty:
+                loaded_r = load_persisted_df("requirements.csv", default_req)
+                st.session_state.manual_requirements = sanitize_dataframe(loaded_r if (loaded_r is not None and not loaded_r.empty) else default_req.copy())
 
-                upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
-            
-                if upload_req is not None:
-                    file_key = f"processed_{upload_req.name}_{upload_req.size}"
-                    if st.session_state.get("last_req_file") != file_key:
-                        loaded = read_excel_robust(upload_req)
-                        if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
-                            st.session_state.manual_requirements = sanitize_dataframe(loaded)
-                            st.session_state.last_req_file = file_key
-                            save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
-                            if "edit_requirements_v2" in st.session_state:
-                                del st.session_state["edit_requirements_v2"]
-                            st.rerun()
-                        else:
-                            st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
-                        
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
-                    📋 Daily Shift Coverage Requirements (Mon-Sun)
-                </div>
-                """, unsafe_allow_html=True)
-                req_df_clean = sanitize_dataframe(st.session_state.manual_requirements)
-                req_cols = list(req_df_clean.columns) if req_df_clean is not None and not req_df_clean.empty else None
-                requirements_df = st.data_editor(req_df_clean, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
-                if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
-                    clean_req = sanitize_dataframe(requirements_df)
-                    if not clean_req.equals(req_df_clean):
-                        st.session_state.manual_requirements = clean_req
-                        save_persisted_df(clean_req, "requirements.csv")
+            upload_req = st.file_uploader("Upload Daily Shift personel requirement.xlsx (Optional)", type=["xlsx"], key="req_upload")
+        
+            if upload_req is not None:
+                file_key = f"processed_{upload_req.name}_{upload_req.size}"
+                if st.session_state.get("last_req_file") != file_key:
+                    loaded = read_excel_robust(upload_req)
+                    if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
+                        st.session_state.manual_requirements = sanitize_dataframe(loaded)
+                        st.session_state.last_req_file = file_key
+                        save_persisted_df(st.session_state.manual_requirements, "requirements.csv")
                         if "edit_requirements_v2" in st.session_state:
                             del st.session_state["edit_requirements_v2"]
                         st.rerun()
-            except Exception as e:
-                st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
-                st.exception(e)
+                    else:
+                        st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
+                    
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none; margin-top: 15px;">
+                📋 Daily Shift Coverage Requirements (Mon-Sun)
+            </div>
+            """, unsafe_allow_html=True)
+            req_df_clean = sanitize_dataframe(st.session_state.manual_requirements)
+            req_cols = list(req_df_clean.columns) if req_df_clean is not None and not req_df_clean.empty else None
+            requirements_df = st.data_editor(req_df_clean, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
+            if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
+                clean_req = sanitize_dataframe(requirements_df)
+                if not clean_req.equals(req_df_clean):
+                    st.session_state.manual_requirements = clean_req
+                    save_persisted_df(clean_req, "requirements.csv")
+                    if "edit_requirements_v2" in st.session_state:
+                        del st.session_state["edit_requirements_v2"]
+                    st.rerun()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Daily Requirements Tab: {e}")
+            st.exception(e)
 
-        # --- TAB 5: FIXED SHIFTS ---
-        with tab_fixed:
-            try:
-                st.subheader("Fixed Baseline Shifts")
+    # --- TAB 7: FIXED SHIFTS ---
+    with tab_fixed:
+        try:
+            st.subheader("Fixed Baseline Shifts")
 
-                if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
-                    loaded_f = load_persisted_df("fixed.csv", default_fixed)
-                    st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy())
+            if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
+                loaded_f = load_persisted_df("fixed.csv", default_fixed)
+                st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy())
 
-                upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
-            
-                if upload_fixed is not None:
-                    file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
-                    if st.session_state.get("last_fixed_file") != file_key:
-                        loaded = read_excel_robust(upload_fixed)
-                        if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
-                            st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded)))
-                            st.session_state.last_fixed_file = file_key
-                            save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
-                            if "edit_fixed_v2" in st.session_state:
-                                del st.session_state["edit_fixed_v2"]
-                            st.rerun()
-                        else:
-                            st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
-                        
-                st.markdown("""
-                <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                    📌 Fixed Baseline Staff Shifts
-                </div>
-                """, unsafe_allow_html=True)
-                fixed_df_clean = sanitize_dataframe(st.session_state.manual_fixed)
-                fixed_cols = list(fixed_df_clean.columns) if fixed_df_clean is not None and not fixed_df_clean.empty else None
-                fixed_df = st.data_editor(fixed_df_clean, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
-                if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
-                    clean_f = sanitize_dataframe(fixed_df)
-                    if not clean_f.equals(fixed_df_clean):
-                        st.session_state.manual_fixed = clean_f
-                        save_persisted_df(clean_f, "fixed.csv")
+            upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
+        
+            if upload_fixed is not None:
+                file_key = f"processed_{upload_fixed.name}_{upload_fixed.size}"
+                if st.session_state.get("last_fixed_file") != file_key:
+                    loaded = read_excel_robust(upload_fixed)
+                    if loaded is not None and isinstance(loaded, pd.DataFrame) and not loaded.empty:
+                        st.session_state.manual_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded)))
+                        st.session_state.last_fixed_file = file_key
+                        save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
                         if "edit_fixed_v2" in st.session_state:
                             del st.session_state["edit_fixed_v2"]
                         st.rerun()
-            except Exception as e:
-                st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
-                st.exception(e)
+                    else:
+                        st.error("⚠️ Invalid or unreadable file format uploaded. Please upload a valid Excel spreadsheet (.xlsx).")
+                    
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #2e4813 0%, #539127 100%); padding: 12px 20px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.3px; border: 2px solid #539127; border-bottom: none; margin-top: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                📌 Fixed Baseline Staff Shifts
+            </div>
+            """, unsafe_allow_html=True)
+            fixed_df_clean = sanitize_dataframe(st.session_state.manual_fixed)
+            fixed_cols = list(fixed_df_clean.columns) if fixed_df_clean is not None and not fixed_df_clean.empty else None
+            fixed_df = st.data_editor(fixed_df_clean, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
+            if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
+                clean_f = sanitize_dataframe(fixed_df)
+                if not clean_f.equals(fixed_df_clean):
+                    st.session_state.manual_fixed = clean_f
+                    save_persisted_df(clean_f, "fixed.csv")
+                    if "edit_fixed_v2" in st.session_state:
+                        del st.session_state["edit_fixed_v2"]
+                    st.rerun()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Fixed Shifts Tab: {e}")
+            st.exception(e)
 
-        # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
-        with tab_timesheets:
-            try:
-                render_manager_timesheet_audit_dashboard()
-            except Exception as e:
-                st.error(f"⚠️ Error rendering Timesheet Audit Tab: {e}")
+    # --- TAB 8: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
+    with tab_timesheets:
+        try:
+            render_manager_timesheet_audit_dashboard()
+        except Exception as e:
+            st.error(f"⚠️ Error rendering Timesheet Audit Tab: {e}")
+
+
 else:
         # IF EMPLOYEE, RENDER 3 TABS (CURRENT ROSTER 1ST, PERSONAL INFO 2ND, AVAILABILITY CALENDAR 3RD)
         with tab_my_current_roster:
