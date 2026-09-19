@@ -1375,6 +1375,8 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 FINALIZED_DIR = os.path.join(DATA_DIR, "finalized_rosters")
 os.makedirs(FINALIZED_DIR, exist_ok=True)
+DRAFTS_DIR = os.path.join(DATA_DIR, "drafts")
+os.makedirs(DRAFTS_DIR, exist_ok=True)
 TIMESHEETS_DIR = os.path.join(DATA_DIR, "timesheets")
 os.makedirs(TIMESHEETS_DIR, exist_ok=True)
 TIMECARDS_FILE = os.path.join(DATA_DIR, "timecards.csv")
@@ -2544,9 +2546,85 @@ def save_finalized_roster(df, start_date):
         remove_deleted_roster_date(date_str)
     except Exception:
         pass
+
+    # Clear any active local draft now that roster is officially finalized
+    try:
+        delete_local_draft_roster(date_str)
+    except Exception:
+        pass
         
     clear_roster_caches()
     return date_str, xlsx_filename, excel_bytes
+
+def save_local_draft_roster(df, start_date):
+    """
+    Saves a working roster draft strictly to local server/disk storage without uploading to Firebase Cloud Firestore.
+    Ensures safe progress persistence across browser refreshes and mobile device app switches.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return False, ""
+    if isinstance(start_date, str):
+        start_date = parse_date_robust(start_date) or get_melbourne_today()
+    if hasattr(start_date, "date"):
+        start_date = start_date.date()
+    date_str = start_date.strftime("%Y-%m-%d")
+    draft_filename = f"Draft_Roster_{date_str}.csv"
+    draft_path = os.path.join(DRAFTS_DIR, draft_filename)
+    try:
+        os.makedirs(DRAFTS_DIR, exist_ok=True)
+        df_to_save = clean_roster_dataframe(strip_daily_gross_row(df))
+        df_to_save.astype(str).to_csv(draft_path, index=False)
+        saved_time = datetime.now().strftime("%I:%M %p")
+        if hasattr(st, "session_state"):
+            st.session_state[f"last_saved_draft_{date_str}"] = saved_time
+        return True, saved_time
+    except Exception as e:
+        return False, str(e)
+
+def load_local_draft_roster(start_date):
+    """
+    Loads a working roster draft from local disk if one exists for the target date.
+    Returns (dataframe, formatted_time) or (None, "").
+    """
+    if isinstance(start_date, str):
+        start_date = parse_date_robust(start_date) or get_melbourne_today()
+    if hasattr(start_date, "date"):
+        start_date = start_date.date()
+    date_str = start_date.strftime("%Y-%m-%d")
+    draft_filename = f"Draft_Roster_{date_str}.csv"
+    draft_path = os.path.join(DRAFTS_DIR, draft_filename)
+    if os.path.exists(draft_path):
+        try:
+            df = pd.read_csv(draft_path, dtype=str, keep_default_na=False)
+            if df is not None and not df.empty:
+                mtime = os.path.getmtime(draft_path)
+                saved_time = datetime.fromtimestamp(mtime).strftime("%I:%M %p")
+                return clean_roster_dataframe(df), saved_time
+        except Exception:
+            pass
+    return None, ""
+
+def delete_local_draft_roster(start_date):
+    """
+    Deletes the local draft once a roster is officially finalized and uploaded to cloud.
+    """
+    if isinstance(start_date, str):
+        start_date = parse_date_robust(start_date) or get_melbourne_today()
+    if hasattr(start_date, "date"):
+        start_date = start_date.date()
+    date_str = start_date.strftime("%Y-%m-%d")
+    draft_filename = f"Draft_Roster_{date_str}.csv"
+    draft_path = os.path.join(DRAFTS_DIR, draft_filename)
+    if os.path.exists(draft_path):
+        try:
+            os.remove(draft_path)
+        except Exception:
+            pass
+    if hasattr(st, "session_state") and f"last_saved_draft_{date_str}" in st.session_state:
+        try:
+            del st.session_state[f"last_saved_draft_{date_str}"]
+        except Exception:
+            pass
 
 def extract_date_from_filename(filename):
     if not filename:
@@ -6679,6 +6757,15 @@ if is_manager:
             with col1:
                 start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
 
+                # Auto-load existing local draft for the chosen date if session roster is not set or date changed
+                date_str_cur = start_date.strftime("%Y-%m-%d")
+                if st.session_state.get("active_roster_week_date") != start_date:
+                    loaded_draft, draft_time = load_local_draft_roster(start_date)
+                    if loaded_draft is not None and not loaded_draft.empty:
+                        st.session_state.final_roster_df = loaded_draft
+                        st.session_state["active_roster_week_date"] = start_date
+                        st.session_state[f"last_saved_draft_{date_str_cur}"] = draft_time
+
                 # Check for VIC Holidays in selected week
                 week_pubs = []
                 week_sch_hols = set()
@@ -6713,7 +6800,9 @@ if is_manager:
                             df_clean = clean_roster_dataframe(df_clean)
                             df_clean = sort_dataframe_by_team_and_age(df_clean)
                             st.session_state.final_roster_df = df_clean
-                            st.success("🎉 Weekly Roster successfully generated!")
+                            st.session_state["active_roster_week_date"] = start_date
+                            save_local_draft_roster(df_clean, start_date)
+                            st.success("🎉 Weekly Roster successfully generated & saved as local editing draft!")
                         except Exception as e:
                             st.error(f"Failed to generate roster: {e}")
                             st.exception(e)
@@ -6737,10 +6826,11 @@ if is_manager:
                             # Extract start date from filename if available, else fallback to selected start_date
                             extracted_dt = extract_date_from_filename(upload_roster_file.name)
                             target_start_dt = extracted_dt if extracted_dt else start_date
+                            st.session_state["active_roster_week_date"] = target_start_dt
 
-                            # Save immediately to disk & cloud so it is persisted after turn off / restart
-                            save_finalized_roster(df_clean, target_start_dt)
-                            st.success(f"🎉 Roster loaded & permanently uploaded to Firebase Cloud Firestore for week starting {target_start_dt.strftime('%d/%m/%Y')}!")
+                            # Save strictly as local draft (DO NOT upload to cloud until finalized)
+                            save_local_draft_roster(df_clean, target_start_dt)
+                            st.success(f"📂 Roster loaded as local editing draft for week starting {target_start_dt.strftime('%d/%m/%Y')}! (Not uploaded to cloud until you click Finalize).")
 
             with col2:
                 st.markdown("""
@@ -6899,15 +6989,40 @@ if is_manager:
                     st.markdown("#### 📊 Hour Rate Breakdown Table (Generated Roster)")
                     st.dataframe(gen_hour_breakdown_df, use_container_width=True, hide_index=True)
 
-                # Finalize & Export Section
+                # Draft & Finalize Action Section
                 st.markdown("<br>", unsafe_allow_html=True)
-                col_fin1, col_fin2, col_fin3 = st.columns([1.1, 1.3, 1])
-                with col_fin1:
-                    if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True):
-                        date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
-                        st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and saved online!")
 
-                with col_fin2:
+                cur_date_str = start_date.strftime("%Y-%m-%d")
+                last_draft_time = st.session_state.get(f"last_saved_draft_{cur_date_str}", "")
+                if not last_draft_time:
+                    _, last_draft_time = load_local_draft_roster(start_date)
+
+                if last_draft_time:
+                    st.markdown(f"""
+                    <div style="background: rgba(13, 51, 43, 0.75); border: 1.5px solid #2ca86c; border-radius: 8px; padding: 7px 14px; margin-bottom: 12px; font-size: 0.9rem; color: #a3f7bf;">
+                        💾 <b>Local Draft Active:</b> Last saved locally at <b>{last_draft_time}</b>. Safe across page refreshes and mobile app switches. <i>(Not uploaded to cloud until Finalized)</i>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                col_btn1, col_btn2 = st.columns([1, 1])
+                with col_btn1:
+                    if st.button("💾 SAVE DRAFT (LOCAL)", key="btn_save_draft_local", use_container_width=True, help="Save your current edits locally on this device/server without uploading to cloud. Safe for mobile phone work."):
+                        ok_d, time_d = save_local_draft_roster(edited_final_df, start_date)
+                        if ok_d:
+                            st.success(f"💾 Working draft saved locally at {time_d}! Safe to close or switch apps on mobile.")
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to save local draft: {time_d}")
+
+                with col_btn2:
+                    if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True, help="Officially finalize this roster, publish it to staff, and upload permanently to Firebase Cloud Firestore."):
+                        date_str, xlsx_filename, excel_bytes = save_finalized_roster(edited_final_df, start_date)
+                        st.success(f"🎉 Weekly Roster for {start_date.strftime('%d/%m/%Y')} successfully finalized and uploaded to Firebase Cloud Firestore!")
+                        st.rerun()
+
+                st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
+                col_btn3, col_btn4 = st.columns([1.2, 1])
+                with col_btn3:
                     if st.button("📌 SAVE AS FIXED BASELINE SHIFTS", key="btn_save_table_as_fixed", use_container_width=True, help="Permanently save the shifts in this table as your new Fixed Baseline Shifts (First Guide) in fixed.csv and Cloud Firestore."):
                         cleaned_for_fixed = clean_roster_unavailability_display(edited_final_df)
                         days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -6928,7 +7043,7 @@ if is_manager:
                         st.success("✅ Fixed Baseline Shifts (First Guide) successfully updated and synced with Cloud Firestore! Future roster generations will follow these shifts.")
                         st.rerun()
 
-                with col_fin3:
+                with col_btn4:
                     excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
                     file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
                     st.download_button(
