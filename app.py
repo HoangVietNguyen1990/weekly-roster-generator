@@ -2036,16 +2036,16 @@ def send_announcement_broadcast_smtp(title, content, author="Store Management"):
 def load_persisted_df(filename, default_df=None):
     collection_name = filename.replace(".csv", "")
     fs_df = firestore_load_df(collection_name)
-    if fs_df is not None and not fs_df.empty:
+    if fs_df is not None and isinstance(fs_df, pd.DataFrame) and not fs_df.empty:
         return fs_df
 
     path = os.path.join(DATA_DIR, filename)
     if os.path.exists(path):
         try:
             df = pd.read_csv(path, dtype=str, keep_default_na=False)
-            if df is not None:
+            if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
                 return df
-        except:
+        except Exception:
             pass
             
     # Auto-recovery fallback: Check if master Excel document exists in data/Document/
@@ -2061,16 +2061,16 @@ def load_persisted_df(filename, default_df=None):
         if os.path.exists(excel_path):
             try:
                 excel_df = read_excel_robust(excel_path)
-                if excel_df is not None and not excel_df.empty:
+                if excel_df is not None and isinstance(excel_df, pd.DataFrame) and not excel_df.empty:
                     try:
                         excel_df.astype(str).to_csv(path, index=False)
-                    except:
+                    except Exception:
                         pass
                     return excel_df
-            except:
+            except Exception:
                 pass
                 
-    return default_df
+    return default_df.copy() if (default_df is not None and hasattr(default_df, "copy")) else default_df
 
 def clear_unavailability_widget_cache():
     for k in list(st.session_state.keys()):
@@ -2078,21 +2078,23 @@ def clear_unavailability_widget_cache():
             del st.session_state[k]
 
 def save_persisted_df(df, filename):
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return False
     collection_name = filename.replace(".csv", "")
-    if df is not None:
-        firestore_save_df(collection_name, df)
+    firestore_save_df(collection_name, df)
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
         if filename == "unavailability.csv":
             clear_unavailability_widget_cache()
-    except:
+    except Exception:
         pass
     try:
         load_persisted_df.clear()
         firestore_load_df.clear()
     except Exception:
         pass
+    return True
 
 def build_roster_excel_bytes(edited_final_df, start_date):
     if edited_final_df is not None and not edited_final_df.empty:
@@ -6796,8 +6798,9 @@ if is_manager:
 
             # Normal table edits save
             clean_df = employees_df.drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
-            st.session_state.manual_employees = cleanup_duplicate_employee_columns(clean_df)
-            save_persisted_df(st.session_state.manual_employees, "employees.csv")
+            if clean_df is not None and isinstance(clean_df, pd.DataFrame) and not clean_df.empty:
+                st.session_state.manual_employees = cleanup_duplicate_employee_columns(clean_df)
+                save_persisted_df(st.session_state.manual_employees, "employees.csv")
 
         # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM & MISSING ACCOUNTS TOOL ---
         with st.expander("➕ Add New Staff Account / Auto-Create Missing Logins", expanded=False):
@@ -7020,8 +7023,9 @@ if is_manager:
                 pass
         req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
         requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
-        st.session_state.manual_requirements = requirements_df
-        save_persisted_df(requirements_df, "requirements.csv")
+        if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
+            st.session_state.manual_requirements = requirements_df
+            save_persisted_df(requirements_df, "requirements.csv")
 
     # --- TAB 5: FIXED SHIFTS ---
     with tab_fixed:
@@ -7055,8 +7059,9 @@ if is_manager:
                 pass
         fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
         fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
-        st.session_state.manual_fixed = fixed_df
-        save_persisted_df(fixed_df, "fixed.csv")
+        if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
+            st.session_state.manual_fixed = fixed_df
+            save_persisted_df(fixed_df, "fixed.csv")
 
     # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
     with tab_timesheets:
