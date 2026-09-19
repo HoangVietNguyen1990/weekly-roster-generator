@@ -6796,11 +6796,13 @@ if is_manager:
                 st.success(f"✅ Deleted selected employee(s): {', '.join(target_del_names)}")
                 st.rerun()
 
-            # Normal table edits save
+            # Normal table edits save (only if data actually changed)
             clean_df = employees_df.drop(columns=["Select"], errors="ignore") if "Select" in employees_df.columns else employees_df
             if clean_df is not None and isinstance(clean_df, pd.DataFrame) and not clean_df.empty:
-                st.session_state.manual_employees = cleanup_duplicate_employee_columns(clean_df)
-                save_persisted_df(st.session_state.manual_employees, "employees.csv")
+                cleaned_emp = cleanup_duplicate_employee_columns(clean_df)
+                if not cleaned_emp.equals(st.session_state.manual_employees):
+                    st.session_state.manual_employees = cleaned_emp
+                    save_persisted_df(cleaned_emp, "employees.csv")
 
         # --- ➕ NEW EMPLOYEE ACCOUNT CREATION FORM & MISSING ACCOUNTS TOOL ---
         with st.expander("➕ Add New Staff Account / Auto-Create Missing Logins", expanded=False):
@@ -7016,16 +7018,12 @@ if is_manager:
             📋 Daily Shift Coverage Requirements (Mon-Sun)
         </div>
         """, unsafe_allow_html=True)
-        if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty:
-            try:
-                st.session_state.manual_requirements = reorder_requirements_dataframe(st.session_state.manual_requirements)
-            except Exception:
-                pass
         req_cols = list(st.session_state.manual_requirements.columns) if st.session_state.manual_requirements is not None and not st.session_state.manual_requirements.empty else None
         requirements_df = st.data_editor(st.session_state.manual_requirements, column_order=req_cols, num_rows="dynamic", key="edit_requirements_v2")
         if requirements_df is not None and isinstance(requirements_df, pd.DataFrame) and not requirements_df.empty:
-            st.session_state.manual_requirements = requirements_df
-            save_persisted_df(requirements_df, "requirements.csv")
+            if not requirements_df.equals(st.session_state.manual_requirements):
+                st.session_state.manual_requirements = requirements_df
+                save_persisted_df(requirements_df, "requirements.csv")
 
     # --- TAB 5: FIXED SHIFTS ---
     with tab_fixed:
@@ -7033,7 +7031,7 @@ if is_manager:
 
         if 'manual_fixed' not in st.session_state or st.session_state.manual_fixed is None or st.session_state.manual_fixed.empty:
             loaded_f = load_persisted_df("fixed.csv", default_fixed)
-            st.session_state.manual_fixed = sort_dataframe_by_team_and_age(loaded_f) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
+            st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded_f)) if (loaded_f is not None and not loaded_f.empty) else default_fixed.copy()
 
         upload_fixed = st.file_uploader("Upload Roster fixed - dont change.xlsx (Optional)", type=["xlsx"], key="fixed_upload")
         
@@ -7042,7 +7040,7 @@ if is_manager:
             if st.session_state.get("last_fixed_file") != file_key:
                 loaded = read_excel_robust(upload_fixed)
                 if loaded is not None:
-                    st.session_state.manual_fixed = loaded
+                    st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(loaded))
                     st.session_state.last_fixed_file = file_key
                     save_persisted_df(st.session_state.manual_fixed, "fixed.csv")
                     st.rerun()
@@ -7052,16 +7050,12 @@ if is_manager:
             📌 Fixed Baseline Staff Shifts
         </div>
         """, unsafe_allow_html=True)
-        if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty:
-            try:
-                st.session_state.manual_fixed = reorder_roster_dataframe(sort_dataframe_by_team_and_age(st.session_state.manual_fixed))
-            except Exception:
-                pass
         fixed_cols = list(st.session_state.manual_fixed.columns) if st.session_state.manual_fixed is not None and not st.session_state.manual_fixed.empty else None
         fixed_df = st.data_editor(st.session_state.manual_fixed, column_order=fixed_cols, num_rows="dynamic", key="edit_fixed_v2")
         if fixed_df is not None and isinstance(fixed_df, pd.DataFrame) and not fixed_df.empty:
-            st.session_state.manual_fixed = fixed_df
-            save_persisted_df(fixed_df, "fixed.csv")
+            if not fixed_df.equals(st.session_state.manual_fixed):
+                st.session_state.manual_fixed = fixed_df
+                save_persisted_df(fixed_df, "fixed.csv")
 
     # --- TAB 7: SHIFT TIMESHEET AUDIT & LIVE ATTENDANCE ---
     with tab_timesheets:
