@@ -6547,6 +6547,7 @@ if is_manager:
                 st.markdown('<div class="hero-generate-btn">', unsafe_allow_html=True)
                 if st.button("🚀 GENERATE WEEKLY ROSTER", key="btn_hero_generate"):
                     with st.spinner("Calculating optimal bakery roster locally..."):
+                        try:
                             emp_data = st.session_state.manual_employees
                             unavail_data = st.session_state.manual_unavailability
                             req_data = st.session_state.manual_requirements
@@ -6561,6 +6562,7 @@ if is_manager:
                             df_clean = sort_dataframe_by_team_and_age(df_clean)
                             st.session_state.final_roster_df = df_clean
                             st.success("🎉 Weekly Roster successfully generated!")
+                        except Exception as e:
                             st.error(f"Failed to generate roster: {e}")
 
                 st.markdown("<br>", unsafe_allow_html=True)
