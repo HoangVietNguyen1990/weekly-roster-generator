@@ -3887,13 +3887,24 @@ with col_head2:
             if st.button("🚪 Logout", key="btn_logout_emp_popover", use_container_width=True):
                 logout_user()
 
-# Helper to read excel sheets robustly, converting everything to strings for easy editing
+# Helper to read roster files robustly, converting everything to strings for easy editing.
 def read_excel_robust(uploaded_file):
     if uploaded_file is None:
         return None
     try:
+        file_name = str(getattr(uploaded_file, "name", uploaded_file)).lower()
+        is_csv = file_name.endswith(".csv")
+
+        # Reset an uploaded stream before each read. This matters because roster
+        # files are scanned once to find their header, then loaded a second time.
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+
         # Load without headers first to scan rows
-        df_raw = pd.read_excel(uploaded_file, header=None)
+        if is_csv:
+            df_raw = pd.read_csv(uploaded_file, header=None, dtype=str, keep_default_na=False)
+        else:
+            df_raw = pd.read_excel(uploaded_file, header=None)
         
         # Look for the header row containing key columns
         keywords = ["name", "employee", "staff", "role", "age", "dob", "commence", "start", "shift", "day", "monday", "tuesday", "unavailability", "fixed", "status", "type"]
@@ -3907,15 +3918,21 @@ def read_excel_robust(uploaded_file):
                     header_row_idx = idx
                     break
                 
-        # Re-read from that header row index
-        df = pd.read_excel(uploaded_file, header=header_row_idx)
+        # Re-read from the detected header row.
+        if hasattr(uploaded_file, "seek"):
+            uploaded_file.seek(0)
+        if is_csv:
+            df = pd.read_csv(uploaded_file, header=header_row_idx, dtype=str, keep_default_na=False)
+        else:
+            df = pd.read_excel(uploaded_file, header=header_row_idx)
         df.columns = [str(c).strip() for c in df.columns]
         
         # Convert all columns to strings to make them fully editable in st.data_editor
         df = clean_roster_dataframe(df)
         return df
     except Exception as e:
-        st.error(f"Error parsing Excel file structure: {e}")
+        file_type = "CSV" if str(getattr(uploaded_file, "name", "")).lower().endswith(".csv") else "Excel"
+        st.error(f"Could not read this {file_type} roster file: {e}")
         return None
 
 def clean_roster_dataframe(df):
@@ -6860,6 +6877,15 @@ if is_manager:
 
             col1, col2 = st.columns([1, 1])
             with col1:
+                # An uploaded roster can supply its own week date. Apply this before
+                # creating the date widget, otherwise Streamlit rejects the change.
+                pending_upload_date = st.session_state.pop("pending_uploaded_start_date", None)
+                if pending_upload_date:
+                    st.session_state["gen_start_date"] = pending_upload_date
+                upload_date_notice = st.session_state.pop("uploaded_roster_date_notice", "")
+                if upload_date_notice:
+                    st.success(upload_date_notice)
+
                 cloud_drafts = firestore_list_roster_drafts(curr_user_key)
                 draft_options = {"— Choose a saved cloud draft —": None}
                 for draft in cloud_drafts:
@@ -6967,15 +6993,26 @@ if is_manager:
                             st.session_state.final_roster_df = df_clean
                             st.session_state.last_uploaded_roster_key = file_key
 
-                            # Extract start date from filename if available, else fallback to selected start_date
+                            # Use the roster date found in the uploaded filename when it
+                            # is available. The date control is updated on a safe rerun.
                             extracted_dt = extract_date_from_filename(upload_roster_file.name)
                             target_start_dt = extracted_dt if extracted_dt else start_date
-                            st.session_state["active_roster_week_date"] = target_start_dt
+                            target_date_str = target_start_dt.strftime("%Y-%m-%d")
+                            st.session_state["active_roster_week_date"] = target_date_str
 
-                            # Save strictly as local draft (DO NOT upload to cloud until finalized)
+                            # Save strictly as local draft (DO NOT upload to cloud until finalized).
                             save_local_draft_roster(df_clean, target_start_dt)
                             st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
-                            st.success(f"📂 Roster loaded as local editing draft for week starting {target_start_dt.strftime('%d/%m/%Y')}! (Not uploaded to cloud until you click Finalize).")
+                            if extracted_dt and extracted_dt != start_date:
+                                # Keep the existing upload from being processed twice after
+                                # the start-date widget changes on the next rerun.
+                                st.session_state.last_uploaded_roster_key = f"roster_up_{upload_roster_file.name}_{upload_roster_file.size}_{target_start_dt}"
+                                st.session_state["pending_uploaded_start_date"] = target_start_dt
+                                st.session_state["uploaded_roster_date_notice"] = f"📅 Roster start date updated from the uploaded file: {target_start_dt.strftime('%d/%m/%Y')}."
+                                st.rerun()
+                            st.success(f"📂 Roster loaded for week starting {target_start_dt.strftime('%d/%m/%Y')}! Review it below, then save a cloud draft or finalize when ready.")
+                        else:
+                            st.error("This file did not contain any roster rows. Use a file with a staff-name column and Monday to Sunday shift columns.")
 
             with col2:
                 st.markdown("""
