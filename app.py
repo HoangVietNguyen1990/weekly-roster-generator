@@ -7223,39 +7223,16 @@ if is_manager:
                         st.rerun()
 
                 st.markdown("<div style='height: 6px;'></div>", unsafe_allow_html=True)
-                col_btn3, col_btn4 = st.columns([1.2, 1])
-                with col_btn3:
-                    if st.button("📌 SAVE AS FIXED BASELINE SHIFTS", key="btn_save_table_as_fixed", use_container_width=True, help="Permanently save the shifts in this table as your new Fixed Baseline Shifts (First Guide) in fixed.csv and Cloud Firestore."):
-                        cleaned_for_fixed = clean_roster_unavailability_display(edited_final_df)
-                        days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                        emp_col_name = find_column(cleaned_for_fixed, ["employee", "name", "staff", "staff name"], cleaned_for_fixed.columns[0])
-                        cols_to_keep = [emp_col_name] + [d for d in days_list if d in cleaned_for_fixed.columns]
-                        new_fixed = cleaned_for_fixed[cols_to_keep].copy()
-                        new_fixed.rename(columns={emp_col_name: "Employee"}, inplace=True)
-                        for d in days_list:
-                            if d in new_fixed.columns:
-                                new_fixed[d] = new_fixed[d].apply(normalize_shift_time_str)
-                        new_fixed = sanitize_dataframe(reorder_roster_dataframe(sort_dataframe_by_team_and_age(new_fixed)))
-                        st.session_state.manual_fixed = new_fixed
-                        save_persisted_df(new_fixed, "fixed.csv")
-                        if "edit_fixed_v2" in st.session_state:
-                            del st.session_state["edit_fixed_v2"]
-                        if "edit_fixed_in_generator" in st.session_state:
-                            del st.session_state["edit_fixed_in_generator"]
-                        st.success("✅ Fixed Baseline Shifts (First Guide) successfully updated and synced with Cloud Firestore! Future roster generations will follow these shifts.")
-                        st.rerun()
-
-                with col_btn4:
-                    excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
-                    file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
-                    st.download_button(
-                        label="📥 DOWNLOAD CURRENT ROSTER (.XLSX)",
-                        data=excel_bytes,
-                        file_name=file_name_out,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="btn_export_excel",
-                        use_container_width=True
-                    )
+                excel_bytes = build_roster_excel_bytes(edited_final_df, start_date)
+                file_name_out = f"Team_Roster_{start_date.strftime('%d.%m.%Y')}.xlsx"
+                st.download_button(
+                    label="📥 DOWNLOAD CURRENT ROSTER (.XLSX)",
+                    data=excel_bytes,
+                    file_name=file_name_out,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="btn_export_excel",
+                    use_container_width=True
+                )
 
         except Exception as e:
             st.error(f"⚠️ Error rendering Weekly Roster Generator: {e}")
