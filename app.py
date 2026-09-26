@@ -485,6 +485,94 @@ def firestore_save_finalized_roster(date_str, df):
                 st.code(tb_str, language="python")
         return False
 
+def _draft_owner_key(owner_key=None):
+    """Return a Firestore-safe owner key for a manager's private working drafts."""
+    if owner_key is None and hasattr(st, "session_state"):
+        owner_key = st.session_state.get("logged_in_user", "")
+    owner_key = str(owner_key or "manager").strip().lower()
+    return re.sub(r"[^a-z0-9_-]", "_", owner_key) or "manager"
+
+def _draft_document_id(owner_key, date_str):
+    return f"{_draft_owner_key(owner_key)}__{date_str}"
+
+def firestore_save_roster_draft(date_str, df, owner_key=None):
+    """Save an editable roster draft to Firestore without publishing it to staff."""
+    db = get_firebase_db()
+    if db is None or df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return False, "Firebase Cloud Database is not connected."
+    try:
+        df_clean = clean_roster_dataframe(strip_daily_gross_row(df.copy()))
+        clean_cols = []
+        for col in df_clean.columns:
+            col_str = str(col).strip().replace(".", "_").replace("/", "_").replace("[", "").replace("]", "")
+            clean_cols.append(col_str if col_str else "Col")
+        df_clean.columns = clean_cols
+        owner = _draft_owner_key(owner_key)
+        saved_at = datetime.now().isoformat()
+        db.collection("roster_drafts").document(_draft_document_id(owner, date_str)).set({
+            "records": df_clean.astype(str).to_dict(orient="records"),
+            "date_str": date_str,
+            "owner_key": owner,
+            "saved_at": saved_at,
+        })
+        clear_draft_caches()
+        return True, saved_at
+    except Exception as e:
+        return False, str(e)
+
+@st.cache_data(ttl=15, show_spinner=False)
+def firestore_load_roster_draft(date_str, owner_key=None):
+    db = get_firebase_db()
+    if db is None:
+        return None, ""
+    try:
+        doc = db.collection("roster_drafts").document(_draft_document_id(owner_key, date_str)).get()
+        if doc.exists:
+            data = doc.to_dict() or {}
+            records = data.get("records", [])
+            if records:
+                return clean_roster_dataframe(pd.DataFrame(records)), data.get("saved_at", "")
+    except Exception:
+        pass
+    return None, ""
+
+@st.cache_data(ttl=15, show_spinner=False)
+def firestore_list_roster_drafts(owner_key=None):
+    db = get_firebase_db()
+    if db is None:
+        return []
+    owner = _draft_owner_key(owner_key)
+    try:
+        docs = db.collection("roster_drafts").where("owner_key", "==", owner).stream()
+        drafts = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            date_str = str(data.get("date_str", "")).strip()
+            if not date_str:
+                continue
+            dt = parse_date_robust(date_str)
+            date_label = dt.strftime("%d/%m/%Y") if dt else date_str
+            saved_at = str(data.get("saved_at", ""))
+            try:
+                saved_label = datetime.fromisoformat(saved_at).strftime("%d/%m/%Y %I:%M %p")
+            except Exception:
+                saved_label = saved_at or "time unknown"
+            drafts.append({"date_str": date_str, "saved_at": saved_at, "label": f"Week of {date_label} — saved {saved_label}"})
+        return sorted(drafts, key=lambda item: item.get("saved_at", ""), reverse=True)
+    except Exception:
+        return []
+
+def firestore_delete_roster_draft(date_str, owner_key=None):
+    db = get_firebase_db()
+    if db is None:
+        return False
+    try:
+        db.collection("roster_drafts").document(_draft_document_id(owner_key, date_str)).delete()
+        clear_draft_caches()
+        return True
+    except Exception:
+        return False
+
 @st.cache_data(ttl=30, show_spinner=False)
 def firestore_load_finalized_roster(date_str):
     db = get_firebase_db()
@@ -606,6 +694,14 @@ def clear_roster_caches():
     try:
         firestore_load_finalized_roster.clear()
         firestore_list_finalized_rosters.clear()
+    except Exception:
+        pass
+
+def clear_draft_caches():
+    """Immediately refresh cloud-draft reads after saving or finalizing."""
+    try:
+        firestore_load_roster_draft.clear()
+        firestore_list_roster_drafts.clear()
     except Exception:
         pass
 
@@ -2531,7 +2627,7 @@ def save_finalized_roster(df, start_date):
     excel_bytes = build_roster_excel_bytes(df, start_date)
     
     # 1. Cloud auto-sync to Firebase Firestore
-    firestore_save_finalized_roster(date_str, df)
+    cloud_finalized = firestore_save_finalized_roster(date_str, df)
 
     # 2. Local file write (if writable)
     try:
@@ -2554,6 +2650,13 @@ def save_finalized_roster(df, start_date):
         delete_local_draft_roster(date_str)
     except Exception:
         pass
+
+    # Only remove the cloud draft after the published roster is safely in Firebase.
+    if cloud_finalized:
+        try:
+            firestore_delete_roster_draft(date_str)
+        except Exception:
+            pass
         
     clear_roster_caches()
     return date_str, xlsx_filename, excel_bytes
@@ -6757,19 +6860,54 @@ if is_manager:
 
             col1, col2 = st.columns([1, 1])
             with col1:
+                cloud_drafts = firestore_list_roster_drafts(curr_user_key)
+                draft_options = {"— Choose a saved cloud draft —": None}
+                for draft in cloud_drafts:
+                    draft_options[draft["label"]] = draft
+                chosen_draft_label = st.selectbox(
+                    "☁️ Saved Drafts",
+                    list(draft_options.keys()),
+                    key="cloud_draft_selector",
+                    help="Choose a cloud draft to continue editing it.",
+                )
+                chosen_draft = draft_options.get(chosen_draft_label)
+                if chosen_draft is None:
+                    st.session_state.pop("loaded_cloud_draft_selector", None)
+                elif st.session_state.get("loaded_cloud_draft_selector") != chosen_draft_label:
+                    loaded_cloud_df, cloud_saved_at = firestore_load_roster_draft(chosen_draft["date_str"], curr_user_key)
+                    if loaded_cloud_df is not None and not loaded_cloud_df.empty:
+                        selected_draft_date = parse_date_robust(chosen_draft["date_str"])
+                        if selected_draft_date:
+                            st.session_state["gen_start_date"] = selected_draft_date
+                        st.session_state.final_roster_df = loaded_cloud_df
+                        st.session_state["active_roster_week_date"] = chosen_draft["date_str"]
+                        st.session_state[f"last_saved_cloud_draft_{chosen_draft['date_str']}"] = cloud_saved_at
+                        st.session_state["loaded_cloud_draft_selector"] = chosen_draft_label
+                        st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+                        date_label = selected_draft_date.strftime("%d/%m/%Y") if selected_draft_date else chosen_draft["date_str"]
+                        st.success(f"☁️ Cloud draft loaded for week starting {date_label}.")
+
                 start_date = st.date_input("🗓️ Roster Start Date (Monday)", datetime.now() + timedelta(days=(0 - datetime.now().weekday())), key="gen_start_date")
 
-                # Auto-load existing local draft for the chosen date ONLY if session roster is not yet initialized or date was explicitly changed
+                # Auto-load the selected week's cloud draft first, then use a local backup if needed.
                 cur_date_str = start_date.strftime("%Y-%m-%d")
-                date_str_cur = cur_date_str
-                if ('final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty or st.session_state.get("active_roster_week_date") != cur_date_str):
+                active_week = st.session_state.get("active_roster_week_date")
+                if hasattr(active_week, "strftime"):
+                    active_week = active_week.strftime("%Y-%m-%d")
+                if ('final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty or active_week != cur_date_str):
                     st.session_state["active_roster_week_date"] = cur_date_str
-                    if 'final_roster_df' not in st.session_state or st.session_state.final_roster_df is None or st.session_state.final_roster_df.empty:
+                    loaded_draft, draft_time = firestore_load_roster_draft(cur_date_str, curr_user_key)
+                    draft_source = "cloud"
+                    if loaded_draft is None or loaded_draft.empty:
                         loaded_draft, draft_time = load_local_draft_roster(start_date)
-                        if loaded_draft is not None and not loaded_draft.empty:
-                            st.session_state.final_roster_df = loaded_draft
-                            st.session_state[f"last_saved_draft_{cur_date_str}"] = draft_time
-                            st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+                        draft_source = "local"
+                    if loaded_draft is not None and not loaded_draft.empty:
+                        st.session_state.final_roster_df = loaded_draft
+                        st.session_state[f"last_saved_{draft_source}_draft_{cur_date_str}"] = draft_time
+                        st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+                    elif active_week != cur_date_str:
+                        # Do not show another week's table when this week has no saved draft.
+                        st.session_state.final_roster_df = None
 
                 # Check for VIC Holidays in selected week
                 week_pubs = []
@@ -7041,29 +7179,40 @@ if is_manager:
                 st.markdown("<br>", unsafe_allow_html=True)
 
                 cur_date_str = start_date.strftime("%Y-%m-%d")
-                last_draft_time = st.session_state.get(f"last_saved_draft_{cur_date_str}", "")
-                if not last_draft_time:
-                    _, last_draft_time = load_local_draft_roster(start_date)
+                cloud_draft_time = st.session_state.get(f"last_saved_cloud_draft_{cur_date_str}", "")
+                if not cloud_draft_time:
+                    _, cloud_draft_time = firestore_load_roster_draft(cur_date_str, curr_user_key)
+                local_draft_time = st.session_state.get(f"last_saved_local_draft_{cur_date_str}", "")
+                if not local_draft_time:
+                    _, local_draft_time = load_local_draft_roster(start_date)
 
-                if last_draft_time:
+                if cloud_draft_time:
                     st.markdown(f"""
                     <div style="background: rgba(13, 51, 43, 0.75); border: 1.5px solid #2ca86c; border-radius: 8px; padding: 7px 14px; margin-bottom: 12px; font-size: 0.9rem; color: #a3f7bf;">
-                        💾 <b>Local Draft Active:</b> Last saved locally at <b>{last_draft_time}</b>. Safe across page refreshes and mobile app switches. <i>(Not uploaded to cloud until Finalized)</i>
+                        ☁️ <b>Cloud Draft Active:</b> Last saved to cloud at <b>{cloud_draft_time}</b>. Safe across logout, browser changes, and server restarts.
                     </div>
                     """, unsafe_allow_html=True)
+                elif local_draft_time:
+                    st.info(f"💾 Local backup draft found from {local_draft_time}. Save it to cloud to keep it after logout.")
 
                 col_btn1, col_btn2 = st.columns([1, 1])
                 with col_btn1:
-                    if st.button("💾 SAVE DRAFT (LOCAL)", key="btn_save_draft_local", use_container_width=True, help="Save your current edits locally on this device/server without uploading to cloud. Safe for mobile phone work."):
-                        ok_d, time_d = save_local_draft_roster(edited_final_df, start_date)
-                        if ok_d:
+                    if st.button("☁️ SAVE DRAFT TO CLOUD", key="btn_save_draft_cloud", use_container_width=True, help="Save your current edits to your cloud draft so you can safely continue after logout or on another device."):
+                        local_ok, local_time = save_local_draft_roster(edited_final_df, start_date)
+                        cloud_ok, cloud_result = firestore_save_roster_draft(cur_date_str, edited_final_df, curr_user_key)
+                        if cloud_ok:
                             st.session_state.final_roster_df = edited_final_df.copy()
                             st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
-                            st.session_state[f"last_saved_draft_{cur_date_str}"] = time_d
-                            st.success(f"💾 Working draft saved locally at {time_d}! Safe to close or switch apps on mobile.")
+                            st.session_state[f"last_saved_cloud_draft_{cur_date_str}"] = cloud_result
+                            if local_ok:
+                                st.session_state[f"last_saved_local_draft_{cur_date_str}"] = local_time
+                            st.success("☁️ Working draft saved to the cloud. You can log out and continue editing it later.")
                             st.rerun()
                         else:
-                            st.error(f"Failed to save local draft: {time_d}")
+                            if local_ok:
+                                st.warning(f"Cloud save failed, but a local backup was saved at {local_time}. Details: {cloud_result}")
+                            else:
+                                st.error(f"Could not save the draft to cloud or local backup. Cloud details: {cloud_result}")
 
                 with col_btn2:
                     if st.button("🔒 FINALIZE WEEKLY ROSTER", key="btn_finalize_roster", use_container_width=True, help="Officially finalize this roster, publish it to staff, and upload permanently to Firebase Cloud Firestore."):
