@@ -7023,6 +7023,17 @@ if is_manager:
                     key="roster_zoom_slider"
                 )
 
+                # A zoom change reruns Streamlit and rebuilds the data editor. Preserve
+                # the editor's latest values before applying the new display dimensions.
+                if "prev_roster_zoom" not in st.session_state:
+                    st.session_state.prev_roster_zoom = roster_zoom_val
+                elif st.session_state.prev_roster_zoom != roster_zoom_val:
+                    st.session_state.prev_roster_zoom = roster_zoom_val
+                    current_editing = st.session_state.get("current_editing_roster")
+                    if current_editing is not None and isinstance(current_editing, pd.DataFrame) and not current_editing.empty:
+                        st.session_state.final_roster_df = current_editing.copy()
+                        st.session_state["roster_editor_nonce"] = st.session_state.get("roster_editor_nonce", 0) + 1
+
                 # Strip out any existing summary row first to get pure staff dataframe
                 st.session_state.final_roster_df = strip_daily_gross_row(st.session_state.final_roster_df)
                 st.session_state.final_roster_df = sort_dataframe_by_team_and_age(st.session_state.final_roster_df)
