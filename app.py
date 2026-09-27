@@ -1765,17 +1765,174 @@ def get_week_start_date_str(dt_obj=None):
     mon_dt = dt_obj - timedelta(days=dt_obj.weekday())
     return mon_dt.strftime("%d.%m.%Y")
 
-def load_persisted_timecards():
-    fs_df = firestore_load_df("timecards")
-    if fs_df is not None and not fs_df.empty:
-        return fs_df
 
+# Attendance must identify a person independently of how their name happens to
+# appear on a roster.  These are deliberate, manager-reviewed roster aliases;
+# unknown names are never silently mapped to a different employee.
+EMPLOYEE_NAME_ALIASES = {
+    "ana": "anastasia",
+    "viet nguyen": "viet",
+}
+
+def _employee_key(value):
+    """Return a stable, filesystem/Firestore-safe key for an employee value."""
+    value = str(value or "").strip().lower()
+    return re.sub(r"[^a-z0-9]+", "_", value).strip("_")
+
+def resolve_employee_identity(raw_name):
+    """Resolve a display name to the canonical employee ID and display name.
+
+    Exact profile names and the explicit alias table are preferred.  Prefix and
+    first-name matching are only accepted when they identify exactly one person,
+    which avoids joining two staff members with the same first name.
+    """
+    raw_clean = str(raw_name or "").strip().lower()
+    alias_clean = EMPLOYEE_NAME_ALIASES.get(raw_clean, raw_clean)
+    profiles = get_active_user_profiles() or {}
+    candidates = []
+    if isinstance(profiles, dict):
+        for username, profile_data in profiles.items():
+            if not isinstance(profile_data, dict):
+                continue
+            display = str(profile_data.get("employee_name", "")).strip()
+            if display:
+                candidates.append((_employee_key(username), display, display.lower()))
+
+    for employee_id, display, clean in candidates:
+        if clean == alias_clean:
+            return {"employee_id": employee_id, "employee_name": display}
+
+    partial_matches = [item for item in candidates if item[2].startswith(alias_clean) or alias_clean.startswith(item[2])]
+    if len(partial_matches) == 1:
+        employee_id, display, _ = partial_matches[0]
+        return {"employee_id": employee_id, "employee_name": display}
+
+    first = alias_clean.split()[0] if alias_clean else ""
+    first_matches = [item for item in candidates if first and item[2].split()[0] == first]
+    if len(first_matches) == 1:
+        employee_id, display, _ = first_matches[0]
+        return {"employee_id": employee_id, "employee_name": display}
+
+    # A roster-only employee remains stable, but is not matched to a profile
+    # until a manager adds an explicit alias or profile entry.
+    return {"employee_id": f"roster_{_employee_key(alias_clean)}", "employee_name": str(raw_name or "").strip()}
+
+def timecard_record_id(date_value, employee_id):
+    d_obj = parse_date_robust(date_value)
+    date_key = d_obj.strftime("%Y%m%d") if d_obj else re.sub(r"\D", "", str(date_value or ""))
+    return f"TC_{date_key}_{_employee_key(employee_id)}"
+
+def timecard_matches_employee_and_date(row, employee_identity, date_value):
+    if parse_date_robust(row.get("Date", "")) != parse_date_robust(date_value):
+        return False
+    stored_id = _employee_key(row.get("Employee ID", ""))
+    if stored_id:
+        return stored_id == _employee_key(employee_identity["employee_id"])
+    return resolve_employee_identity(row.get("Employee", ""))["employee_id"] == employee_identity["employee_id"]
+
+def remove_timecards_for_employee_and_date(df_cards, employee_identity, date_value):
+    if df_cards is None or df_cards.empty:
+        return df_cards
+    keep_mask = df_cards.apply(
+        lambda row: not timecard_matches_employee_and_date(row, employee_identity, date_value), axis=1
+    )
+    return df_cards.loc[keep_mask].copy()
+
+def consolidate_timecards(df_cards):
+    """Canonicalise staff IDs and keep one best record per employee/day.
+
+    A record containing a real clock-in always wins over a blank generated
+    missing-punch record.  This also repairs historic alias duplicates safely.
+    """
+    if df_cards is None or not isinstance(df_cards, pd.DataFrame) or df_cards.empty:
+        return pd.DataFrame() if df_cards is None else df_cards
+    records = []
+    for _, row in df_cards.fillna("").iterrows():
+        record = {str(k): str(v) for k, v in row.to_dict().items()}
+        identity = resolve_employee_identity(record.get("Employee", ""))
+        record["Employee ID"] = identity["employee_id"]
+        record["Employee"] = identity["employee_name"] or record.get("Employee", "")
+        record["Record ID"] = timecard_record_id(record.get("Date", ""), identity["employee_id"])
+        records.append(record)
+
+    best_by_key = {}
+    for record in records:
+        key = (parse_date_robust(record.get("Date", "")), record.get("Employee ID", ""))
+        current = best_by_key.get(key)
+        if current is None:
+            best_by_key[key] = record
+            continue
+        current_score = int(bool(str(current.get("Clock In", "")).strip())) * 2 + int(bool(str(current.get("Clock Out", "")).strip()))
+        candidate_score = int(bool(str(record.get("Clock In", "")).strip())) * 2 + int(bool(str(record.get("Clock Out", "")).strip()))
+        if candidate_score >= current_score:
+            winner, loser = record, current
+        else:
+            winner, loser = current, record
+        # Retain useful legacy metadata that is absent from the winning row.
+        for field, value in loser.items():
+            if not str(winner.get(field, "")).strip() and str(value).strip():
+                winner[field] = value
+        best_by_key[key] = winner
+    return pd.DataFrame(best_by_key.values()).reset_index(drop=True)
+
+def firestore_load_timecard_records():
+    """Load record-level timecards without the 60-second collection cache."""
+    db = get_firebase_db()
+    if db is None:
+        return None
+    try:
+        records = []
+        for doc in db.collection("timecard_records").stream():
+            data = doc.to_dict() or {}
+            if data:
+                records.append(data)
+        return pd.DataFrame(records)
+    except Exception:
+        return None
+
+def firestore_save_timecard_records(df_cards):
+    """Transactionally upsert timecards without cross-terminal data loss."""
+    db = get_firebase_db()
+    if db is None:
+        return False
+    try:
+        # Import here because Firebase is optional when the app runs locally.
+        from firebase_admin import firestore as firebase_firestore
+        for record in df_cards.astype(str).to_dict(orient="records"):
+            doc_id = record.get("Record ID", "") or timecard_record_id(record.get("Date", ""), record.get("Employee ID", ""))
+            doc_ref = db.collection("timecard_records").document(doc_id)
+            transaction = db.transaction()
+
+            @firebase_firestore.transactional
+            def merge_timecard(transaction, doc_ref, incoming_record):
+                snapshot = doc_ref.get(transaction=transaction)
+                payload = dict(incoming_record)
+                if snapshot.exists:
+                    existing = snapshot.to_dict() or {}
+                    # A stale blank alert must never remove a genuine punch.
+                    for punch_field in ["Clock In", "Clock Out"]:
+                        if not str(payload.get(punch_field, "")).strip() and str(existing.get(punch_field, "")).strip():
+                            payload[punch_field] = existing[punch_field]
+                transaction.set(doc_ref, payload, merge=True)
+
+            merge_timecard(transaction, doc_ref, record)
+        return True
+    except Exception:
+        return False
+
+def load_persisted_timecards():
     df_cards = pd.DataFrame()
+    legacy_cloud_df = firestore_load_df("timecards")
+    if legacy_cloud_df is not None and not legacy_cloud_df.empty:
+        df_cards = legacy_cloud_df.copy()
+
     if os.path.exists(TIMECARDS_FILE):
         try:
-            df_cards = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False)
+            local_df = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False)
+            if local_df is not None and not local_df.empty:
+                df_cards = pd.concat([df_cards, local_df], ignore_index=True)
         except:
-            df_cards = pd.DataFrame()
+            pass
             
     archived_rows = []
     if os.path.exists(TIMESHEETS_DIR):
@@ -1795,23 +1952,33 @@ def load_persisted_timecards():
             df_cards = pd.concat([df_arch, df_cards], ignore_index=True)
         else:
             df_cards = df_arch
-        if not df_cards.empty and "Record ID" in df_cards.columns:
-            df_cards = df_cards.drop_duplicates(subset=["Record ID"], keep="last").reset_index(drop=True)
-            
-    return df_cards
+
+    # New record-level documents take precedence over legacy master-list data.
+    record_cloud_df = firestore_load_timecard_records()
+    if record_cloud_df is not None and not record_cloud_df.empty:
+        df_cards = pd.concat([df_cards, record_cloud_df], ignore_index=True)
+    return consolidate_timecards(df_cards)
 
 def save_timecard_records(df_cards):
     if df_cards is None or not isinstance(df_cards, pd.DataFrame):
         return
-    df_cards = df_cards.copy().astype(str)
+    df_cards = consolidate_timecards(df_cards).copy().astype(str)
     
     # 1. Cloud auto-sync to Firebase Firestore
-    firestore_save_df("timecards", df_cards)
+    # Record-level writes prevent a stale dashboard view replacing everyone’s
+    # punches.  Keep the legacy master-list path only as a fallback if the new
+    # collection is temporarily unavailable.
+    if not firestore_save_timecard_records(df_cards):
+        firestore_save_df("timecards", df_cards)
 
     # 2. Local file write
     try:
         df_cards.to_csv(TIMECARDS_FILE, index=False)
     except:
+        pass
+    try:
+        firestore_load_df.clear()
+    except Exception:
         pass
         
     if "Date" in df_cards.columns:
@@ -4647,31 +4814,13 @@ def render_store_kiosk_timeclock():
 
     df_cards = load_persisted_timecards()
     today_punch = None
+    selected_identity = resolve_employee_identity(selected_emp)
     if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
-        target_date = today_dt.date() if isinstance(today_dt, datetime) else today_dt
-        sel_emp_clean = str(selected_emp).strip().lower()
-        sel_emp_first = sel_emp_clean.split()[0] if sel_emp_clean else ""
-
         for idx in range(len(df_cards) - 1, -1, -1):
             r = df_cards.iloc[idx]
-            raw_d = str(r.get("Date", "")).strip()
-            parsed_d = parse_date_robust(raw_d)
-            is_same_date = (raw_d == today_str) or (parsed_d and parsed_d == target_date)
-            
-            if is_same_date:
-                raw_emp = str(r.get("Employee", "")).strip()
-                emp_clean = raw_emp.lower()
-                emp_first = emp_clean.split()[0] if emp_clean else ""
-                
-                is_match = (
-                    emp_clean == sel_emp_clean or
-                    sel_emp_clean in emp_clean or
-                    emp_clean in sel_emp_clean or
-                    (sel_emp_first and emp_first and sel_emp_first == emp_first)
-                )
-                if is_match:
-                    today_punch = r.to_dict()
-                    break
+            if timecard_matches_employee_and_date(r, selected_identity, today_dt):
+                today_punch = r.to_dict()
+                break
 
     scheduled_shift = get_scheduled_shift_for_employee_and_date(selected_emp, today_dt)
 
@@ -4706,13 +4855,14 @@ def render_store_kiosk_timeclock():
         btn_in = st.button("🟢 CLOCK IN NOW", key=f"kiosk_btn_in_{selected_emp}", use_container_width=True, disabled=is_in_disabled)
         if btn_in:
             clock_in_time_str = melbourne_now.strftime("%I:%M %p")
-            rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
+            rec_id = timecard_record_id(today_dt, selected_identity["employee_id"])
             loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
             
             new_rec = {
                 "Record ID": rec_id,
                 "Date": today_str,
-                "Employee": selected_emp,
+                "Employee ID": selected_identity["employee_id"],
+                "Employee": selected_identity["employee_name"],
                 "Scheduled Shift": scheduled_shift,
                 "Clock In": clock_in_time_str,
                 "Clock Out": "",
@@ -4732,7 +4882,7 @@ def render_store_kiosk_timeclock():
             if df_cards is None or df_cards.empty:
                 df_updated = pd.DataFrame([new_rec])
             else:
-                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                df_cards = remove_timecards_for_employee_and_date(df_cards, selected_identity, today_dt)
                 df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
                 
             save_timecard_records(df_updated)
@@ -4811,16 +4961,19 @@ def render_store_kiosk_timeclock():
                 today_punch["Break (Mins)"] = str(final_break_mins)
                 today_punch["Break Status"] = break_status_str
                 today_punch["Status"] = "Completed"
-                rec_id = today_punch.get("Record ID")
-                df_cards = df_cards[df_cards["Record ID"] != rec_id]
+                today_punch["Employee ID"] = selected_identity["employee_id"]
+                today_punch["Employee"] = selected_identity["employee_name"]
+                today_punch["Record ID"] = timecard_record_id(today_dt, selected_identity["employee_id"])
+                df_cards = remove_timecards_for_employee_and_date(df_cards, selected_identity, today_dt)
                 df_updated = pd.concat([df_cards, pd.DataFrame([today_punch])], ignore_index=True)
             else:
-                rec_id = f"TC_{today_str.replace('/', '')}_{selected_emp.replace(' ', '')}"
+                rec_id = timecard_record_id(today_dt, selected_identity["employee_id"])
                 loc_badge = "✅ Verified via Store Terminal (Brumby's Bakery Pakenham)"
                 new_rec = {
                     "Record ID": rec_id,
                     "Date": today_str,
-                    "Employee": selected_emp,
+                    "Employee ID": selected_identity["employee_id"],
+                    "Employee": selected_identity["employee_name"],
                     "Scheduled Shift": scheduled_shift,
                     "Clock In": clock_in_str if clock_in_str else clock_out_time_str,
                     "Clock Out": clock_out_time_str,
@@ -5796,8 +5949,12 @@ def render_manager_timesheet_audit_dashboard():
             if c_in or status != "Missing" or (d_obj and d_obj == today_dt):
                 valid_rows.append(r)
         
-        df_cards = pd.DataFrame(valid_rows).reset_index(drop=True) if valid_rows else pd.DataFrame()
-        save_timecard_records(df_cards)
+        cleaned_cards = pd.DataFrame(valid_rows).reset_index(drop=True) if valid_rows else pd.DataFrame()
+        # Do not write an unchanged dashboard snapshot back to cloud storage.
+        # A kiosk may have clocked in after this screen loaded.
+        if len(cleaned_cards) != len(df_cards):
+            df_cards = cleaned_cards
+            save_timecard_records(df_cards)
 
     # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
     today_dt = get_melbourne_today()
@@ -5823,21 +5980,22 @@ def render_manager_timesheet_audit_dashboard():
                                 emp_name = str(r_row.get(emp_col, "")).strip()
                                 shift_val = str(r_row.get(day_name, "")).strip()
                                 
-                                is_owner = emp_name.lower() in ["viet", "jane"]
+                                employee_identity = resolve_employee_identity(emp_name)
+                                is_owner = False
                                 u_profs = get_active_user_profiles() or {}
                                 if isinstance(u_profs, dict):
-                                    for u_k, u_v in u_profs.items():
-                                        if isinstance(u_v, dict) and u_v.get("employee_name", "").strip().lower() == emp_name.lower():
-                                            if u_v.get("profile", {}).get("classification", "").lower() == "owner":
-                                                is_owner = True
+                                    for username, profile_data in u_profs.items():
+                                        if _employee_key(username) == employee_identity["employee_id"]:
+                                            is_owner = str(profile_data.get("profile", {}).get("classification", "")).lower() == "owner"
+                                            break
 
                                 if not is_owner and emp_name and shift_val and shift_val.lower() not in ["off", "nan", "unavailable"]:
-                                    rec_id = f"TC_{shift_date_str.replace('/', '')}_{emp_name.replace(' ', '')}"
+                                    rec_id = timecard_record_id(today_dt, employee_identity["employee_id"])
                                     
-                                    card_exists = False
-                                    if df_cards is not None and not df_cards.empty and "Record ID" in df_cards.columns:
-                                        if rec_id in df_cards["Record ID"].values:
-                                            card_exists = True
+                                    card_exists = bool(
+                                        df_cards is not None and not df_cards.empty and
+                                        any(timecard_matches_employee_and_date(row, employee_identity, today_dt) for _, row in df_cards.iterrows())
+                                    )
                                             
                                     if not card_exists:
                                         shift_r = parse_shift_range(shift_val)
@@ -5851,7 +6009,8 @@ def render_manager_timesheet_audit_dashboard():
                                         missing_rec = {
                                             "Record ID": rec_id,
                                             "Date": shift_date_str,
-                                            "Employee": emp_name,
+                                            "Employee ID": employee_identity["employee_id"],
+                                            "Employee": employee_identity["employee_name"],
                                             "Scheduled Shift": shift_val,
                                             "Clock In": "",
                                             "Clock Out": "",
