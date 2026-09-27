@@ -1920,6 +1920,58 @@ def firestore_save_timecard_records(df_cards):
     except Exception:
         return False
 
+def save_timecard_record(record):
+    """Persist one changed timecard without rebuilding the audit history.
+
+    Manager approvals use this fast path.  It preserves the per-record
+    transaction guarantee while avoiding serial writes for every other staff
+    member and avoiding expensive archive regeneration.
+    """
+    if not isinstance(record, dict):
+        return False
+    single_df = consolidate_timecards(pd.DataFrame([record]))
+    if single_df.empty:
+        return False
+    saved_record = single_df.iloc[0].to_dict()
+    cloud_saved = firestore_save_timecard_records(single_df)
+
+    # Keep local/offline recovery current using a targeted upsert.  Do not call
+    # load_persisted_timecards here: that would re-read the full cloud history.
+    try:
+        local_df = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False) if os.path.exists(TIMECARDS_FILE) else pd.DataFrame()
+        identity = {"employee_id": saved_record.get("Employee ID", ""), "employee_name": saved_record.get("Employee", "")}
+        local_df = remove_timecards_for_employee_and_date(local_df, identity, saved_record.get("Date", ""))
+        pd.concat([local_df, pd.DataFrame([saved_record])], ignore_index=True).astype(str).to_csv(TIMECARDS_FILE, index=False)
+    except Exception:
+        pass
+
+    try:
+        firestore_load_df.clear()
+    except Exception:
+        pass
+    return cloud_saved or os.path.exists(TIMECARDS_FILE)
+
+def save_changed_timecard(df_cards, record_id):
+    """Save only the manager-edited row from an in-memory audit table."""
+    if df_cards is None or df_cards.empty or "Record ID" not in df_cards.columns:
+        return False
+    changed_rows = df_cards[df_cards["Record ID"] == record_id]
+    return bool(not changed_rows.empty and save_timecard_record(changed_rows.iloc[-1].to_dict()))
+
+def finalized_rosters_for_date(date_value):
+    """Return only the roster week relevant to an approval action."""
+    target_date = parse_date_robust(date_value)
+    if not target_date:
+        return []
+    matching = []
+    for roster_item in list_finalized_rosters() or []:
+        start_date = roster_item.get("start_date") or parse_date_robust(roster_item.get("date_str", ""))
+        if isinstance(start_date, datetime):
+            start_date = start_date.date()
+        if start_date and start_date <= target_date <= start_date + timedelta(days=6):
+            matching.append(roster_item)
+    return matching
+
 def load_persisted_timecards():
     df_cards = pd.DataFrame()
     legacy_cloud_df = firestore_load_df("timecards")
@@ -4885,7 +4937,7 @@ def render_store_kiosk_timeclock():
                 df_cards = remove_timecards_for_employee_and_date(df_cards, selected_identity, today_dt)
                 df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
                 
-            save_timecard_records(df_updated)
+            save_timecard_record(new_rec)
             st.session_state.kiosk_success_msg = f"✅ Welcome {selected_emp}! Successfully Clocked IN at {clock_in_time_str} via Store Terminal."
             st.session_state.reset_kiosk_emp = True
             st.rerun()
@@ -4991,7 +5043,7 @@ def render_store_kiosk_timeclock():
                 }
                 df_updated = pd.concat([df_cards, pd.DataFrame([new_rec])], ignore_index=True)
 
-            save_timecard_records(df_updated)
+            save_timecard_record(today_punch if today_punch else new_rec)
             st.session_state.kiosk_success_msg = f"✅ Goodbye {selected_emp}! Successfully Clocked OUT at {clock_out_time_str} (Total: {net_h} hrs, Break: {final_break_mins} mins)."
             st.session_state.reset_kiosk_emp = True
             st.rerun()
@@ -5954,7 +6006,6 @@ def render_manager_timesheet_audit_dashboard():
         # A kiosk may have clocked in after this screen loaded.
         if len(cleaned_cards) != len(df_cards):
             df_cards = cleaned_cards
-            save_timecard_records(df_cards)
 
     # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
     today_dt = get_melbourne_today()
@@ -6028,7 +6079,7 @@ def render_manager_timesheet_audit_dashboard():
                                             df_cards = pd.DataFrame([missing_rec])
                                         else:
                                             df_cards = pd.concat([df_cards, pd.DataFrame([missing_rec])], ignore_index=True)
-                                        save_timecard_records(df_cards)
+                                        save_timecard_record(missing_rec)
 
     # Re-verify Scheduled Shift for all timecards against exact date & employee roster
     if df_cards is not None and not df_cards.empty:
@@ -6220,7 +6271,7 @@ def render_manager_timesheet_audit_dashboard():
                     with act_col1:
                         if st.button(f"✅ Approve Late Shift (Adjust Roster to {sel_clock_in})", key=f"btn_app_late_{rec_id}_{idx}", use_container_width=True):
                             l_actual_in = sel_clock_in
-                            past_rosters = list_finalized_rosters()
+                            past_rosters = finalized_rosters_for_date(sel_date)
                             if past_rosters:
                                 for r_item in past_rosters:
                                     r_df = load_finalized_roster(r_item["csv_filename"])
@@ -6241,7 +6292,7 @@ def render_manager_timesheet_audit_dashboard():
 
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Roster Adjusted)"
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Late Correction Status"] = "Late Shift Corrected"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.success(f"✅ Approved late clocking for **{sel_emp}**. Roster adjusted to `{l_actual_in}`!")
                             st.rerun()
 
@@ -6249,7 +6300,7 @@ def render_manager_timesheet_audit_dashboard():
                         if st.button(f"❌ Reject Late Shift (Keep Original Roster {sel_sched})", key=f"btn_rej_late_{rec_id}_{idx}", use_container_width=True):
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Roster Maintained)"
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Late Correction Status"] = "Rejected (Unexcused Late)"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.info(f"ℹ️ Rejected late shift adjustment for **{sel_emp}**. Original roster `{sel_sched}` maintained.")
                             st.rerun()
 
@@ -6258,13 +6309,13 @@ def render_manager_timesheet_audit_dashboard():
                         if st.button(f"✅ Approve Missing Shift (Keep Roster {sel_sched})", key=f"btn_app_miss_{rec_id}_{idx}", use_container_width=True):
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Roster Maintained)"
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Completed"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.success(f"✅ Approved missing shift for **{sel_emp}**. Original roster shift `{sel_sched}` approved and maintained.")
                             st.rerun()
 
                     with act_col2:
                         if st.button(f"❌ Reject Missing Shift (Delete Shift from Roster)", key=f"btn_rej_miss_{rec_id}_{idx}", use_container_width=True):
-                            past_rosters = list_finalized_rosters()
+                            past_rosters = finalized_rosters_for_date(sel_date)
                             if past_rosters:
                                 for r_item in past_rosters:
                                     r_df = load_finalized_roster(r_item["csv_filename"])
@@ -6281,7 +6332,7 @@ def render_manager_timesheet_audit_dashboard():
 
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Shift Deleted)"
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.warning(f"⚠️ Rejected missing shift for **{sel_emp}**. Shift has been deleted (`OFF`) from the roster.")
                             st.rerun()
 
@@ -6289,7 +6340,7 @@ def render_manager_timesheet_audit_dashboard():
                     with act_col1:
                         if st.button(f"✅ Approve Unscheduled Punch", key=f"btn_app_unsch_{rec_id}_{idx}", use_container_width=True):
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Unscheduled Punch)"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.success(f"✅ Approved unscheduled punch for **{sel_emp}**!")
                             st.rerun()
 
@@ -6297,7 +6348,7 @@ def render_manager_timesheet_audit_dashboard():
                         if st.button(f"❌ Reject Unscheduled Punch", key=f"btn_rej_unsch_{rec_id}_{idx}", use_container_width=True):
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Unscheduled Punch)"
                             df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
-                            save_timecard_records(df_cards)
+                            save_changed_timecard(df_cards, rec_id)
                             st.info(f"ℹ️ Rejected unscheduled punch for **{sel_emp}**.")
                             st.rerun()
                 else:
