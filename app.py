@@ -6226,9 +6226,8 @@ def render_manager_timesheet_audit_dashboard():
     if df_cards is not None and not df_cards.empty:
         display_df = df_cards.copy()
 
-        # Put the records that need a manager decision first.  Within each
-        # group, keep the newest shifts together and make the staff order
-        # predictable, rather than relying on database/document order.
+        # Keep the newest dates at the top. Within each date, put the records
+        # needing a manager decision first and keep staff order predictable.
         def audit_priority(row):
             note = str(row.get("Note", "")).lower()
             status = str(row.get("Status", "")).lower()
@@ -6253,8 +6252,8 @@ def render_manager_timesheet_audit_dashboard():
         )
         display_df["_audit_employee"] = display_df["Employee"].astype(str).str.lower()
         display_df = display_df.sort_values(
-            ["_audit_priority", "_audit_date", "_audit_shift_start", "_audit_employee"],
-            ascending=[True, False, True, True],
+            ["_audit_date", "_audit_priority", "_audit_shift_start", "_audit_employee"],
+            ascending=[False, True, True, True],
             kind="stable"
         ).drop(columns=["_audit_priority", "_audit_date", "_audit_shift_start", "_audit_employee"])
 
