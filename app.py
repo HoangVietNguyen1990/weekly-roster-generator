@@ -6225,12 +6225,45 @@ def render_manager_timesheet_audit_dashboard():
 
     if df_cards is not None and not df_cards.empty:
         display_df = df_cards.copy()
+
+        # Put the records that need a manager decision first.  Within each
+        # group, keep the newest shifts together and make the staff order
+        # predictable, rather than relying on database/document order.
+        def audit_priority(row):
+            note = str(row.get("Note", "")).lower()
+            status = str(row.get("Status", "")).lower()
+            if "missing" in note:
+                return 0
+            if "late clocking" in note:
+                return 1
+            if status == "working":
+                return 2
+            if status == "scheduled":
+                return 3
+            if status == "completed":
+                return 4
+            return 5
+
+        display_df["_audit_priority"] = display_df.apply(audit_priority, axis=1)
+        display_df["_audit_date"] = display_df["Date"].map(
+            lambda value: parse_date_robust(value).isoformat() if parse_date_robust(value) else "0000-00-00"
+        )
+        display_df["_audit_shift_start"] = display_df["Scheduled Shift"].map(
+            lambda value: parse_shift_range(value)[0] if parse_shift_range(value) else 99.0
+        )
+        display_df["_audit_employee"] = display_df["Employee"].astype(str).str.lower()
+        display_df = display_df.sort_values(
+            ["_audit_priority", "_audit_date", "_audit_shift_start", "_audit_employee"],
+            ascending=[True, False, True, True],
+            kind="stable"
+        ).drop(columns=["_audit_priority", "_audit_date", "_audit_shift_start", "_audit_employee"])
+
         if "Select" not in display_df.columns:
             display_df.insert(0, "Select", False)
         else:
             display_df["Select"] = False
             
-        cols_order = ["Select", "Note", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Distance (m)", "Status", "Record ID"]
+        cols_order = ["Select", "Note", "Status", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Distance (m)", "Record ID"]
         existing_cols = [c for c in cols_order if c in display_df.columns]
         display_df = display_df[existing_cols]
 
