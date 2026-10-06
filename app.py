@@ -6052,6 +6052,9 @@ def render_manager_timesheet_audit_dashboard():
 
     past_rosters = list_finalized_rosters()
     u_profs = get_active_user_profiles() or {}
+    audit_identities = {}
+    audit_shift_map = {}
+    generated_missing_records = []
     if past_rosters:
         for r_item in past_rosters:
             r_df = load_finalized_roster(r_item["csv_filename"])
@@ -6070,7 +6073,14 @@ def render_manager_timesheet_audit_dashboard():
                                 emp_name = str(r_row.get(emp_col, "")).strip()
                                 shift_val = str(r_row.get(day_name, "")).strip()
                                 
-                                employee_identity = resolve_employee_identity(emp_name)
+                                if emp_name not in audit_identities:
+                                    audit_identities[emp_name] = resolve_employee_identity(emp_name)
+                                employee_identity = audit_identities[emp_name]
+                                shift_key = (shift_date, employee_identity["employee_id"])
+                                # Rosters are ordered newest first; use the first matching week.
+                                if shift_key in audit_shift_map:
+                                    continue
+                                audit_shift_map[shift_key] = shift_val
                                 is_owner = False
                                 if isinstance(u_profs, dict):
                                     for username, profile_data in u_profs.items():
@@ -6113,11 +6123,12 @@ def render_manager_timesheet_audit_dashboard():
                                             "Late Correction Status": "Normal",
                                             "Status": init_status
                                         }
-                                        if df_cards is None or df_cards.empty:
-                                            df_cards = pd.DataFrame([missing_rec])
-                                        else:
-                                            df_cards = pd.concat([df_cards, pd.DataFrame([missing_rec])], ignore_index=True)
-                                        save_timecard_record(missing_rec)
+                                        generated_missing_records.append(missing_rec)
+
+    # Missing alerts are derived from the roster. Persist only an explicit
+    # manager decision, avoiding one cloud transaction per historical absence.
+    if generated_missing_records:
+        df_cards = pd.concat([df_cards, pd.DataFrame(generated_missing_records)], ignore_index=True)
 
     # Re-verify Scheduled Shift for all timecards against exact date & employee roster
     if df_cards is not None and not df_cards.empty:
@@ -6125,7 +6136,10 @@ def render_manager_timesheet_audit_dashboard():
         for idx, r in df_cards.iterrows():
             emp_n = str(r.get("Employee", "")).strip()
             d_s = str(r.get("Date", "")).strip()
-            sc_shift = get_scheduled_shift_for_employee_and_date(emp_n, d_s)
+            if emp_n not in audit_identities:
+                audit_identities[emp_n] = resolve_employee_identity(emp_n)
+            shift_key = (parse_date_robust(d_s), audit_identities[emp_n]["employee_id"])
+            sc_shift = audit_shift_map.get(shift_key, str(r.get("Scheduled Shift", "")))
             updated_shifts.append(sc_shift)
         df_cards["Scheduled Shift"] = updated_shifts
 
