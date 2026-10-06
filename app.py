@@ -5922,6 +5922,22 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     output.seek(0)
     return output.getvalue()
 
+def clock_in_review_note(scheduled_shift, clock_in, existing_note=""):
+    """Return pending day-off/early-start review, preserving manager decisions."""
+    if "Approved" in str(existing_note) or "Rejected" in str(existing_note):
+        return ""
+    punch = str(clock_in).strip()
+    if punch.lower() in ("", "nan", "none"):
+        return ""
+    shift = parse_shift_range(str(scheduled_shift).strip())
+    if shift is None:
+        return "⚠️ Needs review — Day off / no scheduled shift"
+    early_minutes = (shift[0] - parse_time_to_decimal(punch)) * 60
+    if early_minutes >= 10 - 1e-7:
+        return f"⚠️ Needs review — Early clock-in ({round(early_minutes)} mins early)"
+    return ""
+
+
 def render_manager_timesheet_audit_dashboard():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 22px; border-radius: 12px; color: #ffffff !important; border: 2px solid #e5a93c; margin-bottom: 20px;">
@@ -6111,6 +6127,9 @@ def render_manager_timesheet_audit_dashboard():
                     calc_note = "✅ Verified / Normal"
                 calc_status = "Completed"
 
+            review_note = clock_in_review_note(sched, c_in, existing_note)
+            if review_note:
+                calc_note = review_note + (f" | {calc_note}" if "Missing" in calc_note else "")
             notes.append(calc_note)
             statuses.append(calc_status)
 
@@ -6161,6 +6180,10 @@ def render_manager_timesheet_audit_dashboard():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Master Table Header
+    if df_cards is not None and not df_cards.empty:
+        review_count = df_cards["Note"].str.contains("Needs review", na=False).sum()
+        if review_count:
+            st.warning(f"⚠️ Needs review: {review_count} day-off or early clock-in record(s). Select a row to approve or reject.")
     st.markdown("""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none;">
         📋 Master Timesheet Audit & Notification Table (Check First Cell `Select` Row to Approve/Reject)
@@ -6177,7 +6200,7 @@ def render_manager_timesheet_audit_dashboard():
             status = str(row.get("Status", "")).lower()
             if "missing" in note:
                 return 0
-            if "late clocking" in note:
+            if "late clocking" in note or "needs review" in note:
                 return 1
             if status == "working":
                 return 2
@@ -6243,7 +6266,19 @@ def render_manager_timesheet_audit_dashboard():
                 
                 act_col1, act_col2 = st.columns(2)
                 
-                if "Late Clocking" in sel_note:
+                if "Needs review" in sel_note:
+                    with act_col1:
+                        if st.button("✅ Approve Clock-In", key=f"btn_app_review_{rec_id}_{idx}", use_container_width=True):
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
+                            save_changed_timecard(df_cards, rec_id)
+                            st.rerun()
+                    with act_col2:
+                        if st.button("❌ Reject Clock-In", key=f"btn_rej_review_{rec_id}_{idx}", use_container_width=True):
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = f"❌ Rejected ({sel_note.replace('⚠️ Needs review — ', '')})"
+                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
+                            save_changed_timecard(df_cards, rec_id)
+                            st.rerun()
+                elif "Late Clocking" in sel_note:
                     with act_col1:
                         if st.button(f"✅ Approve Late Shift (Adjust Roster to {sel_clock_in})", key=f"btn_app_late_{rec_id}_{idx}", use_container_width=True):
                             l_actual_in = sel_clock_in
@@ -6661,9 +6696,15 @@ def render_home_dashboard():
     df_cards = load_persisted_timecards()
     working_count = 0
     late_count = 0
+    clock_in_review_count = 0
     if df_cards is not None and not df_cards.empty and "Status" in df_cards.columns:
         if "Date" in df_cards.columns:
             working_count = len(df_cards[(df_cards["Status"] == "Working") & (df_cards["Date"] == today_str)])
+            for _, card in df_cards.iterrows():
+                if parse_date_robust(card.get("Date", "")) == melbourne_now.date():
+                    scheduled_shift = get_scheduled_shift_for_employee_and_date(card.get("Employee", ""), card.get("Date", ""))
+                    if clock_in_review_note(scheduled_shift, card.get("Clock In", ""), card.get("Note", "")):
+                        clock_in_review_count += 1
             if "Note" in df_cards.columns:
                 late_count = len(df_cards[df_cards["Note"].str.contains("Late Clocking", na=False) & (df_cards["Date"] == today_str)])
 
@@ -6790,9 +6831,11 @@ def render_home_dashboard():
         <div style="background: rgba(8, 29, 25, 0.95); border: 1.5px solid #1f5c50; border-radius: 0 0 10px 10px; padding: 14px; margin-bottom: 15px;">
         """, unsafe_allow_html=True)
 
+        if clock_in_review_count > 0:
+            st.warning(f"⚠️ **Needs review**: {clock_in_review_count} day-off or early clock-in record(s) today. Open Shift Timesheet Audit to review.")
         if late_count > 0:
             st.warning(f"⚠️ **Attendance Alert**: {late_count} staff late clock-in punch(es) today requiring audit review.")
-        else:
+        elif clock_in_review_count == 0:
             st.success("✅ **Attendance Status**: All shift punches today are on time & verified.")
 
         unavail_df = load_persisted_df("unavailability.csv")
