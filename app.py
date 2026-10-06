@@ -6029,6 +6029,12 @@ def process_timecard_decision(df_cards, sel_row, approve):
     return True
 
 
+def roster_audit_dates(start_date, today):
+    """Include each elapsed day in a finalized roster week, never future shifts."""
+    return [start_date + timedelta(days=offset) for offset in range(7)
+            if start_date + timedelta(days=offset) <= today]
+
+
 def render_manager_timesheet_audit_dashboard():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 22px; border-radius: 12px; color: #ffffff !important; border: 2px solid #e5a93c; margin-bottom: 20px;">
@@ -6039,43 +6045,25 @@ def render_manager_timesheet_audit_dashboard():
     
     df_cards = load_persisted_timecards()
     
-    # Clean auto-generated "Missing" records for past historical dates (older than today)
-    if df_cards is not None and not df_cards.empty:
-        today_dt = get_melbourne_today()
-        valid_rows = []
-        for idx, r in df_cards.iterrows():
-            status = str(r.get("Status", "")).strip()
-            c_in = str(r.get("Clock In", "")).strip()
-            d_str = str(r.get("Date", "")).strip()
-            d_obj = parse_date_robust(d_str)
-            # Retain actual punches (with Clock In), or today's missing punches. Drop historical unpunched missing records.
-            if c_in or status != "Missing" or (d_obj and d_obj == today_dt):
-                valid_rows.append(r)
-        
-        cleaned_cards = pd.DataFrame(valid_rows).reset_index(drop=True) if valid_rows else pd.DataFrame()
-        # Do not write an unchanged dashboard snapshot back to cloud storage.
-        # A kiosk may have clocked in after this screen loaded.
-        if len(cleaned_cards) != len(df_cards):
-            df_cards = cleaned_cards
-
-    # 1. Scan current active week roster ONLY for today's missing clockings (not past historical dates)
+    # Scan finalized roster dates through today and retain unresolved missed shifts.
     today_dt = get_melbourne_today()
     melbourne_now = get_melbourne_now()
     now_dec = melbourne_now.hour + melbourne_now.minute / 60.0
 
     past_rosters = list_finalized_rosters()
+    u_profs = get_active_user_profiles() or {}
     if past_rosters:
         for r_item in past_rosters:
             r_df = load_finalized_roster(r_item["csv_filename"])
             start_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
             if r_df is not None and not r_df.empty and start_dt:
-                if start_dt <= today_dt <= start_dt + timedelta(days=6):
+                for shift_date in roster_audit_dates(start_dt, today_dt):
                     emp_col = find_column(r_df, ["name", "employee", "staff"])
                     if emp_col in r_df.columns:
                         days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                        d_idx = today_dt.weekday()
+                        d_idx = shift_date.weekday()
                         day_name = days_list[d_idx]
-                        shift_date_str = today_dt.strftime("%d/%m/%Y")
+                        shift_date_str = shift_date.strftime("%d/%m/%Y")
                         
                         if day_name in r_df.columns:
                             for _, r_row in r_df.iterrows():
@@ -6084,25 +6072,24 @@ def render_manager_timesheet_audit_dashboard():
                                 
                                 employee_identity = resolve_employee_identity(emp_name)
                                 is_owner = False
-                                u_profs = get_active_user_profiles() or {}
                                 if isinstance(u_profs, dict):
                                     for username, profile_data in u_profs.items():
                                         if _employee_key(username) == employee_identity["employee_id"]:
                                             is_owner = str(profile_data.get("profile", {}).get("classification", "")).lower() == "owner"
                                             break
 
-                                if not is_owner and emp_name and shift_val and shift_val.lower() not in ["off", "nan", "unavailable"]:
-                                    rec_id = timecard_record_id(today_dt, employee_identity["employee_id"])
+                                if not is_owner and emp_name and shift_val and parse_shift_range(shift_val) is not None:
+                                    rec_id = timecard_record_id(shift_date, employee_identity["employee_id"])
                                     
                                     card_exists = bool(
                                         df_cards is not None and not df_cards.empty and
-                                        any(timecard_matches_employee_and_date(row, employee_identity, today_dt) for _, row in df_cards.iterrows())
+                                        any(timecard_matches_employee_and_date(row, employee_identity, shift_date) for _, row in df_cards.iterrows())
                                     )
                                             
                                     if not card_exists:
                                         shift_r = parse_shift_range(shift_val)
                                         s_start_dec = shift_r[0] if shift_r else 0.0
-                                        is_overdue = (now_dec >= s_start_dec + 0.25)
+                                        is_overdue = (shift_date < today_dt or now_dec >= s_start_dec + 0.25)
                                         
                                         init_note = "⚠️ Missing Clock-In" if is_overdue else "⏳ Scheduled Today"
                                         init_status = "Missing" if is_overdue else "Scheduled"
