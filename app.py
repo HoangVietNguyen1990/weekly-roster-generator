@@ -2540,14 +2540,26 @@ def save_persisted_df(df, filename):
     if df is None or not isinstance(df, pd.DataFrame) or df.empty:
         return False
     collection_name = filename.replace(".csv", "")
-    firestore_save_df(collection_name, df)
+    # Published rosters are read from finalized_rosters/<date>, not a
+    # generic filename collection containing a master_list document.
+    is_finalized = filename.replace("\\", "/").startswith("finalized_rosters/")
+    if is_finalized:
+        roster_date = extract_date_from_filename(os.path.basename(filename))
+        if not roster_date:
+            return False
+        cloud_saved = firestore_save_finalized_roster(roster_date.strftime("%Y-%m-%d"), df)
+        if get_firebase_db() is not None and not cloud_saved:
+            return False
+    else:
+        firestore_save_df(collection_name, df)
     path = os.path.join(DATA_DIR, filename)
     try:
         df.astype(str).to_csv(path, index=False)
         if filename == "unavailability.csv":
             clear_unavailability_widget_cache()
     except Exception:
-        pass
+        if is_finalized and not cloud_saved:
+            return False
     try:
         load_persisted_df.clear()
         firestore_load_df.clear()
@@ -5956,11 +5968,50 @@ def process_timecard_decision(df_cards, sel_row, approve, batch_context=None):
         return False
     if "Needs review" in sel_note:
         if approve:
-            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
+            if "Day off" in sel_note or "Early clock-in" in sel_note:
+                is_day_off = "Day off" in sel_note
+                clock_out = str(sel_row.get("Clock Out", "")).strip()
+                if str(sel_clock_in).strip().lower() in ("", "nan", "none"):
+                    raise ValueError(f"{sel_emp}: a clock-in time is required to adjust the roster.")
+                if is_day_off and clock_out.lower() in ("", "nan", "none"):
+                    raise ValueError(f"{sel_emp}: clock out before approving a day-off shift.")
+                shift_date = parse_date_robust(sel_date)
+                if not shift_date:
+                    raise ValueError(f"{sel_emp}: invalid shift date.")
+                day_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][shift_date.weekday()]
+                adjusted = False
+                for item in roster_items(sel_date):
+                    roster = load_roster(item["csv_filename"])
+                    if roster is None or roster.empty:
+                        continue
+                    emp_col = find_column(roster, ["name", "employee", "staff"])
+                    if emp_col not in roster.columns or day_name not in roster.columns:
+                        continue
+                    for roster_idx, roster_row in roster.iterrows():
+                        name = str(roster_row.get(emp_col, "")).strip()
+                        if not find_matching_employee(sel_emp, {name.lower(): name}):
+                            continue
+                        old_shift = str(roster_row.get(day_name, "")).strip()
+                        if not is_day_off and "-" not in old_shift:
+                            raise ValueError(f"{sel_emp}: scheduled shift end is missing.")
+                        end_time = clock_out if is_day_off else old_shift.split("-", 1)[1].strip()
+                        new_shift = f"{sel_clock_in}-{end_time}"
+                        roster.at[roster_idx, day_name] = new_shift
+                        if not save_roster(roster, os.path.join("finalized_rosters", item["csv_filename"])):
+                            raise RuntimeError("Could not save the adjusted roster.")
+                        df_cards.loc[df_cards['Record ID'] == rec_id, 'Scheduled Shift'] = new_shift
+                        adjusted = True
+                    if adjusted:
+                        break
+                if not adjusted:
+                    raise ValueError(f"{sel_emp}: no matching finalized roster row found; decision was not approved.")
+                df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = "✅ Approved (Roster Adjusted)"
+            else:
+                df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
             if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
         else:
-            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"❌ Rejected ({sel_note.replace('⚠️ Needs review — ', '')})"
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = "❌ Rejected (Roster Maintained)"
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
             if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
@@ -5985,7 +6036,8 @@ def process_timecard_decision(df_cards, sel_row, approve, batch_context=None):
                                             new_shift = f'{l_actual_in}-{old_end}'
                                             r_df.at[r_idx, day_w_name] = new_shift
                                             df_cards.loc[df_cards['Record ID'] == rec_id, 'Scheduled Shift'] = new_shift
-                                            save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+                                            if not save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename'])):
+                                                raise RuntimeError("Could not save the adjusted roster.")
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Roster Adjusted)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Late Correction Status'] = 'Late Shift Corrected'
             if not save_decision(df_cards, rec_id):
@@ -6016,7 +6068,8 @@ def process_timecard_decision(df_cards, sel_row, approve, batch_context=None):
                                     if find_matching_employee(sel_emp, {str(r_row.get(emp_col, '')).strip().lower(): str(r_row.get(emp_col, '')).strip()}):
                                         r_df.at[r_idx, day_w_name] = 'OFF'
                                         df_cards.loc[df_cards['Record ID'] == rec_id, 'Scheduled Shift'] = 'OFF'
-                                        save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+                                        if not save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename'])):
+                                            raise RuntimeError("Could not save the adjusted roster.")
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Shift Deleted)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
             if not save_decision(df_cards, rec_id):
@@ -6428,7 +6481,7 @@ def render_manager_timesheet_audit_dashboard():
         selected_rows = edited_df[approve_mask | reject_mask]
         if conflicts.any():
             st.error("Choose either Approve or Reject for each row, then confirm.")
-        st.caption(f"{int(approve_mask.sum())} marked for approval · {int(reject_mask.sum())} marked for rejection. Late approvals adjust the roster; missing-shift rejections remove the roster shift.")
+        st.caption(f"{int(approve_mask.sum())} marked for approval · {int(reject_mask.sum())} marked for rejection. Day-off approvals add the worked shift (clock-out required); early/late approvals adjust the start; missing-shift rejections remove the shift.")
         result = st.session_state.pop("timecard_decision_result", None)
         if result:
             st.success(result)
