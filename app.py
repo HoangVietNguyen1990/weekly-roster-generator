@@ -5656,7 +5656,7 @@ def render_team_monthly_calendar_grid():
             st.session_state[f"unavail_sig_{sel_month}_{sel_year}"] = str(len(std_edited)) + "_" + str(hash(tuple(std_edited.astype(str).values.flatten())))
             st.rerun()
 
-def build_weekly_timesheet_excel_bytes(selected_week_str):
+def build_weekly_timesheet_excel_bytes(selected_week_str, df_cards=None):
     wb = openpyxl.Workbook()
     ws_summary = wb.active
     ws_summary.title = "Weekly Audited Summary"
@@ -5755,7 +5755,8 @@ def build_weekly_timesheet_excel_bytes(selected_week_str):
     # ----------------------------------------------------
     # 3. LOAD & GROUP TIMECARDS BY DAY OF WEEK
     # ----------------------------------------------------
-    df_cards = load_persisted_timecards()
+    if df_cards is None:
+        df_cards = load_persisted_timecards()
     week_cards = []
     if df_cards is not None and not df_cards.empty and "Date" in df_cards.columns:
         for idx, row in df_cards.iterrows():
@@ -5938,13 +5939,17 @@ def clock_in_review_note(scheduled_shift, clock_in, existing_note=""):
     return ""
 
 
-def process_timecard_decision(df_cards, sel_row, approve):
+def process_timecard_decision(df_cards, sel_row, approve, batch_context=None):
     """Apply one manager decision using the existing roster adjustment rules."""
     rec_id = sel_row.get("Record ID", "")
     sel_note = str(sel_row.get("Note", ""))
     sel_emp = sel_row.get("Employee", "")
     sel_date = sel_row.get("Date", "")
     sel_clock_in = sel_row.get("Clock In", "")
+    save_decision = batch_context["save_decision"] if batch_context else save_changed_timecard
+    roster_items = batch_context["roster_items"] if batch_context else finalized_rosters_for_date
+    load_roster = batch_context["load_roster"] if batch_context else load_finalized_roster
+    save_roster = batch_context["save_roster"] if batch_context else save_persisted_df
     if not rec_id or not (df_cards["Record ID"] == rec_id).any():
         raise ValueError("Timecard record is missing. Refresh the audit table.")
     if "Approved" in sel_note or "Rejected" in sel_note:
@@ -5952,20 +5957,20 @@ def process_timecard_decision(df_cards, sel_row, approve):
     if "Needs review" in sel_note:
         if approve:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
         else:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"❌ Rejected ({sel_note.replace('⚠️ Needs review — ', '')})"
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
     elif "Late Clocking" in sel_note:
         if approve:
             l_actual_in = sel_clock_in
-            past_rosters = finalized_rosters_for_date(sel_date)
+            past_rosters = roster_items(sel_date)
             if past_rosters:
                 for r_item in past_rosters:
-                    r_df = load_finalized_roster(r_item['csv_filename'])
+                    r_df = load_roster(r_item['csv_filename'])
                     if r_df is not None and (not r_df.empty):
                         l_date_obj = parse_date_robust(sel_date)
                         if l_date_obj:
@@ -5979,27 +5984,28 @@ def process_timecard_decision(df_cards, sel_row, approve):
                                             old_end = old_shift.split('-')[1].strip()
                                             new_shift = f'{l_actual_in}-{old_end}'
                                             r_df.at[r_idx, day_w_name] = new_shift
-                                            save_persisted_df(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+                                            df_cards.loc[df_cards['Record ID'] == rec_id, 'Scheduled Shift'] = new_shift
+                                            save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Roster Adjusted)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Late Correction Status'] = 'Late Shift Corrected'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
         else:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Roster Maintained)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Late Correction Status'] = 'Rejected (Unexcused Late)'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
     elif "Missing" in sel_note:
         if approve:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Roster Maintained)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Completed'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
         else:
-            past_rosters = finalized_rosters_for_date(sel_date)
+            past_rosters = roster_items(sel_date)
             if past_rosters:
                 for r_item in past_rosters:
-                    r_df = load_finalized_roster(r_item['csv_filename'])
+                    r_df = load_roster(r_item['csv_filename'])
                     if r_df is not None and (not r_df.empty):
                         l_date_obj = parse_date_robust(sel_date)
                         if l_date_obj:
@@ -6009,24 +6015,105 @@ def process_timecard_decision(df_cards, sel_row, approve):
                                 for r_idx, r_row in r_df.iterrows():
                                     if find_matching_employee(sel_emp, {str(r_row.get(emp_col, '')).strip().lower(): str(r_row.get(emp_col, '')).strip()}):
                                         r_df.at[r_idx, day_w_name] = 'OFF'
-                                        save_persisted_df(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+                                        df_cards.loc[df_cards['Record ID'] == rec_id, 'Scheduled Shift'] = 'OFF'
+                                        save_roster(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Shift Deleted)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
     elif "Waiting" in sel_note:
         if approve:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Unscheduled Punch)'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
         else:
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Unscheduled Punch)'
             df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
-            if not save_changed_timecard(df_cards, rec_id):
+            if not save_decision(df_cards, rec_id):
                 raise RuntimeError('Could not save the timecard decision.')
     else:
         return False
     return True
+
+
+def save_timecard_decision_batch(changed_cards):
+    """Save selected decisions in one transaction without replacing live punches."""
+    if changed_cards.empty:
+        return True
+    records = changed_cards.fillna("").astype(str).to_dict(orient="records")
+    db = get_firebase_db()
+    if db is not None:
+        from firebase_admin import firestore as firebase_firestore
+        transaction = db.transaction()
+
+        @firebase_firestore.transactional
+        def commit_decisions(transaction):
+            # Firestore requires every read to occur before the first write.
+            refs = [db.collection("timecard_records").document(r["Record ID"]) for r in records]
+            snapshots = [ref.get(transaction=transaction) for ref in refs]
+            for ref, snapshot, record in zip(refs, snapshots, records):
+                payload = record if not snapshot.exists else {
+                    key: record[key] for key in ("Note", "Status", "Late Correction Status") if key in record
+                }
+                transaction.set(ref, payload, merge=True)
+
+        commit_decisions(transaction)
+
+    # Update the offline copy once for the entire selection.
+    try:
+        local = pd.read_csv(TIMECARDS_FILE, dtype=str, keep_default_na=False) if os.path.exists(TIMECARDS_FILE) else pd.DataFrame()
+        if not local.empty and "Record ID" in local.columns:
+            local = local[~local["Record ID"].isin(changed_cards["Record ID"])]
+        pd.concat([local, changed_cards], ignore_index=True).fillna("").to_csv(TIMECARDS_FILE, index=False)
+    except Exception:
+        if db is None:
+            raise
+    return True
+
+
+def process_timecard_decision_batch(df_cards, selected_rows):
+    """Stage decisions, reuse each affected roster, then persist once."""
+    if (selected_rows["Approve"].fillna(False) & selected_rows["Reject"].fillna(False)).any():
+        raise ValueError("Choose either Approve or Reject for each row.")
+    if len(selected_rows) > 400:
+        raise ValueError("Confirm up to 400 records at a time.")
+    staged = df_cards.copy()
+    changed_ids = []
+    rosters = {}
+    dirty_rosters = {}
+    roster_dates = {}
+
+    def stage_decision(cards, rec_id):
+        changed_ids.append(rec_id)
+        return True
+
+    def roster_items(date_value):
+        if date_value not in roster_dates:
+            roster_dates[date_value] = finalized_rosters_for_date(date_value)
+        return roster_dates[date_value]
+
+    def load_roster(filename):
+        if filename not in rosters:
+            rosters[filename] = load_finalized_roster(filename)
+        return rosters[filename]
+
+    def stage_roster(roster, filename):
+        dirty_rosters[filename] = roster
+        return True
+
+    context = {"save_decision": stage_decision, "roster_items": roster_items,
+               "load_roster": load_roster, "save_roster": stage_roster}
+    skipped = 0
+    for _, row in selected_rows.iterrows():
+        if not process_timecard_decision(staged, row, bool(row["Approve"]), context):
+            skipped += 1
+    for filename, roster in dirty_rosters.items():
+        if not save_persisted_df(roster, filename):
+            raise RuntimeError("Could not save an adjusted roster.")
+    changed = staged[staged["Record ID"].isin(changed_ids)]
+    if not save_timecard_decision_batch(changed):
+        raise RuntimeError("Could not save the selected decisions.")
+    return staged, len(changed_ids), skipped
 
 
 def roster_audit_dates(start_date, today):
@@ -6043,190 +6130,192 @@ def render_manager_timesheet_audit_dashboard():
     </div>
     """, unsafe_allow_html=True)
     
-    df_cards = load_persisted_timecards()
+    df_cards = st.session_state.pop("timecard_audit_after_confirm", None)
+    if df_cards is None:
+        df_cards = load_persisted_timecards()
     
-    # Scan finalized roster dates through today and retain unresolved missed shifts.
-    today_dt = get_melbourne_today()
-    melbourne_now = get_melbourne_now()
-    now_dec = melbourne_now.hour + melbourne_now.minute / 60.0
+        # Scan finalized roster dates through today and retain unresolved missed shifts.
+        today_dt = get_melbourne_today()
+        melbourne_now = get_melbourne_now()
+        now_dec = melbourne_now.hour + melbourne_now.minute / 60.0
 
-    past_rosters = list_finalized_rosters()
-    u_profs = get_active_user_profiles() or {}
-    audit_identities = {}
-    audit_shift_map = {}
-    generated_missing_records = []
-    if past_rosters:
-        for r_item in past_rosters:
-            r_df = load_finalized_roster(r_item["csv_filename"])
-            start_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
-            if r_df is not None and not r_df.empty and start_dt:
-                for shift_date in roster_audit_dates(start_dt, today_dt):
-                    emp_col = find_column(r_df, ["name", "employee", "staff"])
-                    if emp_col in r_df.columns:
-                        days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-                        d_idx = shift_date.weekday()
-                        day_name = days_list[d_idx]
-                        shift_date_str = shift_date.strftime("%d/%m/%Y")
+        past_rosters = list_finalized_rosters()
+        u_profs = get_active_user_profiles() or {}
+        audit_identities = {}
+        audit_shift_map = {}
+        generated_missing_records = []
+        if past_rosters:
+            for r_item in past_rosters:
+                r_df = load_finalized_roster(r_item["csv_filename"])
+                start_dt = r_item.get("start_date") or parse_date_robust(r_item.get("date_str", ""))
+                if r_df is not None and not r_df.empty and start_dt:
+                    for shift_date in roster_audit_dates(start_dt, today_dt):
+                        emp_col = find_column(r_df, ["name", "employee", "staff"])
+                        if emp_col in r_df.columns:
+                            days_list = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+                            d_idx = shift_date.weekday()
+                            day_name = days_list[d_idx]
+                            shift_date_str = shift_date.strftime("%d/%m/%Y")
                         
-                        if day_name in r_df.columns:
-                            for _, r_row in r_df.iterrows():
-                                emp_name = str(r_row.get(emp_col, "")).strip()
-                                shift_val = str(r_row.get(day_name, "")).strip()
+                            if day_name in r_df.columns:
+                                for _, r_row in r_df.iterrows():
+                                    emp_name = str(r_row.get(emp_col, "")).strip()
+                                    shift_val = str(r_row.get(day_name, "")).strip()
                                 
-                                if emp_name not in audit_identities:
-                                    audit_identities[emp_name] = resolve_employee_identity(emp_name)
-                                employee_identity = audit_identities[emp_name]
-                                shift_key = (shift_date, employee_identity["employee_id"])
-                                # Rosters are ordered newest first; use the first matching week.
-                                if shift_key in audit_shift_map:
-                                    continue
-                                audit_shift_map[shift_key] = shift_val
-                                is_owner = False
-                                if isinstance(u_profs, dict):
-                                    for username, profile_data in u_profs.items():
-                                        if _employee_key(username) == employee_identity["employee_id"]:
-                                            is_owner = str(profile_data.get("profile", {}).get("classification", "")).lower() == "owner"
-                                            break
+                                    if emp_name not in audit_identities:
+                                        audit_identities[emp_name] = resolve_employee_identity(emp_name)
+                                    employee_identity = audit_identities[emp_name]
+                                    shift_key = (shift_date, employee_identity["employee_id"])
+                                    # Rosters are ordered newest first; use the first matching week.
+                                    if shift_key in audit_shift_map:
+                                        continue
+                                    audit_shift_map[shift_key] = shift_val
+                                    is_owner = False
+                                    if isinstance(u_profs, dict):
+                                        for username, profile_data in u_profs.items():
+                                            if _employee_key(username) == employee_identity["employee_id"]:
+                                                is_owner = str(profile_data.get("profile", {}).get("classification", "")).lower() == "owner"
+                                                break
 
-                                if not is_owner and emp_name and shift_val and parse_shift_range(shift_val) is not None:
-                                    rec_id = timecard_record_id(shift_date, employee_identity["employee_id"])
+                                    if not is_owner and emp_name and shift_val and parse_shift_range(shift_val) is not None:
+                                        rec_id = timecard_record_id(shift_date, employee_identity["employee_id"])
                                     
-                                    card_exists = bool(
-                                        df_cards is not None and not df_cards.empty and
-                                        any(timecard_matches_employee_and_date(row, employee_identity, shift_date) for _, row in df_cards.iterrows())
-                                    )
+                                        card_exists = bool(
+                                            df_cards is not None and not df_cards.empty and
+                                            any(timecard_matches_employee_and_date(row, employee_identity, shift_date) for _, row in df_cards.iterrows())
+                                        )
                                             
-                                    if not card_exists:
-                                        shift_r = parse_shift_range(shift_val)
-                                        s_start_dec = shift_r[0] if shift_r else 0.0
-                                        is_overdue = (shift_date < today_dt or now_dec >= s_start_dec + 0.25)
+                                        if not card_exists:
+                                            shift_r = parse_shift_range(shift_val)
+                                            s_start_dec = shift_r[0] if shift_r else 0.0
+                                            is_overdue = (shift_date < today_dt or now_dec >= s_start_dec + 0.25)
                                         
-                                        init_note = "⚠️ Missing Clock-In" if is_overdue else "⏳ Scheduled Today"
-                                        init_status = "Missing" if is_overdue else "Scheduled"
-                                        init_loc = "⚠️ Missing Clocking" if is_overdue else "⏳ Scheduled Today"
+                                            init_note = "⚠️ Missing Clock-In" if is_overdue else "⏳ Scheduled Today"
+                                            init_status = "Missing" if is_overdue else "Scheduled"
+                                            init_loc = "⚠️ Missing Clocking" if is_overdue else "⏳ Scheduled Today"
 
-                                        missing_rec = {
-                                            "Record ID": rec_id,
-                                            "Date": shift_date_str,
-                                            "Employee ID": employee_identity["employee_id"],
-                                            "Employee": employee_identity["employee_name"],
-                                            "Scheduled Shift": shift_val,
-                                            "Clock In": "",
-                                            "Clock Out": "",
-                                            "Net Hours": "0",
-                                            "Variance (Mins)": "0",
-                                            "GPS Lat": str(BAKERY_LAT),
-                                            "GPS Lon": str(BAKERY_LON),
-                                            "Distance (m)": "0.0",
-                                            "Location Verification": init_loc,
-                                            "Note": init_note,
-                                            "Late Correction Status": "Normal",
-                                            "Status": init_status
-                                        }
-                                        generated_missing_records.append(missing_rec)
+                                            missing_rec = {
+                                                "Record ID": rec_id,
+                                                "Date": shift_date_str,
+                                                "Employee ID": employee_identity["employee_id"],
+                                                "Employee": employee_identity["employee_name"],
+                                                "Scheduled Shift": shift_val,
+                                                "Clock In": "",
+                                                "Clock Out": "",
+                                                "Net Hours": "0",
+                                                "Variance (Mins)": "0",
+                                                "GPS Lat": str(BAKERY_LAT),
+                                                "GPS Lon": str(BAKERY_LON),
+                                                "Distance (m)": "0.0",
+                                                "Location Verification": init_loc,
+                                                "Note": init_note,
+                                                "Late Correction Status": "Normal",
+                                                "Status": init_status
+                                            }
+                                            generated_missing_records.append(missing_rec)
 
-    # Missing alerts are derived from the roster. Persist only an explicit
-    # manager decision, avoiding one cloud transaction per historical absence.
-    if generated_missing_records:
-        df_cards = pd.concat([df_cards, pd.DataFrame(generated_missing_records)], ignore_index=True)
+        # Missing alerts are derived from the roster. Persist only an explicit
+        # manager decision, avoiding one cloud transaction per historical absence.
+        if generated_missing_records:
+            df_cards = pd.concat([df_cards, pd.DataFrame(generated_missing_records)], ignore_index=True)
 
-    # Re-verify Scheduled Shift for all timecards against exact date & employee roster
-    if df_cards is not None and not df_cards.empty:
-        updated_shifts = []
-        for idx, r in df_cards.iterrows():
-            emp_n = str(r.get("Employee", "")).strip()
-            d_s = str(r.get("Date", "")).strip()
-            if emp_n not in audit_identities:
-                audit_identities[emp_n] = resolve_employee_identity(emp_n)
-            shift_key = (parse_date_robust(d_s), audit_identities[emp_n]["employee_id"])
-            sc_shift = audit_shift_map.get(shift_key, str(r.get("Scheduled Shift", "")))
-            updated_shifts.append(sc_shift)
-        df_cards["Scheduled Shift"] = updated_shifts
+        # Re-verify Scheduled Shift for all timecards against exact date & employee roster
+        if df_cards is not None and not df_cards.empty:
+            updated_shifts = []
+            for idx, r in df_cards.iterrows():
+                emp_n = str(r.get("Employee", "")).strip()
+                d_s = str(r.get("Date", "")).strip()
+                if emp_n not in audit_identities:
+                    audit_identities[emp_n] = resolve_employee_identity(emp_n)
+                shift_key = (parse_date_robust(d_s), audit_identities[emp_n]["employee_id"])
+                sc_shift = audit_shift_map.get(shift_key, str(r.get("Scheduled Shift", "")))
+                updated_shifts.append(sc_shift)
+            df_cards["Scheduled Shift"] = updated_shifts
 
-    # Re-calculate Note column dynamically based on Melbourne current time
-    if df_cards is not None and not df_cards.empty:
-        notes = []
-        statuses = []
-        for idx, r in df_cards.iterrows():
-            existing_note = str(r.get("Note", "")).strip()
-            existing_status = str(r.get("Status", "")).strip()
-            c_in = str(r.get("Clock In", "")).strip()
-            c_out = str(r.get("Clock Out", "")).strip()
-            sched = str(r.get("Scheduled Shift", "")).strip()
-            r_d_obj = parse_date_robust(r.get("Date", ""))
-            is_today = (r_d_obj and r_d_obj == today_dt)
-            is_past_day = (r_d_obj and r_d_obj < today_dt)
+        # Re-calculate Note column dynamically based on Melbourne current time
+        if df_cards is not None and not df_cards.empty:
+            notes = []
+            statuses = []
+            for idx, r in df_cards.iterrows():
+                existing_note = str(r.get("Note", "")).strip()
+                existing_status = str(r.get("Status", "")).strip()
+                c_in = str(r.get("Clock In", "")).strip()
+                c_out = str(r.get("Clock Out", "")).strip()
+                sched = str(r.get("Scheduled Shift", "")).strip()
+                r_d_obj = parse_date_robust(r.get("Date", ""))
+                is_today = (r_d_obj and r_d_obj == today_dt)
+                is_past_day = (r_d_obj and r_d_obj < today_dt)
             
-            shift_r = parse_shift_range(sched) if (sched and "-" in sched) else None
-            s_start_dec = shift_r[0] if shift_r else None
-            s_end_dec = shift_r[1] if shift_r else None
+                shift_r = parse_shift_range(sched) if (sched and "-" in sched) else None
+                s_start_dec = shift_r[0] if shift_r else None
+                s_end_dec = shift_r[1] if shift_r else None
             
-            calc_note = existing_note
-            calc_status = existing_status
-
-            if "Approved" in existing_note or "Rejected" in existing_note:
                 calc_note = existing_note
-            elif not c_in:
-                if is_today and s_start_dec is not None:
-                    if now_dec < s_start_dec + 0.25:
-                        calc_note = "⏳ Scheduled Today"
-                        calc_status = "Scheduled"
-                    else:
+                calc_status = existing_status
+
+                if "Approved" in existing_note or "Rejected" in existing_note:
+                    calc_note = existing_note
+                elif not c_in:
+                    if is_today and s_start_dec is not None:
+                        if now_dec < s_start_dec + 0.25:
+                            calc_note = "⏳ Scheduled Today"
+                            calc_status = "Scheduled"
+                        else:
+                            calc_note = "⚠️ Missing Clock-In"
+                            calc_status = "Missing"
+                    elif is_past_day or existing_status == "Missing" or "Missing" in existing_note:
                         calc_note = "⚠️ Missing Clock-In"
                         calc_status = "Missing"
-                elif is_past_day or existing_status == "Missing" or "Missing" in existing_note:
-                    calc_note = "⚠️ Missing Clock-In"
-                    calc_status = "Missing"
-                else:
-                    calc_note = "⏳ Scheduled Today"
-                    calc_status = "Scheduled"
-            elif c_in and not c_out:
-                if is_past_day:
-                    calc_note = "⚠️ Missing Clock-Out"
-                    calc_status = "Missing"
-                elif is_today and s_end_dec is not None and now_dec >= s_end_dec + 0.25:
-                    calc_note = "⚠️ Missing Clock-Out"
-                    calc_status = "Working"
-                elif is_today and sched and "-" in sched:
-                    sched_start_str = sched.split("-")[0].strip()
-                    c_in_dec = parse_time_to_decimal(c_in)
-                    s_in_dec = parse_time_to_decimal(sched_start_str)
-                    var_mins = round((c_in_dec - s_in_dec) * 60)
-                    if var_mins >= 10:
-                        calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
                     else:
+                        calc_note = "⏳ Scheduled Today"
+                        calc_status = "Scheduled"
+                elif c_in and not c_out:
+                    if is_past_day:
+                        calc_note = "⚠️ Missing Clock-Out"
+                        calc_status = "Missing"
+                    elif is_today and s_end_dec is not None and now_dec >= s_end_dec + 0.25:
+                        calc_note = "⚠️ Missing Clock-Out"
+                        calc_status = "Working"
+                    elif is_today and sched and "-" in sched:
+                        sched_start_str = sched.split("-")[0].strip()
+                        c_in_dec = parse_time_to_decimal(c_in)
+                        s_in_dec = parse_time_to_decimal(sched_start_str)
+                        var_mins = round((c_in_dec - s_in_dec) * 60)
+                        if var_mins >= 10:
+                            calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
+                        else:
+                            calc_note = "🟢 Working Now"
+                        calc_status = "Working"
+                    elif is_today:
                         calc_note = "🟢 Working Now"
-                    calc_status = "Working"
-                elif is_today:
-                    calc_note = "🟢 Working Now"
-                    calc_status = "Working"
-                else:
-                    calc_note = "⚠️ Missing Clock-Out"
-                    calc_status = "Missing"
-            elif c_in and c_out:
-                if sched and "-" in sched:
-                    sched_start_str = sched.split("-")[0].strip()
-                    c_in_dec = parse_time_to_decimal(c_in)
-                    s_in_dec = parse_time_to_decimal(sched_start_str)
-                    var_mins = round((c_in_dec - s_in_dec) * 60)
-                    if var_mins >= 10 and "Approved" not in existing_note and "Rejected" not in existing_note:
-                        calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
-                    elif "Approved" in existing_note or "Rejected" in existing_note:
-                        calc_note = existing_note
+                        calc_status = "Working"
+                    else:
+                        calc_note = "⚠️ Missing Clock-Out"
+                        calc_status = "Missing"
+                elif c_in and c_out:
+                    if sched and "-" in sched:
+                        sched_start_str = sched.split("-")[0].strip()
+                        c_in_dec = parse_time_to_decimal(c_in)
+                        s_in_dec = parse_time_to_decimal(sched_start_str)
+                        var_mins = round((c_in_dec - s_in_dec) * 60)
+                        if var_mins >= 10 and "Approved" not in existing_note and "Rejected" not in existing_note:
+                            calc_note = f"⚠️ Late Clocking (+{var_mins} mins)"
+                        elif "Approved" in existing_note or "Rejected" in existing_note:
+                            calc_note = existing_note
+                        else:
+                            calc_note = "✅ Verified / Normal"
                     else:
                         calc_note = "✅ Verified / Normal"
-                else:
-                    calc_note = "✅ Verified / Normal"
-                calc_status = "Completed"
+                    calc_status = "Completed"
 
-            review_note = clock_in_review_note(sched, c_in, existing_note)
-            if review_note:
-                calc_note = review_note + (f" | {calc_note}" if "Missing" in calc_note else "")
-            notes.append(calc_note)
-            statuses.append(calc_status)
+                review_note = clock_in_review_note(sched, c_in, existing_note)
+                if review_note:
+                    calc_note = review_note + (f" | {calc_note}" if "Missing" in calc_note else "")
+                notes.append(calc_note)
+                statuses.append(calc_status)
 
-        df_cards["Note"] = notes
-        df_cards["Status"] = statuses
+            df_cards["Note"] = notes
+            df_cards["Status"] = statuses
 
     # Metrics Bar
     working_count = 0
@@ -6345,26 +6434,18 @@ def render_manager_timesheet_audit_dashboard():
             st.success(result)
         if st.button("Confirm", key="confirm_timecard_decisions", type="primary",
                      disabled=selected_rows.empty or bool(conflicts.any()), use_container_width=True):
-            processed = 0
-            skipped = 0
-            failures = []
-            for _, sel_row in selected_rows.iterrows():
-                try:
-                    if process_timecard_decision(df_cards, sel_row, bool(sel_row["Approve"])):
-                        processed += 1
-                    else:
-                        skipped += 1
-                except Exception:
-                    failures.append(str(sel_row.get("Employee", "Unknown")) + " (" + str(sel_row.get("Record ID", "")) + ")")
-            summary = f"Processed {processed} decision(s)."
-            if skipped:
-                summary += f" Skipped {skipped} normal or already reviewed record(s)."
-            if failures:
-                st.error(summary + " Could not finish saving: " + ", ".join(failures) + ". Refresh and review these records before retrying.")
-            else:
+            try:
+                with st.spinner("Saving selected decisions..."):
+                    df_cards, processed, skipped = process_timecard_decision_batch(df_cards, selected_rows)
+                summary = f"Processed {processed} decision(s)."
+                if skipped:
+                    summary += f" Skipped {skipped} normal or already reviewed record(s)."
                 st.session_state["timecard_decision_result"] = summary
+                st.session_state["timecard_audit_after_confirm"] = df_cards
                 st.session_state["timecard_decision_editor_version"] = editor_version + 1
                 st.rerun()
+            except Exception as exc:
+                st.error(f"Could not finish confirmation: {exc}. Refresh and review before retrying.")
 
     else:
         st.info("ℹ️ No timecard records or scheduled roster shifts found for audit.")
@@ -6385,14 +6466,16 @@ def render_manager_timesheet_audit_dashboard():
 
     sel_download_week = st.selectbox("Select Roster Week to Download:", available_weeks, key="sel_dl_week")
     
-    excel_bytes = build_weekly_timesheet_excel_bytes(sel_download_week)
-    st.download_button(
-        label=f"📥 Download Timesheet_Audit_Week_{sel_download_week}.xlsx",
-        data=excel_bytes,
-        file_name=f"Timesheet_Audit_Week_{sel_download_week}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        key="btn_download_timesheet_excel"
-    )
+    if st.button("Prepare Weekly Timesheet Download", key="prepare_timesheet_download"):
+        excel_bytes = build_weekly_timesheet_excel_bytes(sel_download_week, df_cards=df_cards)
+        st.download_button(
+            label=f"📥 Download Timesheet_Audit_Week_{sel_download_week}.xlsx",
+            data=excel_bytes,
+            file_name=f"Timesheet_Audit_Week_{sel_download_week}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_download_timesheet_excel",
+        )
+
 
 def solve_roster(employees_raw, unavailability_raw, requirements_raw, fixed_raw, start_dt, debug_logs=None):
     # Standardize column headers to lowercase and stripped
