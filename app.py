@@ -5938,6 +5938,97 @@ def clock_in_review_note(scheduled_shift, clock_in, existing_note=""):
     return ""
 
 
+def process_timecard_decision(df_cards, sel_row, approve):
+    """Apply one manager decision using the existing roster adjustment rules."""
+    rec_id = sel_row.get("Record ID", "")
+    sel_note = str(sel_row.get("Note", ""))
+    sel_emp = sel_row.get("Employee", "")
+    sel_date = sel_row.get("Date", "")
+    sel_clock_in = sel_row.get("Clock In", "")
+    if not rec_id or not (df_cards["Record ID"] == rec_id).any():
+        raise ValueError("Timecard record is missing. Refresh the audit table.")
+    if "Approved" in sel_note or "Rejected" in sel_note:
+        return False
+    if "Needs review" in sel_note:
+        if approve:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+        else:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = f"❌ Rejected ({sel_note.replace('⚠️ Needs review — ', '')})"
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+    elif "Late Clocking" in sel_note:
+        if approve:
+            l_actual_in = sel_clock_in
+            past_rosters = finalized_rosters_for_date(sel_date)
+            if past_rosters:
+                for r_item in past_rosters:
+                    r_df = load_finalized_roster(r_item['csv_filename'])
+                    if r_df is not None and (not r_df.empty):
+                        l_date_obj = parse_date_robust(sel_date)
+                        if l_date_obj:
+                            day_w_name = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][l_date_obj.weekday()]
+                            emp_col = find_column(r_df, ['name', 'employee', 'staff'])
+                            if emp_col in r_df.columns and day_w_name in r_df.columns:
+                                for r_idx, r_row in r_df.iterrows():
+                                    if find_matching_employee(sel_emp, {str(r_row.get(emp_col, '')).strip().lower(): str(r_row.get(emp_col, '')).strip()}):
+                                        old_shift = str(r_row.get(day_w_name, '')).strip()
+                                        if '-' in old_shift:
+                                            old_end = old_shift.split('-')[1].strip()
+                                            new_shift = f'{l_actual_in}-{old_end}'
+                                            r_df.at[r_idx, day_w_name] = new_shift
+                                            save_persisted_df(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Roster Adjusted)'
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Late Correction Status'] = 'Late Shift Corrected'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+        else:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Roster Maintained)'
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Late Correction Status'] = 'Rejected (Unexcused Late)'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+    elif "Missing" in sel_note:
+        if approve:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Roster Maintained)'
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Completed'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+        else:
+            past_rosters = finalized_rosters_for_date(sel_date)
+            if past_rosters:
+                for r_item in past_rosters:
+                    r_df = load_finalized_roster(r_item['csv_filename'])
+                    if r_df is not None and (not r_df.empty):
+                        l_date_obj = parse_date_robust(sel_date)
+                        if l_date_obj:
+                            day_w_name = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][l_date_obj.weekday()]
+                            emp_col = find_column(r_df, ['name', 'employee', 'staff'])
+                            if emp_col in r_df.columns and day_w_name in r_df.columns:
+                                for r_idx, r_row in r_df.iterrows():
+                                    if find_matching_employee(sel_emp, {str(r_row.get(emp_col, '')).strip().lower(): str(r_row.get(emp_col, '')).strip()}):
+                                        r_df.at[r_idx, day_w_name] = 'OFF'
+                                        save_persisted_df(r_df, os.path.join('finalized_rosters', r_item['csv_filename']))
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Shift Deleted)'
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+    elif "Waiting" in sel_note:
+        if approve:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '✅ Approved (Unscheduled Punch)'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+        else:
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Note'] = '❌ Rejected (Unscheduled Punch)'
+            df_cards.loc[df_cards['Record ID'] == rec_id, 'Status'] = 'Rejected'
+            if not save_changed_timecard(df_cards, rec_id):
+                raise RuntimeError('Could not save the timecard decision.')
+    else:
+        return False
+    return True
+
+
 def render_manager_timesheet_audit_dashboard():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 16px 22px; border-radius: 12px; color: #ffffff !important; border: 2px solid #e5a93c; margin-bottom: 20px;">
@@ -6183,10 +6274,10 @@ def render_manager_timesheet_audit_dashboard():
     if df_cards is not None and not df_cards.empty:
         review_count = df_cards["Note"].str.contains("Needs review", na=False).sum()
         if review_count:
-            st.warning(f"⚠️ Needs review: {review_count} day-off or early clock-in record(s). Select a row to approve or reject.")
+            st.warning(f"⚠️ Needs review: {review_count} day-off or early clock-in record(s). Tick Approve or Reject, then click Confirm.")
     st.markdown("""
     <div style="background: linear-gradient(135deg, #081d19 0%, #16443c 100%); padding: 10px 18px; border-radius: 12px 12px 0 0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.3px; border: 2px solid #e5a93c; border-bottom: none;">
-        📋 Master Timesheet Audit & Notification Table (Check First Cell `Select` Row to Approve/Reject)
+        📋 Master Timesheet Audit & Notification Table (Tick Approve or Reject, then Confirm)
     </div>
     """, unsafe_allow_html=True)
 
@@ -6224,146 +6315,55 @@ def render_manager_timesheet_audit_dashboard():
             kind="stable"
         ).drop(columns=["_audit_priority", "_audit_date", "_audit_shift_start", "_audit_employee"])
 
-        if "Select" not in display_df.columns:
-            display_df.insert(0, "Select", False)
-        else:
-            display_df["Select"] = False
-            
-        cols_order = ["Select", "Note", "Status", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Distance (m)", "Record ID"]
-        existing_cols = [c for c in cols_order if c in display_df.columns]
-        display_df = display_df[existing_cols]
-
+        display_df.insert(0, "Reject", False)
+        display_df.insert(0, "Approve", False)
+        cols_order = ["Approve", "Reject", "Note", "Status", "Date", "Employee", "Scheduled Shift", "Clock In", "Clock Out", "Net Hours", "Distance (m)", "Record ID"]
+        display_df = display_df[[c for c in cols_order if c in display_df.columns]]
+        editor_version = st.session_state.get("timecard_decision_editor_version", 0)
         edited_df = st.data_editor(
             display_df,
-            num_rows="dynamic",
-            key="edit_timecards_master_table",
+            num_rows="fixed",
+            key=f"edit_timecards_decisions_{editor_version}",
+            disabled=[c for c in display_df.columns if c not in ("Approve", "Reject")],
             column_config={
-                "Select": st.column_config.CheckboxColumn("Select", help="Check row to trigger Approve / Reject actions", default=False),
-                "Note": st.column_config.TextColumn("Note", help="Notification status and system alerts", disabled=True),
+                "Approve": st.column_config.CheckboxColumn("Approve", help="Approve this record when you click Confirm", default=False),
+                "Reject": st.column_config.CheckboxColumn("Reject", help="Reject this record when you click Confirm", default=False),
+                "Note": st.column_config.TextColumn("Note", help="Notification status and system alerts"),
             },
-            use_container_width=True
+            use_container_width=True,
         )
-
-        selected_rows = edited_df[edited_df["Select"] == True]
-        
-        if not selected_rows.empty:
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""
-            <div style="background: rgba(8, 29, 25, 0.95); border: 2px solid #e5a93c; border-radius: 12px; padding: 14px 20px;">
-                <h4 style="margin: 0 0 8px 0; color: #e5a93c;">⚡ Manager Action Controls for Selected Row(s)</h4>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            for idx, sel_row in selected_rows.iterrows():
-                rec_id = sel_row.get("Record ID", "")
-                sel_note = sel_row.get("Note", "")
-                sel_emp = sel_row.get("Employee", "")
-                sel_date = sel_row.get("Date", "")
-                sel_clock_in = sel_row.get("Clock In", "")
-                sel_sched = sel_row.get("Scheduled Shift", "")
-                
-                st.markdown(f"**Selected Record:** `{sel_emp}` on `{sel_date}` | Notification: `{sel_note}` | Scheduled: `{sel_sched}` | Clock In: `{sel_clock_in}`")
-                
-                act_col1, act_col2 = st.columns(2)
-                
-                if "Needs review" in sel_note:
-                    with act_col1:
-                        if st.button("✅ Approve Clock-In", key=f"btn_app_review_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = f"✅ Approved ({sel_note.replace('⚠️ Needs review — ', '')})"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.rerun()
-                    with act_col2:
-                        if st.button("❌ Reject Clock-In", key=f"btn_rej_review_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = f"❌ Rejected ({sel_note.replace('⚠️ Needs review — ', '')})"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.rerun()
-                elif "Late Clocking" in sel_note:
-                    with act_col1:
-                        if st.button(f"✅ Approve Late Shift (Adjust Roster to {sel_clock_in})", key=f"btn_app_late_{rec_id}_{idx}", use_container_width=True):
-                            l_actual_in = sel_clock_in
-                            past_rosters = finalized_rosters_for_date(sel_date)
-                            if past_rosters:
-                                for r_item in past_rosters:
-                                    r_df = load_finalized_roster(r_item["csv_filename"])
-                                    if r_df is not None and not r_df.empty:
-                                        l_date_obj = parse_date_robust(sel_date)
-                                        if l_date_obj:
-                                            day_w_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][l_date_obj.weekday()]
-                                            emp_col = find_column(r_df, ["name", "employee", "staff"])
-                                            if emp_col in r_df.columns and day_w_name in r_df.columns:
-                                                for r_idx, r_row in r_df.iterrows():
-                                                    if find_matching_employee(sel_emp, {str(r_row.get(emp_col, "")).strip().lower(): str(r_row.get(emp_col, "")).strip()}):
-                                                        old_shift = str(r_row.get(day_w_name, "")).strip()
-                                                        if "-" in old_shift:
-                                                            old_end = old_shift.split("-")[1].strip()
-                                                            new_shift = f"{l_actual_in}-{old_end}"
-                                                            r_df.at[r_idx, day_w_name] = new_shift
-                                                            save_persisted_df(r_df, os.path.join("finalized_rosters", r_item["csv_filename"]))
-
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Roster Adjusted)"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Late Correction Status"] = "Late Shift Corrected"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.success(f"✅ Approved late clocking for **{sel_emp}**. Roster adjusted to `{l_actual_in}`!")
-                            st.rerun()
-
-                    with act_col2:
-                        if st.button(f"❌ Reject Late Shift (Keep Original Roster {sel_sched})", key=f"btn_rej_late_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Roster Maintained)"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Late Correction Status"] = "Rejected (Unexcused Late)"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.info(f"ℹ️ Rejected late shift adjustment for **{sel_emp}**. Original roster `{sel_sched}` maintained.")
-                            st.rerun()
-
-                elif "Missing" in sel_note:
-                    with act_col1:
-                        if st.button(f"✅ Approve Missing Shift (Keep Roster {sel_sched})", key=f"btn_app_miss_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Roster Maintained)"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Completed"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.success(f"✅ Approved missing shift for **{sel_emp}**. Original roster shift `{sel_sched}` approved and maintained.")
-                            st.rerun()
-
-                    with act_col2:
-                        if st.button(f"❌ Reject Missing Shift (Delete Shift from Roster)", key=f"btn_rej_miss_{rec_id}_{idx}", use_container_width=True):
-                            past_rosters = finalized_rosters_for_date(sel_date)
-                            if past_rosters:
-                                for r_item in past_rosters:
-                                    r_df = load_finalized_roster(r_item["csv_filename"])
-                                    if r_df is not None and not r_df.empty:
-                                        l_date_obj = parse_date_robust(sel_date)
-                                        if l_date_obj:
-                                            day_w_name = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][l_date_obj.weekday()]
-                                            emp_col = find_column(r_df, ["name", "employee", "staff"])
-                                            if emp_col in r_df.columns and day_w_name in r_df.columns:
-                                                for r_idx, r_row in r_df.iterrows():
-                                                    if find_matching_employee(sel_emp, {str(r_row.get(emp_col, "")).strip().lower(): str(r_row.get(emp_col, "")).strip()}):
-                                                        r_df.at[r_idx, day_w_name] = "OFF"
-                                                        save_persisted_df(r_df, os.path.join("finalized_rosters", r_item["csv_filename"]))
-
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Shift Deleted)"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.warning(f"⚠️ Rejected missing shift for **{sel_emp}**. Shift has been deleted (`OFF`) from the roster.")
-                            st.rerun()
-
-                elif "Waiting Verified" in sel_note or "Waiting" in sel_note:
-                    with act_col1:
-                        if st.button(f"✅ Approve Unscheduled Punch", key=f"btn_app_unsch_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "✅ Approved (Unscheduled Punch)"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.success(f"✅ Approved unscheduled punch for **{sel_emp}**!")
-                            st.rerun()
-
-                    with act_col2:
-                        if st.button(f"❌ Reject Unscheduled Punch", key=f"btn_rej_unsch_{rec_id}_{idx}", use_container_width=True):
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Note"] = "❌ Rejected (Unscheduled Punch)"
-                            df_cards.loc[df_cards["Record ID"] == rec_id, "Status"] = "Rejected"
-                            save_changed_timecard(df_cards, rec_id)
-                            st.info(f"ℹ️ Rejected unscheduled punch for **{sel_emp}**.")
-                            st.rerun()
-                else:
-                    st.info("ℹ️ Selected row is verified and normal. No pending actions required.")
+        approve_mask = edited_df["Approve"].fillna(False).astype(bool)
+        reject_mask = edited_df["Reject"].fillna(False).astype(bool)
+        conflicts = approve_mask & reject_mask
+        selected_rows = edited_df[approve_mask | reject_mask]
+        if conflicts.any():
+            st.error("Choose either Approve or Reject for each row, then confirm.")
+        st.caption(f"{int(approve_mask.sum())} marked for approval · {int(reject_mask.sum())} marked for rejection. Late approvals adjust the roster; missing-shift rejections remove the roster shift.")
+        result = st.session_state.pop("timecard_decision_result", None)
+        if result:
+            st.success(result)
+        if st.button("Confirm", key="confirm_timecard_decisions", type="primary",
+                     disabled=selected_rows.empty or bool(conflicts.any()), use_container_width=True):
+            processed = 0
+            skipped = 0
+            failures = []
+            for _, sel_row in selected_rows.iterrows():
+                try:
+                    if process_timecard_decision(df_cards, sel_row, bool(sel_row["Approve"])):
+                        processed += 1
+                    else:
+                        skipped += 1
+                except Exception:
+                    failures.append(str(sel_row.get("Employee", "Unknown")) + " (" + str(sel_row.get("Record ID", "")) + ")")
+            summary = f"Processed {processed} decision(s)."
+            if skipped:
+                summary += f" Skipped {skipped} normal or already reviewed record(s)."
+            if failures:
+                st.error(summary + " Could not finish saving: " + ", ".join(failures) + ". Refresh and review these records before retrying.")
+            else:
+                st.session_state["timecard_decision_result"] = summary
+                st.session_state["timecard_decision_editor_version"] = editor_version + 1
+                st.rerun()
 
     else:
         st.info("ℹ️ No timecard records or scheduled roster shifts found for audit.")
